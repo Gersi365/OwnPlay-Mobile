@@ -7,16 +7,12 @@ import app.ownplay.player.OwnPlayAppRuntime
 @Composable
 internal fun TargetOwnPlayApp(
     runtime: OwnPlayAppRuntime,
-    rotationFullscreenEnabled: Boolean,
     onPlaybackFullscreenChanged: (Boolean) -> Unit,
     onPlaybackSurfaceActiveChanged: (Boolean) -> Unit,
-    onLivePreviewActiveChanged: (Boolean) -> Unit,
 ) {
     MobileOwnPlayApp(
         runtime = runtime,
-        rotationFullscreenEnabled = rotationFullscreenEnabled,
         onPlaybackFullscreenChanged = onPlaybackFullscreenChanged,
         onPlaybackSurfaceActiveChanged = onPlaybackSurfaceActiveChanged,
-        onLivePreviewActiveChanged = onLivePreviewActiveChanged,
     )
 }

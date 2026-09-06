@@ -161,7 +161,6 @@ class MainActivity : ComponentActivity() {
                 Box(modifier = Modifier.fillMaxSize()) {
                     OwnPlayRoot(
                         runtime = runtime,
-                        rotationFullscreenEnabled = false,
                         onPlaybackFullscreenChanged = { isFullscreen ->
                             playbackFullscreen = isFullscreen
                             playbackWindowController.updateFullscreenState(isFullscreen)
@@ -169,7 +168,6 @@ class MainActivity : ComponentActivity() {
                         },
                         onPlaybackSurfaceActiveChanged =
                             playbackWindowController::updatePlaybackSurfaceState,
-                        onLivePreviewActiveChanged = {},
                     )
 
                     when {
