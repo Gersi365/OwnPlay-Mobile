@@ -14,6 +14,8 @@ class OnDemandPlaybackPresentationContractTest {
         assertTrue(shared.contains("showNativeController = false"))
         assertTrue(shared.contains("ON_DEMAND_CONTROLS_AUTO_HIDE_MILLIS"))
         assertTrue(shared.contains("Slider("))
+        assertTrue(shared.contains("scrubPositionMs"))
+        assertTrue(shared.contains("scrubbing"))
         assertTrue(shared.contains("Icons.Filled.PlayArrow"))
         assertTrue(shared.contains("Icons.Filled.Pause"))
         assertFalse(shared.contains("ONLINE"))
@@ -22,29 +24,23 @@ class OnDemandPlaybackPresentationContractTest {
     }
 
     @Test
-    fun `series and offline use shared presentation instead of native controller chrome`() {
+    fun `movie series and offline use one shared fullscreen presentation`() {
+        val vod = sourceText("src/main/java/app/ownplay/player/ui/vod/VodRoute.kt")
+        val moviePlayback = sourceBlockAfter(vod, "private fun VodPlaybackScreen(")
         val series = sourceText("src/main/java/app/ownplay/player/ui/series/SeriesRoute.kt")
         val seriesPlayback = sourceBlockAfter(series, "private fun SeriesPlaybackScreen(")
         val offline = sourceText("src/main/java/app/ownplay/player/ui/library/LibraryPlaybackScreen.kt")
         val offlinePlayback = sourceBlockAfter(offline, "internal fun LibraryPlaybackScreen(")
 
-        assertTrue(seriesPlayback.contains("OnDemandPlaybackSurface("))
-        assertFalse(seriesPlayback.contains("showNativeController = true"))
-        assertTrue(offlinePlayback.contains("OnDemandPlaybackSurface("))
-        assertFalse(offlinePlayback.contains("useController = true"))
-        assertFalse(offlinePlayback.contains("LibraryOfflineBadge"))
-        assertFalse(offlinePlayback.contains("OFFLINE"))
-        assertFalse(offlinePlayback.contains("Local file"))
-    }
-
-    @Test
-    fun `movie remains the canonical custom-control baseline`() {
-        val vod = sourceText("src/main/java/app/ownplay/player/ui/vod/VodRoute.kt")
-        val moviePlayback = sourceBlockAfter(vod, "private fun VodPlaybackScreen(")
-
-        assertTrue(moviePlayback.contains("useController = false"))
-        assertTrue(moviePlayback.contains("VOD_CONTROLS_AUTO_HIDE_MILLIS"))
-        assertTrue(moviePlayback.contains("Slider("))
-        assertFalse(moviePlayback.contains("PlaybackOriginBadge"))
+        listOf(moviePlayback, seriesPlayback, offlinePlayback).forEach { playback ->
+            assertTrue(playback.contains("OnDemandPlaybackSurface("))
+            assertFalse(playback.contains("useController = true"))
+            assertFalse(playback.contains("PlaybackOriginBadge"))
+            assertFalse(playback.contains("OFFLINE"))
+            assertFalse(playback.contains("Local file"))
+        }
+        assertFalse(moviePlayback.contains("Slider("))
+        assertFalse(seriesPlayback.contains("Slider("))
+        assertFalse(offlinePlayback.contains("Slider("))
     }
 }
