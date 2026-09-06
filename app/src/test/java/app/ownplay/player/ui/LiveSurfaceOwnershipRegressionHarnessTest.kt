@@ -203,7 +203,6 @@ private class LiveSurfaceOwnershipHarness {
     fun rotateLandscape() {
         if (
             liveRotationFullscreenEnabled(
-                isSmartphone = true,
                 inPictureInPicture = inPictureInPicture,
             ) && presentation == LivePlaybackPresentationSurface.PREVIEW
         ) {
@@ -214,7 +213,6 @@ private class LiveSurfaceOwnershipHarness {
     fun rotatePortrait() {
         if (
             liveRotationFullscreenEnabled(
-                isSmartphone = true,
                 inPictureInPicture = inPictureInPicture,
             ) && presentation == LivePlaybackPresentationSurface.FULLSCREEN
         ) {
