@@ -7,6 +7,13 @@ import org.junit.Test
 
 class MobilePortraitFoundationContractTest {
     @Test
+    fun `active Mobile entry point pins browsing configuration to portrait`() {
+        val target = sourceText("src/mobile/java/app/ownplay/player/ui/TargetOwnPlayApp.kt")
+        assertTrue(target.contains("orientation = Configuration.ORIENTATION_PORTRAIT"))
+        assertTrue(target.contains("LocalConfiguration provides portraitConfiguration"))
+    }
+
+    @Test
     fun `active Mobile shell has no rotation driven browsing presentation`() {
         val shell = sourceText("src/mobile/java/app/ownplay/player/ui/MobileOwnPlayApp.kt")
         assertFalse(shell.contains("rotationFullscreenEnabled"))
