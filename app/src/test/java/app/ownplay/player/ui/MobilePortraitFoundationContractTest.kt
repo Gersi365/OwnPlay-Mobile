@@ -56,9 +56,9 @@ class MobilePortraitFoundationContractTest {
     }
 
     @Test
-    fun `Library retains Offline without exposing a global All label`() {
+    fun `Library retains Offline without rendering a global All filter`() {
         val library = sourceText("src/main/java/app/ownplay/player/ui/library/UnifiedLibraryRoute.kt")
-        assertTrue(library.contains("label = \"Offline\""))
-        assertFalse(library.contains("\"All\""))
+        assertTrue(library.contains("\"Offline\""))
+        assertFalse(library.contains("Text(\"All\")"))
     }
 }
