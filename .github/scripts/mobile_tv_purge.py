@@ -1,0 +1,241 @@
+from pathlib import Path
+import re
+import sys
+
+playback_path = Path('app/src/main/java/app/ownplay/player/ui/PlaybackScreen.kt')
+text = playback_path.read_text(encoding='utf-8')
+
+imports_to_remove = [
+    'import android.content.res.Configuration\n',
+    'import android.view.KeyEvent\n',
+    'import androidx.compose.foundation.focusable\n',
+    'import androidx.compose.runtime.withFrameNanos\n',
+    'import androidx.compose.ui.focus.FocusRequester\n',
+    'import androidx.compose.ui.focus.focusRequester\n',
+    'import androidx.compose.ui.input.key.onPreviewKeyEvent\n',
+    'import androidx.compose.ui.platform.LocalConfiguration\n',
+    'import app.ownplay.player.ui.live.LiveFullscreenEpgDirection\n',
+]
+for line in imports_to_remove:
+    if line not in text:
+        raise SystemExit(f'Expected import missing before purge: {line.strip()}')
+    text = text.replace(line, '', 1)
+
+old_doc = '''/**
+ * Live fullscreen presentation.
+ *
+ * Live intentionally has no playback menu. The video owns the screen and EPG is the only transient
+ * interaction layer. TV remote behavior is CH+ / CH- -> next / previous channel, OK -> reveal EPG,
+ * Down -> enter EPG, Left/Right -> move through available programmes, Up -> leave the EPG timeline.
+ * D-pad Up/Down are reserved for focus/EPG navigation and never perform direct channel zapping.
+ * The final timeline card opens the full guide over Full View without tearing down playback. Mobile
+ * uses tap to show/hide EPG, horizontal swipe to change channel, left-side vertical swipe for
+ * brightness, and right-side vertical swipe for media volume. Category gestures belong only to the
+ * channel browser and never to Full View.
+ */'''
+new_doc = '''/**
+ * Mobile Live fullscreen presentation.
+ *
+ * Live intentionally has no playback menu. Video owns the screen and EPG is the only transient
+ * interaction layer. Tap shows or hides EPG, horizontal swipe changes channel, left-side vertical
+ * swipe adjusts brightness, and right-side vertical swipe adjusts media volume. Category gestures
+ * belong only to the channel browser and never to Full View.
+ */'''
+if old_doc not in text:
+    raise SystemExit('Expected PlaybackScreen documentation block was not found.')
+text = text.replace(old_doc, new_doc, 1)
+
+profile_block = '''    val configuration = LocalConfiguration.current
+    val context = LocalContext.current
+    val isTelevision =
+        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
+    val hostActivity = remember(context) { context.findActivity() }
+    val audioManager = remember(context) {
+        context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    }
+    val rootFocusRequester = remember { FocusRequester() }
+'''
+replacement_profile = '''    val context = LocalContext.current
+    val hostActivity = remember(context) { context.findActivity() }
+    val audioManager = remember(context) {
+        context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    }
+'''
+if profile_block not in text:
+    raise SystemExit('Expected television profile block was not found.')
+text = text.replace(profile_block, replacement_profile, 1)
+
+old_channel_effect = '''    LaunchedEffect(selection.request.channelId, isTelevision) {
+        epgVisible = true
+        epgFocused = false
+        showFullGuide = false
+        selectedProgramIndex = currentProgramIndex
+        interactionGeneration += 1
+        if (isTelevision) {
+            withFrameNanos { }
+            rootFocusRequester.requestFocus()
+        }
+    }
+
+    LaunchedEffect(showFullGuide, isTelevision) {
+        if (isTelevision && !showFullGuide) {
+            withFrameNanos { }
+            rootFocusRequester.requestFocus()
+        }
+    }
+'''
+new_channel_effect = '''    LaunchedEffect(selection.request.channelId) {
+        epgVisible = true
+        epgFocused = false
+        showFullGuide = false
+        selectedProgramIndex = currentProgramIndex
+        interactionGeneration += 1
+    }
+'''
+if old_channel_effect not in text:
+    raise SystemExit('Expected television channel focus effects were not found.')
+text = text.replace(old_channel_effect, new_channel_effect, 1)
+
+outer_pattern = re.compile(
+    r'''        Box\(\n'''
+    r'''            modifier = Modifier\n'''
+    r'''                \.fillMaxSize\(\)\n'''
+    r'''                \.then\(\n'''
+    r'''                    if \(isTelevision\) \{.*?'''
+    r'''                \),\n'''
+    r'''        \) \{\n'''
+    r'''            LiveFullscreenVideoSurface''',
+    re.S,
+)
+text, count = outer_pattern.subn(
+    '''        Box(\n            modifier = Modifier.fillMaxSize(),\n        ) {\n            LiveFullscreenVideoSurface''',
+    text,
+    count=1,
+)
+if count != 1:
+    raise SystemExit(f'Expected exactly one TV fullscreen modifier block, found {count}.')
+
+pointer_old = '''                    .pointerInput(
+                        isTelevision,
+                        selection.request.channelId,
+                        hostActivity,
+                        audioManager,
+                        showFullGuide,
+                    ) {
+                        if (isTelevision || showFullGuide) return@pointerInput
+'''
+pointer_new = '''                    .pointerInput(
+                        selection.request.channelId,
+                        hostActivity,
+                        audioManager,
+                        showFullGuide,
+                    ) {
+                        if (showFullGuide) return@pointerInput
+'''
+if pointer_old not in text:
+    raise SystemExit('Expected TV-aware pointerInput block was not found.')
+text = text.replace(pointer_old, pointer_new, 1)
+
+if 'enabled = !isTelevision && !showFullGuide' not in text:
+    raise SystemExit('Expected TV-aware clickable condition was not found.')
+text = text.replace('enabled = !isTelevision && !showFullGuide', 'enabled = !showFullGuide', 1)
+
+header_pattern = re.compile(
+    r'''                    Text\(\n'''
+    r'''                        text = if \(focused\) \{\n'''
+    r'''                            "EPG · ← → browse · ↑ video"\n'''
+    r'''                        \} else \{\n'''
+    r'''                            "EPG · ↓ browse"\n'''
+    r'''                        \},'''
+)
+text, count = header_pattern.subn('''                    Text(\n                        text = "EPG",''', text, count=1)
+if count != 1:
+    raise SystemExit(f'Expected one remote EPG instruction block, found {count}.')
+
+nav_pattern = re.compile(
+    r'''\ninternal fun tvLiveChannelNavigationForKeyCode\(keyCode: Int\): PlaybackNavigationDirection\? =\n'''
+    r'''    when \(keyCode\) \{\n'''
+    r'''        KeyEvent\.KEYCODE_CHANNEL_UP -> PlaybackNavigationDirection\.NEXT\n'''
+    r'''        KeyEvent\.KEYCODE_CHANNEL_DOWN -> PlaybackNavigationDirection\.PREVIOUS\n'''
+    r'''        else -> null\n'''
+    r'''    \}\n'''
+)
+text, count = nav_pattern.subn('\n', text, count=1)
+if count != 1:
+    raise SystemExit(f'Expected one TV channel-key helper, found {count}.')
+playback_path.write_text(text, encoding='utf-8')
+
+Path('app/src/main/java/app/ownplay/player/ui/live/LiveFullscreenEpgPolicy.kt').write_text('''package app.ownplay.player.ui.live
+
+internal object LiveFullscreenEpgPolicy {
+    /** The full-guide affordance occupies the slot immediately after the visible programmes. */
+    fun fullGuideIndex(programCount: Int): Int = programCount.coerceAtLeast(0)
+
+    fun canEnterTimeline(programCount: Int): Boolean = programCount > 0
+}
+''', encoding='utf-8')
+
+Path('app/src/test/java/app/ownplay/player/ui/live/LiveFullscreenEpgPolicyTest.kt').write_text('''package app.ownplay.player.ui.live
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class LiveFullscreenEpgPolicyTest {
+    @Test
+    fun fullGuideFollowsVisibleProgrammeCount() {
+        assertEquals(0, LiveFullscreenEpgPolicy.fullGuideIndex(0))
+        assertEquals(3, LiveFullscreenEpgPolicy.fullGuideIndex(3))
+    }
+
+    @Test
+    fun timelineRequiresAtLeastOneProgramme() {
+        assertFalse(LiveFullscreenEpgPolicy.canEnterTimeline(0))
+        assertTrue(LiveFullscreenEpgPolicy.canEnterTimeline(1))
+    }
+}
+''', encoding='utf-8')
+
+delete_paths = [
+    'app/src/main/java/app/ownplay/player/ui/OfflineMediaTvFocusPolicy.kt',
+    'app/src/main/java/app/ownplay/player/ui/tv/TvPlaybackLifecyclePolicy.kt',
+    'app/src/main/java/app/ownplay/player/ui/tv/TvPopupFocusPolicy.kt',
+    'app/src/main/java/app/ownplay/player/ui/tv/TvRemoteActionGuard.kt',
+    'app/src/main/java/app/ownplay/player/ui/tv/TvRemoteIndication.kt',
+    'app/src/main/java/app/ownplay/player/ui/tv/TvRemoteKeySuppression.kt',
+    'app/src/main/res/drawable-xhdpi/tv_banner.xml',
+    'app/src/test/java/app/ownplay/player/ui/OfflineMediaTvFocusPolicyTest.kt',
+    'app/src/test/java/app/ownplay/player/ui/PlaybackScreenTvRemotePolicyTest.kt',
+    'app/src/test/java/app/ownplay/player/ui/tv/TvPlaybackLifecyclePolicyTest.kt',
+    'app/src/test/java/app/ownplay/player/ui/tv/TvPopupFocusPolicyTest.kt',
+    'app/src/test/java/app/ownplay/player/ui/tv/TvRemoteActionGuardTest.kt',
+    'app/src/test/java/app/ownplay/player/ui/tv/TvRemoteKeySuppressionTest.kt',
+]
+for raw in delete_paths:
+    path = Path(raw)
+    if not path.exists():
+        raise SystemExit(f'Expected TV-only file missing before purge: {raw}')
+    path.unlink()
+
+forbidden = [
+    'UI_MODE_TYPE_TELEVISION', 'ANDROID_TV', 'KEYCODE_DPAD_', 'KEYCODE_CHANNEL_UP',
+    'KEYCODE_CHANNEL_DOWN', 'TvRemote', 'TvPlaybackLifecycle', 'OfflineMediaTvFocusPolicy',
+    'PlaybackScreenTvRemote', 'tvLiveChannelNavigationForKeyCode', 'isTelevision', 'TV remote',
+    'D-pad', 'remote-first TV', 'Android TV',
+]
+violations = []
+for path in Path('app/src').rglob('*'):
+    if not path.is_file() or path.suffix not in {'.kt', '.xml'}:
+        continue
+    source = path.read_text(encoding='utf-8', errors='ignore')
+    for token in forbidden:
+        if token in source:
+            violations.append(f'{path}: {token}')
+for path in Path('app/src').rglob('*'):
+    p = path.as_posix()
+    if '/ui/tv/' in p or p.endswith('/tv_banner.xml'):
+        violations.append(f'forbidden path remains: {p}')
+if violations:
+    print('\n'.join(violations))
+    sys.exit(2)
