@@ -3,7 +3,6 @@ package app.ownplay.player.ui
 import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -14,9 +13,8 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import app.ownplay.player.OwnPlayAppRuntime
 import app.ownplay.player.persistence.PlaylistSourceSummary
-import app.ownplay.player.personalization.AppDeviceProfileSelection
-import app.ownplay.player.personalization.AppDeviceProfileStore
 import app.ownplay.player.personalization.AppOrientationMode
+import app.ownplay.player.personalization.AppOrientationStore
 import app.ownplay.player.source.SourceSyncState
 import kotlinx.coroutines.launch
 
@@ -43,28 +41,16 @@ internal fun SettingsScreen(
     var destination by remember { mutableStateOf(SettingsDestination.CONTENT) }
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-    val isTelevision =
-        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
     val readySummaries = summaries.filter { summary -> summary.enabled }
 
     val context = LocalContext.current
-    val deviceProfileStore = remember(context) {
-        AppDeviceProfileStore(context.applicationContext)
+    val orientationStore = remember(context) {
+        AppOrientationStore(context.applicationContext)
     }
-    val deviceProfileSelection by deviceProfileStore.observeSelection().collectAsState(
-        initial = AppDeviceProfileSelection.Loading,
+    val orientationMode by orientationStore.observe().collectAsState(
+        initial = AppOrientationMode.PORTRAIT,
     )
-    val deviceSettings =
-        (deviceProfileSelection as? AppDeviceProfileSelection.Configured)?.settings
-    val deviceProfile = deviceSettings?.profile
-    val orientationMode = deviceSettings?.effectiveOrientation ?: AppOrientationMode.PORTRAIT
     val scope = rememberCoroutineScope()
-
-    LaunchedEffect(isTelevision, destination) {
-        if (isTelevision && destination == SettingsDestination.DOWNLOADS) {
-            destination = SettingsDestination.CONTENT
-        }
-    }
 
     val nestedDestinationBackEnabled =
         destination == SettingsDestination.LIVE_MANAGEMENT ||
@@ -81,10 +67,9 @@ internal fun SettingsScreen(
             runtime = runtime,
             summaries = summaries,
             syncState = syncState,
-            deviceProfile = deviceProfile,
             orientationMode = orientationMode,
             onSetOrientation = { mode ->
-                scope.launch { deviceProfileStore.setSmartphoneOrientation(mode) }
+                scope.launch { orientationStore.set(mode) }
             },
             onOpenSourceInLive = onOpenSourceInLive,
         )
@@ -97,7 +82,6 @@ internal fun SettingsScreen(
                 runtime = runtime,
                 summaries = readySummaries,
                 onBack = { destination = SettingsDestination.CONTENT },
-                focusBackOnEntry = true,
             )
             return
         }
@@ -108,14 +92,12 @@ internal fun SettingsScreen(
                 syncState = syncState,
                 onBack = { destination = SettingsDestination.CONTENT },
                 onOpenInLive = onOpenSourceInLive,
-                focusBackOnEntry = true,
             )
             return
         }
         SettingsDestination.DOWNLOADS -> {
             DownloadsSettingsScreen(
                 onBack = { destination = SettingsDestination.CONTENT },
-                focusBackOnEntry = true,
             )
             return
         }
@@ -123,10 +105,9 @@ internal fun SettingsScreen(
     }
 
     PortraitSettingsMenu(
-        deviceProfile = deviceProfile,
         orientationMode = orientationMode,
         onSetOrientation = { mode ->
-            scope.launch { deviceProfileStore.setSmartphoneOrientation(mode) }
+            scope.launch { orientationStore.set(mode) }
         },
         summaries = summaries,
         onOpenLiveManagement = { destination = SettingsDestination.LIVE_MANAGEMENT },
