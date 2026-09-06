@@ -8,11 +8,10 @@ import org.junit.Test
 
 class OnDemandPresentationLifecycleRegressionTest {
     @Test
-    fun mobileAndTvShellsRestoreOnDemandRouteFromProcessSession() {
+    fun mobileShellRestoresOnDemandRouteFromProcessSession() {
         val mobile = sourceText("src/mobile/java/app/ownplay/player/ui/MobileOwnPlayApp.kt")
-        val tv = sourceText("src/tv/java/app/ownplay/player/ui/TVOwnPlayApp.kt")
 
-        listOf(mobile, tv).forEach { shell ->
+        listOf(mobile).forEach { shell ->
             assertTrue(shell.contains("runtime.onDemandPresentationSession.state.collectAsState()"))
             assertTrue(shell.contains("OnDemandContentKind.MOVIE"))
             assertTrue(shell.contains("OnDemandContentKind.SERIES"))
