@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!--
+      Android must permit cleartext at the platform layer so explicitly opted-in
+      Xtream HTTP sources can work. OwnPlay still enforces cleartext policy per
+      source before requests/playback reach the network stack.
+    -->
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

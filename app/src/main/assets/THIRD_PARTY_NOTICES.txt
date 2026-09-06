@@ -1,0 +1,13 @@
+OwnPlay third-party media decoder notice
+
+This build can include the AndroidX Media3 FFmpeg decoder extension packaged from the Just Player project at the pinned source revision:
+https://github.com/moneytoo/Player/tree/fb436e14a5cc03998e69a166f00401ddbc71a138/app/libs
+
+The Media3 wrapper is based on AndroidX Media3 and is distributed under the Apache License 2.0.
+The bundled FFmpeg libraries are distributed under the GNU Lesser General Public License (LGPL), version 2.1 or later, subject to their build configuration.
+
+Build instructions and enabled decoder provenance:
+https://github.com/moneytoo/Player/blob/fb436e14a5cc03998e69a166f00401ddbc71a138/app/libs/README.md
+https://github.com/androidx/media/tree/release/libraries/decoder_ffmpeg
+
+OwnPlay does not modify or log provider credentials or raw stream URLs as part of this decoder integration.
