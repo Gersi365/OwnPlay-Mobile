@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   bootstrap:
-    if: ${{ github.event.head_commit.message == 'Add one-time Mobile bootstrap workflow' }}
+    if: ${{ github.event.head_commit.message == 'Run verified Mobile bootstrap' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -47,18 +47,24 @@ jobs:
           from pathlib import Path
 
           path = Path('target/app/build.gradle.kts')
-          text = path.read_text(encoding='utf-8')
-          tv_block = '''        create("tv") {
-              dimension = "device"
-              applicationId = "app.ownplay.tv"
-              manifestPlaceholders["appLabel"] = "OwnPlay"
-              buildConfigField("boolean", "IS_TV_BUILD", "true")
-              buildConfigField("String", "TARGET_DEVICE", "\\\"tv\\\"")
-          }
-          '''
-          if tv_block not in text:
-              raise SystemExit('Expected TV flavor block not found; refusing bootstrap drift.')
-          path.write_text(text.replace(tv_block, ''), encoding='utf-8')
+          lines = path.read_text(encoding='utf-8').splitlines(keepends=True)
+          try:
+              start = next(i for i, line in enumerate(lines) if 'create("tv") {' in line)
+          except StopIteration:
+              raise SystemExit('Expected TV flavor declaration not found; refusing bootstrap drift.')
+
+          depth = 0
+          end = None
+          for i in range(start, len(lines)):
+              depth += lines[i].count('{')
+              depth -= lines[i].count('}')
+              if depth == 0:
+                  end = i + 1
+                  break
+          if end is None:
+              raise SystemExit('TV flavor block is unbalanced; refusing bootstrap drift.')
+
+          path.write_text(''.join(lines[:start] + lines[end:]), encoding='utf-8')
           PY
 
           mkdir -p target/.github/workflows
@@ -186,12 +192,14 @@ jobs:
           YAML
 
           rm -f target/.github/workflows/bootstrap-mobile.yml
+          rm -f target/.bootstrap-trigger
 
           cd target
           test ! -e app/src/tv
           grep -F 'applicationId = "app.ownplay.mobile"' app/build.gradle.kts
           ! grep -F 'applicationId = "app.ownplay.tv"' app/build.gradle.kts
-          ! grep -R ':app:.*Tv' .github/workflows/android-validation-no-apk.yml
+          ! grep -F 'create("tv")' app/build.gradle.kts
+          ! grep -E ':app:[A-Za-z]*Tv' .github/workflows/android-validation-no-apk.yml
 
           git config user.name "OwnPlay Mobile Bootstrap"
           git config user.email "actions@users.noreply.github.com"
