@@ -275,31 +275,24 @@ internal fun VodRoute(
         }
     }
 
-    fun clearMovieProgress(movie: VodMovie) {
-        scope.launch {
-            if (!featureRuntime.clearProgress(sourceId, movie.movieId)) return@launch
-            val clearedMovie = movie.copy(
-                positionMs = null,
-                progressCompleted = false,
-                progressUpdatedAtEpochMillis = null,
-            )
-            if (selectedMovie?.movieId == movie.movieId) {
-                selectedMovie = clearedMovie
-            }
-            details = details?.let { current ->
-                if (current.movie.movieId != movie.movieId) {
-                    current
-                } else {
-                    current.copy(
-                        movie = current.movie.copy(
-                            positionMs = null,
-                            progressCompleted = false,
-                            progressUpdatedAtEpochMillis = null,
-                        ),
-                    )
-                }
-            }
-        }
+    fun playMovie(target: VodMovie, startFromBeginning: Boolean) {
+        restoreDetailFocusAfterPlayback = false
+        runtime.playbackController.start(
+            PlaybackRequest(
+                sourceId = sourceId,
+                channelId = target.movieId,
+                mediaKind = PlaybackMediaKind.MOVIE,
+            ),
+        )
+        runtime.onDemandPresentationSession.showMoviePlayback(
+            sourceId = sourceId,
+            movie = if (startFromBeginning) {
+                target.copy(positionMs = 0L, progressCompleted = false)
+            } else {
+                target
+            },
+            returnToLibraryOnDetailBack = returnToLibraryOnDetailBack,
+        )
     }
 
     fun refresh() {
@@ -464,22 +457,8 @@ internal fun VodRoute(
                 onResumeDownload = ::resumeDownload,
                 onRetryDownload = ::retryDownload,
                 onRemoveDownload = ::removeDownload,
-                onClearProgress = { clearMovieProgress(movie) },
-                onPlay = { target ->
-                    restoreDetailFocusAfterPlayback = false
-                    runtime.playbackController.start(
-                        PlaybackRequest(
-                            sourceId = sourceId,
-                            channelId = target.movieId,
-                            mediaKind = PlaybackMediaKind.MOVIE,
-                        ),
-                    )
-                    runtime.onDemandPresentationSession.showMoviePlayback(
-                        sourceId = sourceId,
-                        movie = target,
-                        returnToLibraryOnDetailBack = returnToLibraryOnDetailBack,
-                    )
-                },
+                onPlay = { target -> playMovie(target, startFromBeginning = false) },
+                onPlayFromBeginning = { target -> playMovie(target, startFromBeginning = true) },
                 modifier = Modifier.fillMaxSize(),
             )
             return
@@ -544,22 +523,8 @@ internal fun VodRoute(
                     onResumeDownload = ::resumeDownload,
                     onRetryDownload = ::retryDownload,
                     onRemoveDownload = ::removeDownload,
-                    onClearProgress = { clearMovieProgress(movie) },
-                    onPlay = { target ->
-                        restoreDetailFocusAfterPlayback = false
-                        runtime.playbackController.start(
-                            PlaybackRequest(
-                                sourceId = sourceId,
-                                channelId = target.movieId,
-                                mediaKind = PlaybackMediaKind.MOVIE,
-                            ),
-                        )
-                        runtime.onDemandPresentationSession.showMoviePlayback(
-                            sourceId = sourceId,
-                            movie = target,
-                            returnToLibraryOnDetailBack = returnToLibraryOnDetailBack,
-                        )
-                    },
+                    onPlay = { target -> playMovie(target, startFromBeginning = false) },
+                    onPlayFromBeginning = { target -> playMovie(target, startFromBeginning = true) },
                     modifier = Modifier
                         .weight(0.37f)
                         .fillMaxHeight(),

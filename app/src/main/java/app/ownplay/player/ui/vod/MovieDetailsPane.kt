@@ -60,8 +60,8 @@ internal fun MovieDetailsPane(
     onResumeDownload: (OfflineDownload) -> Unit,
     onRetryDownload: (OfflineDownload) -> Unit,
     onRemoveDownload: (OfflineDownload) -> Unit,
-    onClearProgress: () -> Unit,
     onPlay: (VodMovie) -> Unit,
+    onPlayFromBeginning: (VodMovie) -> Unit,
     modifier: Modifier,
 ) {
     val offlineCopyAvailable = download?.state == DownloadStates.COMPLETED
@@ -171,9 +171,9 @@ internal fun MovieDetailsPane(
                 }
             }
 
-            if ((movie.positionMs ?: 0L) > 0L) {
-                TextButton(onClick = onClearProgress) {
-                    Text("Clear progress")
+            if (movie.resumeAvailable) {
+                TextButton(onClick = { onPlayFromBeginning(movie) }) {
+                    Text("Play from beginning")
                 }
             }
 

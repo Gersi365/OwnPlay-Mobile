@@ -63,7 +63,7 @@ internal fun SeriesDetailsPane(
     onResumeDownload: (OfflineDownload) -> Unit,
     onRetryDownload: (OfflineDownload) -> Unit,
     onRemoveDownload: (OfflineDownload) -> Unit,
-    onClearProgress: (SeriesEpisode) -> Unit,
+    onPlayFromBeginning: (SeriesEpisode) -> Unit,
     onClose: () -> Unit,
     modifier: Modifier,
 ) {
@@ -148,7 +148,7 @@ internal fun SeriesDetailsPane(
                             onResumeDownload = onResumeDownload,
                             onRetryDownload = onRetryDownload,
                             onRemoveDownload = onRemoveDownload,
-                            onClearProgress = { onClearProgress(selectedEpisode) },
+                            onPlayFromBeginning = { onPlayFromBeginning(selectedEpisode) },
                         )
                     }
 
@@ -202,7 +202,7 @@ internal fun SeriesDetailsPane(
                                         onResumeDownload = onResumeDownload,
                                         onRetryDownload = onRetryDownload,
                                         onRemoveDownload = onRemoveDownload,
-                                        onClearProgress = { onClearProgress(episode) },
+                                        onPlayFromBeginning = { onPlayFromBeginning(episode) },
                                     )
                                 }
                             }
@@ -372,7 +372,7 @@ private fun SeriesEpisodeDetailsPane(
     onResumeDownload: (OfflineDownload) -> Unit,
     onRetryDownload: (OfflineDownload) -> Unit,
     onRemoveDownload: (OfflineDownload) -> Unit,
-    onClearProgress: () -> Unit,
+    onPlayFromBeginning: () -> Unit,
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -441,7 +441,7 @@ private fun SeriesEpisodeDetailsPane(
         onResumeDownload = onResumeDownload,
         onRetryDownload = onRetryDownload,
         onRemoveDownload = onRemoveDownload,
-        onClearProgress = onClearProgress,
+        onPlayFromBeginning = onPlayFromBeginning,
     )
 }
 
@@ -458,7 +458,7 @@ private fun EpisodeRow(
     onResumeDownload: (OfflineDownload) -> Unit,
     onRetryDownload: (OfflineDownload) -> Unit,
     onRemoveDownload: (OfflineDownload) -> Unit,
-    onClearProgress: () -> Unit,
+    onPlayFromBeginning: () -> Unit,
 ) {
     val offlineCopyAvailable = download?.state == DownloadStates.COMPLETED
     val rowModifier = if (onOpen == null) {
@@ -561,8 +561,8 @@ private fun EpisodeRow(
                         Icon(Icons.Filled.Delete, contentDescription = "Remove episode download")
                     }
                 }
-                if ((episode.positionMs ?: 0L) > 0L) {
-                    TextButton(onClick = onClearProgress) { Text("Clear") }
+                if (episode.resumeAvailable) {
+                    TextButton(onClick = onPlayFromBeginning) { Text("Play from beginning") }
                 }
             }
             if (offlineCopyAvailable) {
