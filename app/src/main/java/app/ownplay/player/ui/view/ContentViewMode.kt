@@ -1,141 +1,46 @@
 package app.ownplay.player.ui.view
 
 import android.content.Context
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.emptyPreferences
-import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
-import java.io.IOException
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.flowOf
 
-internal enum class ContentViewMode(
-    val storageValue: String,
-    val label: String,
-) {
-    LIST("list", "List"),
-    COMPACT("compact", "Compact"),
-    CARDS("cards", "Gallery"),
-    ;
-
-    companion object {
-        fun fromStorageValue(
-            value: String?,
-            default: ContentViewMode,
-        ): ContentViewMode = entries.firstOrNull { it.storageValue == value } ?: default
-    }
+/**
+ * Legacy renderer keys retained only so older compiled presentation branches remain source-compatible.
+ * OwnPlay Mobile exposes one canonical browsing presentation and never restores a persisted alternate
+ * view mode.
+ */
+internal enum class ContentViewMode {
+    LIST,
+    COMPACT,
+    CARDS,
 }
 
-internal enum class ContentViewSurface {
-    LIVE,
-    LIBRARY,
-}
+internal fun canonicalContentViewMode(
+    @Suppress("UNUSED_PARAMETER") requested: ContentViewMode? = null,
+): ContentViewMode = ContentViewMode.CARDS
 
-private val Context.contentViewModeDataStore: DataStore<Preferences> by preferencesDataStore(
-    name = "content_view_modes",
-)
-
+/**
+ * Compatibility boundary for installations that may still contain historical view-mode preferences.
+ * Those values are intentionally ignored: Mobile now has one canonical Cards presentation.
+ */
+@Suppress("UNUSED_PARAMETER")
 internal class ContentViewModeStore(context: Context) {
-    private val appContext = context.applicationContext
+    val liveMode: Flow<ContentViewMode> = flowOf(canonicalContentViewMode())
+    val libraryMode: Flow<ContentViewMode> = flowOf(canonicalContentViewMode())
 
-    val liveMode: Flow<ContentViewMode> = modeFlow(
-        key = LIVE_VIEW_MODE,
-        default = ContentViewMode.COMPACT,
-    )
+    suspend fun setLiveMode(mode: ContentViewMode) = Unit
 
-    val libraryMode: Flow<ContentViewMode> = modeFlow(
-        key = LIBRARY_VIEW_MODE,
-        default = ContentViewMode.CARDS,
-    )
-
-    suspend fun setLiveMode(mode: ContentViewMode) {
-        setMode(LIVE_VIEW_MODE, mode)
-    }
-
-    suspend fun setLibraryMode(mode: ContentViewMode) {
-        setMode(LIBRARY_VIEW_MODE, mode)
-    }
-
-    private fun modeFlow(
-        key: Preferences.Key<String>,
-        default: ContentViewMode,
-    ): Flow<ContentViewMode> = appContext.contentViewModeDataStore.data
-        .catch { error ->
-            if (error is IOException) {
-                emit(emptyPreferences())
-            } else {
-                throw error
-            }
-        }
-        .map { preferences ->
-            ContentViewMode.fromStorageValue(preferences[key], default)
-        }
-
-    private suspend fun setMode(
-        key: Preferences.Key<String>,
-        mode: ContentViewMode,
-    ) {
-        appContext.contentViewModeDataStore.edit { preferences ->
-            preferences[key] = mode.storageValue
-        }
-    }
-
-    private companion object {
-        val LIVE_VIEW_MODE = stringPreferencesKey("live_view_mode")
-        val LIBRARY_VIEW_MODE = stringPreferencesKey("library_view_mode")
-    }
+    suspend fun setLibraryMode(mode: ContentViewMode) = Unit
 }
 
+/** Alternate view selection is intentionally not part of the OwnPlay Mobile UI. */
+@Suppress("UNUSED_PARAMETER")
 @Composable
 internal fun ContentViewModeMenu(
     mode: ContentViewMode,
     onModeSelected: (ContentViewMode) -> Unit,
     modifier: Modifier = Modifier,
     prefix: String? = null,
-) {
-    var expanded by remember { mutableStateOf(false) }
-
-    Box(modifier = modifier) {
-        TextButton(onClick = { expanded = true }) {
-            Text(buildString {
-                prefix?.takeIf(String::isNotBlank)?.let { append(it); append(" · ") }
-                append(mode.label)
-            })
-            Icon(
-                imageVector = Icons.Filled.ArrowDropDown,
-                contentDescription = "Change view",
-                modifier = Modifier.size(18.dp),
-            )
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            ContentViewMode.entries.forEach { option ->
-                DropdownMenuItem(
-                    text = { Text(if (option == mode) "${option.label} ✓" else option.label) },
-                    onClick = {
-                        expanded = false
-                        if (option != mode) onModeSelected(option)
-                    },
-                )
-            }
-        }
-    }
-}
+) = Unit

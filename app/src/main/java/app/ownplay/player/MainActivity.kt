@@ -34,7 +34,6 @@ import app.ownplay.player.download.DownloadNotificationPermissionBridge
 import app.ownplay.player.download.DownloadNotificationPermissionPolicy
 import app.ownplay.player.download.DownloadNotificationPermissionStore
 import app.ownplay.player.download.OfflineDownloadFeatureRuntime
-import app.ownplay.player.personalization.AppOrientationStore
 import app.ownplay.player.playback.LiveActivityBackgroundAction
 import app.ownplay.player.playback.LiveActivityLifecyclePolicy
 import app.ownplay.player.playback.PlaybackInteractionBridge
@@ -61,7 +60,6 @@ class MainActivity : ComponentActivity() {
     private lateinit var runtime: OwnPlayAppRuntime
     private var offlineDownloadRuntime: OfflineDownloadFeatureRuntime? = null
     private lateinit var playbackWindowController: PlaybackWindowController
-    private lateinit var appOrientationStore: AppOrientationStore
     private lateinit var playbackGestureDetector: GestureDetector
     private lateinit var downloadNotificationPermissionStore: DownloadNotificationPermissionStore
     private val downloadNotificationPermissionOwner = Any()
@@ -79,7 +77,6 @@ class MainActivity : ComponentActivity() {
             requestDownloadNotificationPermissionIfNeeded()
         }
         offlineDownloadRuntime = OfflineDownloadFeatureRuntime(applicationContext)
-        appOrientationStore = AppOrientationStore(applicationContext)
         playbackWindowController = PlaybackWindowController(this)
         playbackGestureDetector = GestureDetector(
             this,
@@ -164,9 +161,6 @@ class MainActivity : ComponentActivity() {
                 Box(modifier = Modifier.fillMaxSize()) {
                     OwnPlayRoot(
                         runtime = runtime,
-                        rotationFullscreenEnabled = liveRotationFullscreenEnabled(
-                            inPictureInPicture = isInPictureInPictureMode,
-                        ),
                         onPlaybackFullscreenChanged = { isFullscreen ->
                             playbackFullscreen = isFullscreen
                             playbackWindowController.updateFullscreenState(isFullscreen)
@@ -174,9 +168,6 @@ class MainActivity : ComponentActivity() {
                         },
                         onPlaybackSurfaceActiveChanged =
                             playbackWindowController::updatePlaybackSurfaceState,
-                        onLivePreviewActiveChanged = { previewActive ->
-                            playbackWindowController.updateLivePreviewRotationEnabled(previewActive)
-                        },
                     )
 
                     when {
@@ -245,11 +236,6 @@ class MainActivity : ComponentActivity() {
             }
         }
         playbackWindowController.attachWindowRoot(findViewById(android.R.id.content))
-        activityScope.launch {
-            appOrientationStore.observe().collectLatest { orientation ->
-                playbackWindowController.updateAppOrientation(orientation)
-            }
-        }
         activityScope.launch {
             runtime.playbackController.state.collectLatest { state ->
                 playbackWindowController.updatePlaybackState(state is PlaybackState.Playing)
@@ -381,11 +367,3 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-
-/**
- * PiP owns the active playback surface. Rotation-triggered Live presentation changes must stay
- * inert until PiP exits so the hidden Preview/Fullscreen tree cannot steal the video surface.
- */
-internal fun liveRotationFullscreenEnabled(
-    inPictureInPicture: Boolean,
-): Boolean = !inPictureInPicture
