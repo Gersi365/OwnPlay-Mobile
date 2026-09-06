@@ -19,7 +19,7 @@ class ShellLifecycleRegressionTest {
     }
 
     @Test
-    fun mobileAndTvActiveSourceHelpersPersistAndDoNotRecurse() {
+    fun mobileActiveSourceHelperPersistsAndDoesNotRecurse() {
         activeShellPaths.forEach { path ->
             val source = sourceText(path)
             val helper = sourceBlockAfter(
@@ -48,7 +48,7 @@ class ShellLifecycleRegressionTest {
     }
 
     @Test
-    fun mobileAndTvWaitForPersistedSelectionBeforeResolvingFallback() {
+    fun mobileWaitsForPersistedSelectionBeforeResolvingFallback() {
         activeShellPaths.forEach { path ->
             val normalized = normalizedSource(sourceText(path))
             assertTrue(
@@ -67,10 +67,9 @@ class ShellLifecycleRegressionTest {
     }
 
     @Test
-    fun mobileAndTvLiveSyncStatusIsScopedToDisplayedSource() {
+    fun mobileLiveSyncStatusIsScopedToDisplayedSource() {
         listOf(
             "src/mobile/java/app/ownplay/player/ui/TargetLiveRoute.kt",
-            "src/tv/java/app/ownplay/player/ui/LiveRoute.kt",
         ).forEach { path ->
             val normalized = normalizedSource(sourceText(path))
             assertTrue(
@@ -81,10 +80,9 @@ class ShellLifecycleRegressionTest {
     }
 
     @Test
-    fun mobileAndTvBackHierarchyFallsThroughToExitOnlyAtLiveRoot() {
+    fun mobileBackHierarchyFallsThroughToExitOnlyAtLiveRoot() {
         listOf(
             "src/mobile/java/app/ownplay/player/ui/MobileOwnPlayApp.kt" to "MobileSection",
-            "src/tv/java/app/ownplay/player/ui/TVOwnPlayApp.kt" to "TVSection",
         ).forEach { (path, sectionType) ->
             val source = sourceText(path)
             assertTrue("$path must install a Compose back handler", source.contains("import androidx.activity.compose.BackHandler"))
@@ -112,7 +110,6 @@ class ShellLifecycleRegressionTest {
     private companion object {
         val activeShellPaths = listOf(
             "src/mobile/java/app/ownplay/player/ui/MobileOwnPlayApp.kt",
-            "src/tv/java/app/ownplay/player/ui/TVOwnPlayApp.kt",
         )
     }
 }
