@@ -40,6 +40,31 @@ jobs:
           test -d "${ANDROID_HOME}/platforms/android-36"
           test -d "${ANDROID_HOME}/build-tools/36.0.0"
 
+      - name: Verify Mobile-only source boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          violations_file="${RUNNER_TEMP}/ownplay-mobile-tv-boundary.txt"
+          : > "${violations_file}"
+
+          find app/src -type f \
+            \( -path '*/ui/tv/*' -o -name 'tv_banner.*' \) \
+            -print >> "${violations_file}"
+
+          grep -RInE \
+            'ANDROID_TV|UI_MODE_TYPE_TELEVISION|KEYCODE_DPAD|KEYCODE_CHANNEL_(UP|DOWN)|Tv(Remote|Playback|Popup|Background)|OfflineMediaTvFocusPolicy|tvRemote|isTelevision|AppDeviceProfile|AppInputMode|usesDpad|focusBackOnEntry|LEANBACK_LAUNCHER|android\.software\.leanback|android\.hardware\.type\.television' \
+            app/src \
+            --include='*.kt' \
+            --include='*.xml' \
+            >> "${violations_file}" || true
+
+          if test -s "${violations_file}"; then
+            echo 'Android TV / remote-control compatibility code is not allowed in OwnPlay Mobile:' >&2
+            cat "${violations_file}" >&2
+            exit 1
+          fi
+
       - name: Validate Mobile without APK
         run: >-
           gradle
