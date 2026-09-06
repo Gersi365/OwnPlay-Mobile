@@ -10,10 +10,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
-import androidx.compose.ui.focus.FocusDirection
-import androidx.compose.ui.platform.LocalFocusManager
-import app.ownplay.player.BuildConfig
 import app.ownplay.player.OwnPlayAppRuntime
 
 @Composable
@@ -25,7 +21,6 @@ fun OwnPlayRoot(
     onLivePreviewActiveChanged: (Boolean) -> Unit = {},
 ) {
     var contentVisible by remember { mutableStateOf(false) }
-    val focusManager = LocalFocusManager.current
 
     SideEffect {
         LiveEpgPresentationBridge.bindRuntime(runtime)
@@ -33,16 +28,6 @@ fun OwnPlayRoot(
 
     LaunchedEffect(Unit) {
         contentVisible = true
-    }
-
-    LaunchedEffect(BuildConfig.IS_TV_BUILD, contentVisible) {
-        if (BuildConfig.IS_TV_BUILD && contentVisible) {
-            withFrameNanos { }
-            if (!focusManager.moveFocus(FocusDirection.Next)) {
-                withFrameNanos { }
-                focusManager.moveFocus(FocusDirection.Next)
-            }
-        }
     }
 
     AnimatedVisibility(

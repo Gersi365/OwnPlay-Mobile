@@ -35,14 +35,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -59,7 +53,6 @@ internal fun MovieDetailsPane(
     loading: Boolean,
     error: SourceError?,
     download: OfflineDownload?,
-    focusBackOnEntry: Boolean,
     onDismiss: () -> Unit,
     onFavoriteChanged: (Boolean) -> Unit,
     onDownload: (VodMovie) -> Unit,
@@ -71,19 +64,7 @@ internal fun MovieDetailsPane(
     onPlay: (VodMovie) -> Unit,
     modifier: Modifier,
 ) {
-    val configuration = LocalConfiguration.current
-    val isTelevision =
-        configuration.uiMode and android.content.res.Configuration.UI_MODE_TYPE_MASK ==
-            android.content.res.Configuration.UI_MODE_TYPE_TELEVISION
-    val detailPrimaryFocusRequester = remember(movie.movieId) { FocusRequester() }
-    val offlineCopyAvailable = !isTelevision && download?.state == DownloadStates.COMPLETED
-
-    LaunchedEffect(isTelevision, focusBackOnEntry, movie.movieId) {
-        if (isTelevision) {
-            withFrameNanos { }
-            detailPrimaryFocusRequester.requestFocus()
-        }
-    }
+    val offlineCopyAvailable = download?.state == DownloadStates.COMPLETED
 
     Surface(
         modifier = modifier,
@@ -165,9 +146,7 @@ internal fun MovieDetailsPane(
             ) {
                 Button(
                     onClick = { onPlay(movie) },
-                    modifier = Modifier
-                        .weight(1f)
-                        .focusRequester(detailPrimaryFocusRequester),
+                    modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(10.dp),
                 ) {
                     Icon(Icons.Filled.PlayArrow, contentDescription = null)
@@ -198,127 +177,125 @@ internal fun MovieDetailsPane(
                 }
             }
 
-            if (!isTelevision) {
-                val target = details?.movie ?: movie
-                if (offlineCopyAvailable) {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.48f),
-                        tonalElevation = 0.dp,
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            Icon(Icons.Filled.DownloadDone, contentDescription = null)
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = if (download?.savedToDownloads == true) {
-                                        "Downloaded · Phone Downloads"
-                                    } else {
-                                        "Downloaded · Offline copy"
-                                    },
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.Medium,
-                                )
-                                Text(
-                                    text = "Play uses the local download first.",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            IconButton(onClick = { onRemoveDownload(requireNotNull(download)) }) {
-                                Icon(Icons.Filled.Delete, contentDescription = "Remove download")
-                            }
-                        }
-                    }
-                } else {
+            val target = details?.movie ?: movie
+            if (offlineCopyAvailable) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.48f),
+                    tonalElevation = 0.dp,
+                ) {
                     Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        val downloadLabel = when (download?.state) {
-                            DownloadStates.QUEUED -> "Pause"
-                            DownloadStates.DOWNLOADING -> "Pause"
-                            DownloadStates.PAUSED -> "Resume"
-                            DownloadStates.FAILED -> "Retry"
-                            else -> "Download"
-                        }
-                        FilledTonalButton(
-                            onClick = {
-                                when (download?.state) {
-                                    DownloadStates.QUEUED,
-                                    DownloadStates.DOWNLOADING,
-                                    -> onPauseDownload(download)
-                                    DownloadStates.PAUSED -> onResumeDownload(download)
-                                    DownloadStates.FAILED -> onRetryDownload(download)
-                                    null -> onDownload(target)
-                                    DownloadStates.COMPLETED -> Unit
-                                }
-                            },
-                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
-                            shape = RoundedCornerShape(10.dp),
-                        ) {
-                            Icon(
-                                imageVector = when (download?.state) {
-                                    DownloadStates.QUEUED,
-                                    DownloadStates.DOWNLOADING,
-                                    -> Icons.Filled.Pause
-                                    DownloadStates.PAUSED -> Icons.Filled.PlayArrow
-                                    DownloadStates.FAILED -> Icons.Filled.Refresh
-                                    else -> Icons.Filled.Download
+                        Icon(Icons.Filled.DownloadDone, contentDescription = null)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (download?.savedToDownloads == true) {
+                                    "Downloaded · Phone Downloads"
+                                } else {
+                                    "Downloaded · Offline copy"
                                 },
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Medium,
                             )
-                            Spacer(Modifier.width(6.dp))
-                            Text(downloadLabel)
+                            Text(
+                                text = "Play uses the local download first.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
-                        download?.let { managedDownload ->
-                            IconButton(onClick = { onRemoveDownload(managedDownload) }) {
-                                Icon(Icons.Filled.Delete, contentDescription = "Remove download")
-                            }
+                        IconButton(onClick = { onRemoveDownload(requireNotNull(download)) }) {
+                            Icon(Icons.Filled.Delete, contentDescription = "Remove download")
                         }
                     }
                 }
-
-                if (
-                    download?.state == DownloadStates.DOWNLOADING ||
-                    download?.state == DownloadStates.QUEUED ||
-                    download?.state == DownloadStates.PAUSED
+            } else {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    val progress = download.progressFraction
-                    if (progress == null) {
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    } else {
-                        LinearProgressIndicator(
-                            progress = { progress },
-                            modifier = Modifier.fillMaxWidth(),
-                        )
+                    val downloadLabel = when (download?.state) {
+                        DownloadStates.QUEUED -> "Pause"
+                        DownloadStates.DOWNLOADING -> "Pause"
+                        DownloadStates.PAUSED -> "Resume"
+                        DownloadStates.FAILED -> "Retry"
+                        else -> "Download"
                     }
+                    FilledTonalButton(
+                        onClick = {
+                            when (download?.state) {
+                                DownloadStates.QUEUED,
+                                DownloadStates.DOWNLOADING,
+                                -> onPauseDownload(download)
+                                DownloadStates.PAUSED -> onResumeDownload(download)
+                                DownloadStates.FAILED -> onRetryDownload(download)
+                                null -> onDownload(target)
+                                DownloadStates.COMPLETED -> Unit
+                            }
+                        },
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
+                        shape = RoundedCornerShape(10.dp),
+                    ) {
+                        Icon(
+                            imageVector = when (download?.state) {
+                                DownloadStates.QUEUED,
+                                DownloadStates.DOWNLOADING,
+                                -> Icons.Filled.Pause
+                                DownloadStates.PAUSED -> Icons.Filled.PlayArrow
+                                DownloadStates.FAILED -> Icons.Filled.Refresh
+                                else -> Icons.Filled.Download
+                            },
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(downloadLabel)
+                    }
+                    download?.let { managedDownload ->
+                        IconButton(onClick = { onRemoveDownload(managedDownload) }) {
+                            Icon(Icons.Filled.Delete, contentDescription = "Remove download")
+                        }
+                    }
+                }
+            }
+
+            if (
+                download?.state == DownloadStates.DOWNLOADING ||
+                download?.state == DownloadStates.QUEUED ||
+                download?.state == DownloadStates.PAUSED
+            ) {
+                val progress = download.progressFraction
+                if (progress == null) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                } else {
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                Text(
+                    text = movieDownloadProgressLabel(download),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (download.savedToDownloads) {
                     Text(
-                        text = movieDownloadProgressLabel(download),
-                        style = MaterialTheme.typography.labelMedium,
+                        text = "Saving to phone Downloads",
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    if (download.savedToDownloads) {
-                        Text(
-                            text = "Saving to phone Downloads",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
                 }
+            }
 
-                if (download?.state == DownloadStates.FAILED) {
-                    Text(
-                        text = download.failureReason ?: "Download failed. Retry when the source is available.",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
+            if (download?.state == DownloadStates.FAILED) {
+                Text(
+                    text = download.failureReason ?: "Download failed. Retry when the source is available.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
             }
 
             details?.let { info ->

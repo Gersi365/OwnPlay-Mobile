@@ -25,12 +25,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.ownplay.player.persistence.PlaylistSourceSummary
-import app.ownplay.player.personalization.AppDeviceProfile
 import app.ownplay.player.personalization.AppOrientationMode
 
 @Composable
 internal fun PortraitSettingsMenu(
-    deviceProfile: AppDeviceProfile?,
     orientationMode: AppOrientationMode,
     onSetOrientation: (AppOrientationMode) -> Unit,
     summaries: List<PlaylistSourceSummary>,
@@ -77,10 +75,9 @@ internal fun PortraitSettingsMenu(
             CompactSettingsSection(
                 icon = Icons.Filled.Tune,
                 title = "Interface",
-                subtitle = "Device behavior and orientation",
+                subtitle = "Orientation",
             ) {
                 InterfaceSettingsContent(
-                    deviceProfile = deviceProfile,
                     orientationMode = orientationMode,
                     onSetOrientation = onSetOrientation,
                 )
@@ -124,77 +121,38 @@ internal fun PortraitSettingsMenu(
 
 @Composable
 internal fun InterfaceSettingsContent(
-    deviceProfile: AppDeviceProfile?,
     orientationMode: AppOrientationMode,
     onSetOrientation: (AppOrientationMode) -> Unit,
 ) {
     SettingValueRow(
-        label = "Device target",
-        value = when (deviceProfile) {
-            AppDeviceProfile.SMARTPHONE -> "Mobile"
-            AppDeviceProfile.ANDROID_TV -> "TV"
-            null -> "Loading…"
-        },
-    )
-    Text(
-        text = when (deviceProfile) {
-            AppDeviceProfile.SMARTPHONE ->
-                "This build uses touch-first Mobile controls."
-            AppDeviceProfile.ANDROID_TV ->
-                "This build uses remote-first TV controls."
-            null -> "Loading device target…"
-        },
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-
-    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-    SettingValueRow(
         label = "Orientation",
-        value = when (deviceProfile) {
-            AppDeviceProfile.SMARTPHONE -> if (orientationMode == AppOrientationMode.LANDSCAPE) {
-                "Landscape"
-            } else {
-                "Portrait"
-            }
-            AppDeviceProfile.ANDROID_TV -> "Landscape · fixed"
-            null -> "Loading…"
+        value = if (orientationMode == AppOrientationMode.LANDSCAPE) {
+            "Landscape"
+        } else {
+            "Portrait"
         },
     )
-    if (deviceProfile == AppDeviceProfile.SMARTPHONE) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            OrientationButton(
-                label = "Portrait",
-                selected = orientationMode == AppOrientationMode.PORTRAIT,
-                onClick = { onSetOrientation(AppOrientationMode.PORTRAIT) },
-                modifier = Modifier.weight(1f),
-            )
-            OrientationButton(
-                label = "Landscape",
-                selected = orientationMode == AppOrientationMode.LANDSCAPE,
-                onClick = { onSetOrientation(AppOrientationMode.LANDSCAPE) },
-                modifier = Modifier.weight(1f),
-            )
-        }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        OrientationButton(
+            label = "Portrait",
+            selected = orientationMode == AppOrientationMode.PORTRAIT,
+            onClick = { onSetOrientation(AppOrientationMode.PORTRAIT) },
+            modifier = Modifier.weight(1f),
+        )
+        OrientationButton(
+            label = "Landscape",
+            selected = orientationMode == AppOrientationMode.LANDSCAPE,
+            onClick = { onSetOrientation(AppOrientationMode.LANDSCAPE) },
+            modifier = Modifier.weight(1f),
+        )
     }
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     Text(
-        text = when (deviceProfile) {
-            AppDeviceProfile.SMARTPHONE ->
-                "With an active Live preview, rotating to landscape can open the full player."
-            AppDeviceProfile.ANDROID_TV ->
-                "TV stays landscape and uses the D-pad/remote layout."
-            null -> "Loading orientation…"
-        },
+        text = "With an active Live preview, rotating to landscape can open the full player.",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
-}
-
-internal fun deviceProfileLabel(profile: AppDeviceProfile?): String = when (profile) {
-    AppDeviceProfile.SMARTPHONE -> "Smartphone"
-    AppDeviceProfile.ANDROID_TV -> "Android TV"
-    null -> "Loading…"
 }

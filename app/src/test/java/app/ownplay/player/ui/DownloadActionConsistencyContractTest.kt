@@ -10,7 +10,7 @@ class DownloadActionConsistencyContractTest {
     fun `movie details use canonical download actions and repository retry semantics`() {
         val details = sourceText("src/main/java/app/ownplay/player/ui/vod/MovieDetailsPane.kt")
 
-        assertTrue(details.contains("offlineCopyAvailable = !isTelevision && download?.state == DownloadStates.COMPLETED"))
+        assertTrue(details.contains("offlineCopyAvailable = download?.state == DownloadStates.COMPLETED"))
         assertTrue(details.contains("DownloadStates.QUEUED -> \"Pause\""))
         assertTrue(details.contains("DownloadStates.DOWNLOADING -> \"Pause\""))
         assertTrue(details.contains("DownloadStates.PAUSED -> \"Resume\""))
@@ -27,7 +27,7 @@ class DownloadActionConsistencyContractTest {
     fun `series details use the same canonical download actions`() {
         val details = sourceText("src/main/java/app/ownplay/player/ui/series/SeriesDetailsPane.kt")
 
-        assertTrue(details.contains("offlineCopyAvailable = !isTelevision && download?.state == DownloadStates.COMPLETED"))
+        assertTrue(details.contains("offlineCopyAvailable = download?.state == DownloadStates.COMPLETED"))
         assertTrue(details.contains("-> \"Pause\""))
         assertTrue(details.contains("DownloadStates.PAUSED -> \"Resume\""))
         assertTrue(details.contains("DownloadStates.FAILED -> \"Retry\""))

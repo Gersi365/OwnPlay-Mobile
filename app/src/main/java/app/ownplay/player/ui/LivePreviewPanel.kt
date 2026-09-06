@@ -1,6 +1,5 @@
 package app.ownplay.player.ui
 
-import android.content.res.Configuration
 import android.graphics.Color as AndroidColor
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
@@ -23,7 +22,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -42,10 +40,8 @@ import app.ownplay.player.playback.PlaybackVideoOutput
 /**
  * Live Preview is deliberately presentation-only.
  *
- * No playback/navigation/fullscreen/close buttons are rendered on either mobile or TV. TV keeps
- * focus in the channel browser so a second OK on the selected channel can open fullscreen. Mobile
- * gets a transparent tap target above PlayerView so tapping video opens fullscreen without adding a
- * visible control layer. Back/ESC ownership remains in LiveRoute so Preview closes first.
+ * No playback/navigation/fullscreen/close buttons are rendered on Mobile. A a transparent tap target above PlayerView so tapping video opens fullscreen without adding a
+ * visible control layer. Back ownership remains in LiveRoute so Preview closes first.
  */
 @Suppress("UNUSED_PARAMETER")
 @OptIn(UnstableApi::class)
@@ -63,9 +59,6 @@ internal fun LivePreviewPanel(
     modifier: Modifier = Modifier,
     showLiveBadge: Boolean = true,
 ) {
-    val configuration = LocalConfiguration.current
-    val isTelevision =
-        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
     val controls = PlaybackPresentationPolicy.controlsFor(state)
     val interactionSource = remember { MutableInteractionSource() }
 
@@ -98,7 +91,6 @@ internal fun LivePreviewPanel(
                 onRelease = { view -> videoOutput.unbind(view) },
             )
 
-            if (!isTelevision) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -113,7 +105,6 @@ internal fun LivePreviewPanel(
                             onClick = onOpenFullscreen,
                         ),
                 )
-            }
 
             if (showLiveBadge) {
                 Surface(

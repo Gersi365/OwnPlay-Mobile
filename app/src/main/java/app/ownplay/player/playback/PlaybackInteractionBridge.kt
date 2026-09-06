@@ -20,18 +20,12 @@ object PlaybackInteractionBridge {
     private var lifecycleSuspendedView = WeakReference<PlayerView>(null)
     private var backOwner: Any? = null
     private var backAction: (() -> Unit)? = null
-    private var dpadMode = false
-
-    fun setDpadMode(enabled: Boolean) {
-        dpadMode = enabled
-    }
 
     fun bind(
         output: PlaybackVideoOutput,
         view: PlayerView,
         showNativeController: Boolean = false,
     ) {
-        val newlyBound = boundView.get() !== view
         output.bind(view)
         observeBoundView(view)
         if (showNativeController) {
@@ -41,10 +35,6 @@ object PlaybackInteractionBridge {
                 view.controllerShowTimeoutMs = DEFAULT_CONTROLLER_TIMEOUT_MILLIS
                 view.setControllerAutoShow(true)
                 view.showController()
-                if (newlyBound && dpadMode) {
-                    view.isFocusable = true
-                    view.requestFocus()
-                }
             }
         }
     }

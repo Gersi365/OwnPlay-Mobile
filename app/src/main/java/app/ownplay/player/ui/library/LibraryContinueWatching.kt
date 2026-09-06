@@ -1,6 +1,5 @@
 package app.ownplay.player.ui.library
 
-import android.content.res.Configuration
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,7 +25,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -92,10 +90,7 @@ private fun <T> LibraryContinueWatchingStrip(
     onOpen: (T) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val configuration = LocalConfiguration.current
-    val isTelevision =
-        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
-    val cardWidth = if (isTelevision) 172.dp else 138.dp
+    val cardWidth = 138.dp
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -103,17 +98,13 @@ private fun <T> LibraryContinueWatchingStrip(
     ) {
         Text(
             text = "Continue Watching",
-            style = if (isTelevision) {
-                MaterialTheme.typography.titleMedium
-            } else {
-                MaterialTheme.typography.titleSmall
-            },
+            style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.SemiBold,
         )
         LazyRow(
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(end = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(if (isTelevision) 10.dp else 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(items = items, key = key) { item ->
                 var focused by remember(key(item)) { mutableStateOf(false) }
@@ -142,9 +133,7 @@ private fun <T> LibraryContinueWatchingStrip(
                                 .fillMaxWidth()
                                 .aspectRatio(2f / 3f),
                         )
-                        if (!isTelevision) {
-                            ContinueWatchingProgressSlot(progress = progress)
-                        }
+                        ContinueWatchingProgressSlot(progress = progress)
                         Text(
                             text = title(item),
                             style = MaterialTheme.typography.labelLarge,
@@ -152,7 +141,7 @@ private fun <T> LibraryContinueWatchingStrip(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        if (isTelevision || !hideSubtitleOnMobile) {
+                        if (!hideSubtitleOnMobile) {
                             Text(
                                 text = subtitle(item),
                                 style = MaterialTheme.typography.labelSmall,
@@ -161,14 +150,6 @@ private fun <T> LibraryContinueWatchingStrip(
                                 overflow = TextOverflow.Ellipsis,
                             )
                         }
-                        if (isTelevision) {
-                            progress?.let { watched ->
-                                LinearProgressIndicator(
-                                    progress = { watched },
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
-                            }
-                        } else {
                             Text(
                                 text = continueWatchingResumeLabel(
                                     positionMs = positionMs(item),
@@ -178,7 +159,7 @@ private fun <T> LibraryContinueWatchingStrip(
                                 color = MaterialTheme.colorScheme.primary,
                                 maxLines = 1,
                             )
-                        }
+
                     }
                 }
             }

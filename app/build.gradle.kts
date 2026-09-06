@@ -24,8 +24,6 @@ android {
             dimension = "device"
             applicationId = "app.ownplay.mobile"
             manifestPlaceholders["appLabel"] = "OwnPlay"
-            buildConfigField("boolean", "IS_TV_BUILD", "false")
-            buildConfigField("String", "TARGET_DEVICE", "\"mobile\"")
         }
     }
 

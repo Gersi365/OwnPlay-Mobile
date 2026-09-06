@@ -1,6 +1,5 @@
 package app.ownplay.player.ui
 
-import android.content.res.Configuration
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,9 +22,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -51,22 +47,11 @@ internal fun LiveManagementScreen(
     runtime: OwnPlayAppRuntime,
     summaries: List<PlaylistSourceSummary>,
     onBack: () -> Unit,
-    focusBackOnEntry: Boolean = false,
 ) {
-    val configuration = LocalConfiguration.current
-    val isTelevision =
-        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
-    val backFocusRequester = remember { FocusRequester() }
     var sourceId by remember(summaries) {
         mutableStateOf(summaries.firstOrNull()?.sourceId)
     }
     val selectedSourceId = sourceId
-
-    LaunchedEffect(isTelevision, focusBackOnEntry, selectedSourceId) {
-        if (isTelevision && focusBackOnEntry) {
-            backFocusRequester.requestFocus()
-        }
-    }
 
     if (selectedSourceId == null) {
         Column(
@@ -80,10 +65,7 @@ internal fun LiveManagementScreen(
                 "Add a playlist before managing categories and channels.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            TextButton(
-                onClick = onBack,
-                modifier = Modifier.focusRequester(backFocusRequester),
-            ) { Text("Back") }
+            TextButton(onClick = onBack) { Text("Back") }
         }
         return
     }
@@ -105,12 +87,6 @@ internal fun LiveManagementScreen(
     val selectedCategory = state.query.categoryKey?.let { key ->
         state.categories.firstOrNull { category -> category.providerCategoryKey == key }
     }
-    val selectedChannelId = editState.selectedChannelIds.singleOrNull()
-    val selectedChannelIndex = selectedChannelId?.let { channelId ->
-        state.channels.indexOfFirst { channel -> channel.channelId == channelId }
-    } ?: -1
-    val canMoveSelectedUp = selectedChannelIndex > 0
-    val canMoveSelectedDown = selectedChannelIndex >= 0 && selectedChannelIndex < state.channels.lastIndex
 
     LaunchedEffect(selectedSourceId) {
         browseSession.setIncludeHidden(true)
@@ -133,54 +109,6 @@ internal fun LiveManagementScreen(
                 selectedChannelIds = selection,
                 action = action,
             )
-        }
-    }
-
-    fun moveSelectedRelative(anchorChannelId: String, placement: ManualOrderPlacement) {
-        val channelId = selectedChannelId ?: return
-        val useFavoriteOrder =
-            state.query.favoritesOnly && state.query.order == LiveBrowseOrder.FAVORITE_ORDER
-        val useManualOrder = state.query.order == LiveBrowseOrder.MY_ORDER
-        if (!useFavoriteOrder && !useManualOrder) return
-
-        orderError = null
-        scope.launch {
-            try {
-                if (useFavoriteOrder) {
-                    when (
-                        runtime.moveFavoriteRelative(
-                            sourceId = selectedSourceId,
-                            channelId = channelId,
-                            anchorChannelId = anchorChannelId,
-                            placement = placement,
-                        )
-                    ) {
-                        is FavoriteMutationResult.Success -> orderError = null
-                        is FavoriteMutationResult.Failure -> {
-                            orderError = "Could not save channel order."
-                        }
-                    }
-                } else {
-                    when (
-                        runtime.moveChannelRelative(
-                            sourceId = selectedSourceId,
-                            channelId = channelId,
-                            anchorChannelId = anchorChannelId,
-                            placement = placement,
-                        )
-                    ) {
-                        is ManualOrderMutationResult.Success -> orderError = null
-                        is ManualOrderMutationResult.Rejected,
-                        ManualOrderMutationResult.InvalidSourceId,
-                        ManualOrderMutationResult.PersistenceFailure,
-                        -> orderError = "Could not save channel order."
-                    }
-                }
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: Exception) {
-                orderError = "Could not save channel order."
-            }
         }
     }
 
@@ -229,38 +157,6 @@ internal fun LiveManagementScreen(
                 orderError = "Could not save channel order."
             }
         }
-    }
-
-    fun moveSelectedUp() {
-        if (!canMoveSelectedUp) return
-        moveSelectedRelative(
-            anchorChannelId = state.channels[selectedChannelIndex - 1].channelId,
-            placement = ManualOrderPlacement.BEFORE,
-        )
-    }
-
-    fun moveSelectedDown() {
-        if (!canMoveSelectedDown) return
-        moveSelectedRelative(
-            anchorChannelId = state.channels[selectedChannelIndex + 1].channelId,
-            placement = ManualOrderPlacement.AFTER,
-        )
-    }
-
-    fun moveSelectedToTop() {
-        if (!canMoveSelectedUp) return
-        moveSelectedRelative(
-            anchorChannelId = state.channels.first().channelId,
-            placement = ManualOrderPlacement.BEFORE,
-        )
-    }
-
-    fun moveSelectedToBottom() {
-        if (!canMoveSelectedDown) return
-        moveSelectedRelative(
-            anchorChannelId = state.channels.last().channelId,
-            placement = ManualOrderPlacement.AFTER,
-        )
     }
 
     fun toggleCategoryVisibility() {
@@ -315,10 +211,7 @@ internal fun LiveManagementScreen(
                     sourceId = nextSourceId
                 },
             )
-            TextButton(
-                onClick = onBack,
-                modifier = Modifier.focusRequester(backFocusRequester),
-            ) { Text("Done") }
+            TextButton(onClick = onBack) { Text("Done") }
         }
 
         if (selectedCategory != null) {
@@ -359,27 +252,6 @@ internal fun LiveManagementScreen(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.error,
             )
-        }
-
-        if (isTelevision && selectedChannelId != null) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 10.dp, vertical = 2.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                Text(
-                    text = "Remote order",
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                TextButton(onClick = ::moveSelectedToTop) { Text("Top") }
-                TextButton(onClick = ::moveSelectedUp) { Text("Move up") }
-                TextButton(onClick = ::moveSelectedDown) { Text("Move down") }
-                TextButton(onClick = ::moveSelectedToBottom) { Text("Bottom") }
-            }
         }
 
         LiveBrowseScreen(

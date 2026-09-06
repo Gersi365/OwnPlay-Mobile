@@ -1,18 +1,15 @@
 package app.ownplay.player.playback
 
-import app.ownplay.player.BuildConfig
-
 internal enum class LiveActivityBackgroundAction {
     NONE,
     SUSPEND_AND_RETAIN_SURFACE,
 }
 
 /**
- * Activity-level background policy used by the shared MainActivity.
+ * Activity-level background policy for OwnPlay Mobile.
  *
- * Live suspends outside PiP/configuration changes on both targets. Mobile additionally suspends
- * long-form Movie/Series playback so the existing PlaybackController can retain resume position.
- * TV non-Live playback remains delegated to TvPlaybackLifecyclePolicy.
+ * Active Live, Movie, and Series playback suspends outside PiP/configuration changes so the
+ * existing PlaybackController can retain a recoverable session and resume position.
  */
 internal object LiveActivityLifecyclePolicy {
     fun backgroundAction(
@@ -36,7 +33,7 @@ internal object LiveActivityLifecyclePolicy {
             PlaybackMediaKind.LIVE -> true
             PlaybackMediaKind.MOVIE,
             PlaybackMediaKind.SERIES_EPISODE,
-            -> !BuildConfig.IS_TV_BUILD
+            -> true
             null -> false
         }
         return if (shouldSuspend) {

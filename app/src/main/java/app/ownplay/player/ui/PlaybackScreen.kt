@@ -3,18 +3,15 @@ package app.ownplay.player.ui
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
-import android.content.res.Configuration
 import android.graphics.Color as AndroidColor
 import android.media.AudioManager
 import android.provider.Settings
-import android.view.KeyEvent
 import androidx.annotation.OptIn
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -45,15 +42,10 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -75,7 +67,6 @@ import app.ownplay.player.playback.PlaybackState
 import app.ownplay.player.playback.PlaybackSubtitleSelection
 import app.ownplay.player.playback.PlaybackTrackState
 import app.ownplay.player.playback.PlaybackVideoOutput
-import app.ownplay.player.ui.live.LiveFullscreenEpgDirection
 import app.ownplay.player.ui.live.LiveFullscreenEpgPolicy
 import kotlinx.coroutines.delay
 import kotlin.math.abs
@@ -98,16 +89,12 @@ private data class MobileFullscreenGestureFeedback(
 )
 
 /**
- * Live fullscreen presentation.
+ * Mobile Live fullscreen presentation.
  *
- * Live intentionally has no playback menu. The video owns the screen and EPG is the only transient
- * interaction layer. TV remote behavior is CH+ / CH- -> next / previous channel, OK -> reveal EPG,
- * Down -> enter EPG, Left/Right -> move through available programmes, Up -> leave the EPG timeline.
- * D-pad Up/Down are reserved for focus/EPG navigation and never perform direct channel zapping.
- * The final timeline card opens the full guide over Full View without tearing down playback. Mobile
- * uses tap to show/hide EPG, horizontal swipe to change channel, left-side vertical swipe for
- * brightness, and right-side vertical swipe for media volume. Category gestures belong only to the
- * channel browser and never to Full View.
+ * Live intentionally has no playback menu. Video owns the screen and EPG is the only transient
+ * interaction layer. Tap shows or hides EPG, horizontal swipe changes channel, left-side vertical
+ * swipe adjusts brightness, and right-side vertical swipe adjusts media volume. Category gestures
+ * belong only to the channel browser and never to Full View.
  */
 @Suppress("UNUSED_PARAMETER")
 @OptIn(UnstableApi::class)
@@ -126,15 +113,11 @@ internal fun PlaybackScreen(
     onReturnToChannels: () -> Unit,
     onFullscreenStateChanged: (Boolean) -> Unit,
 ) {
-    val configuration = LocalConfiguration.current
     val context = LocalContext.current
-    val isTelevision =
-        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
     val hostActivity = remember(context) { context.findActivity() }
     val audioManager = remember(context) {
         context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     }
-    val rootFocusRequester = remember { FocusRequester() }
     val touchInteractionSource = remember { MutableInteractionSource() }
     val epgSnapshot by LiveEpgPresentationBridge.snapshot.collectAsState()
     val timeline = remember(epgSnapshot, selection.request.channelId) {
@@ -218,23 +201,12 @@ internal fun PlaybackScreen(
         }
     }
 
-    LaunchedEffect(selection.request.channelId, isTelevision) {
+    LaunchedEffect(selection.request.channelId) {
         epgVisible = true
         epgFocused = false
         showFullGuide = false
         selectedProgramIndex = currentProgramIndex
         interactionGeneration += 1
-        if (isTelevision) {
-            withFrameNanos { }
-            rootFocusRequester.requestFocus()
-        }
-    }
-
-    LaunchedEffect(showFullGuide, isTelevision) {
-        if (isTelevision && !showFullGuide) {
-            withFrameNanos { }
-            rootFocusRequester.requestFocus()
-        }
     }
 
     LaunchedEffect(overlayPrograms, currentProgramIndex) {
@@ -274,109 +246,7 @@ internal fun PlaybackScreen(
         color = Color.Black,
     ) {
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .then(
-                    if (isTelevision) {
-                        Modifier
-                            .focusRequester(rootFocusRequester)
-                            .onPreviewKeyEvent { event ->
-                                if (showFullGuide) return@onPreviewKeyEvent false
-                                val native = event.nativeKeyEvent
-                                if (native.action != KeyEvent.ACTION_DOWN) {
-                                    return@onPreviewKeyEvent false
-                                }
-                                tvLiveChannelNavigationForKeyCode(native.keyCode)?.let { direction ->
-                                    onNavigate(direction)
-                                    return@onPreviewKeyEvent true
-                                }
-                                when (native.keyCode) {
-                                    KeyEvent.KEYCODE_DPAD_CENTER,
-                                    KeyEvent.KEYCODE_ENTER,
-                                    KeyEvent.KEYCODE_NUMPAD_ENTER,
-                                    KeyEvent.KEYCODE_BUTTON_A,
-                                    KeyEvent.KEYCODE_BUTTON_SELECT,
-                                    -> {
-                                        when {
-                                            !epgVisible -> revealEpg()
-                                            epgFocused &&
-                                                LiveFullscreenEpgPolicy.isFullGuideSelection(
-                                                    selectedIndex = selectedProgramIndex,
-                                                    programCount = overlayPrograms.size,
-                                                ) -> openFullGuide()
-                                            else -> revealEpg()
-                                        }
-                                        true
-                                    }
-
-                                    KeyEvent.KEYCODE_DPAD_DOWN -> {
-                                        if (
-                                            !epgVisible ||
-                                            epgLoading ||
-                                            !LiveFullscreenEpgPolicy.canEnterTimeline(
-                                                overlayPrograms.size,
-                                            )
-                                        ) {
-                                            false
-                                        } else {
-                                            epgFocused = true
-                                            selectedProgramIndex = selectedProgramIndex.coerceIn(
-                                                0,
-                                                fullGuideIndex,
-                                            )
-                                            interactionGeneration += 1
-                                            true
-                                        }
-                                    }
-
-                                    KeyEvent.KEYCODE_DPAD_UP -> {
-                                        if (epgFocused) {
-                                            epgFocused = false
-                                            interactionGeneration += 1
-                                            true
-                                        } else {
-                                            false
-                                        }
-                                    }
-
-                                    KeyEvent.KEYCODE_DPAD_LEFT -> {
-                                        if (epgFocused) {
-                                            selectedProgramIndex =
-                                                LiveFullscreenEpgPolicy.moveSelection(
-                                                    currentIndex = selectedProgramIndex,
-                                                    direction = LiveFullscreenEpgDirection.LEFT,
-                                                    programCount = overlayPrograms.size,
-                                                )
-                                            interactionGeneration += 1
-                                            true
-                                        } else {
-                                            false
-                                        }
-                                    }
-
-                                    KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                                        if (epgFocused) {
-                                            selectedProgramIndex =
-                                                LiveFullscreenEpgPolicy.moveSelection(
-                                                    currentIndex = selectedProgramIndex,
-                                                    direction = LiveFullscreenEpgDirection.RIGHT,
-                                                    programCount = overlayPrograms.size,
-                                                )
-                                            interactionGeneration += 1
-                                            true
-                                        } else {
-                                            false
-                                        }
-                                    }
-
-                                    else -> false
-                                }
-                            }
-                            .focusable()
-                    } else {
-                        Modifier
-                    },
-                ),
+            modifier = Modifier.fillMaxSize(),
         ) {
             LiveFullscreenVideoSurface(
                 videoOutput = videoOutput,
@@ -387,13 +257,12 @@ internal fun PlaybackScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .pointerInput(
-                        isTelevision,
                         selection.request.channelId,
                         hostActivity,
                         audioManager,
                         showFullGuide,
                     ) {
-                        if (isTelevision || showFullGuide) return@pointerInput
+                        if (showFullGuide) return@pointerInput
 
                         var startX = 0f
                         var totalX = 0f
@@ -482,7 +351,7 @@ internal fun PlaybackScreen(
                         )
                     }
                     .clickable(
-                        enabled = !isTelevision && !showFullGuide,
+                        enabled = !showFullGuide,
                         interactionSource = touchInteractionSource,
                         indication = null,
                         onClick = ::toggleEpg,
@@ -643,11 +512,7 @@ private fun LiveFullscreenEpgOverlay(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        text = if (focused) {
-                            "EPG · ← → browse · ↑ video"
-                        } else {
-                            "EPG · ↓ browse"
-                        },
+                        text = "EPG",
                         style = MaterialTheme.typography.labelSmall,
                         color = Color.White.copy(alpha = 0.62f),
                         maxLines = 1,
@@ -803,12 +668,6 @@ private fun timeRange(program: EpgProgram): String = when {
     else -> "—"
 }
 
-internal fun tvLiveChannelNavigationForKeyCode(keyCode: Int): PlaybackNavigationDirection? =
-    when (keyCode) {
-        KeyEvent.KEYCODE_CHANNEL_UP -> PlaybackNavigationDirection.NEXT
-        KeyEvent.KEYCODE_CHANNEL_DOWN -> PlaybackNavigationDirection.PREVIOUS
-        else -> null
-    }
 
 private fun currentWindowBrightness(activity: Activity?, context: Context): Float {
     val windowBrightness = activity?.window?.attributes?.screenBrightness ?: -1f

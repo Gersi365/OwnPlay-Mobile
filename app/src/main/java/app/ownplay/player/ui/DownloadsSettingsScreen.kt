@@ -1,7 +1,5 @@
 package app.ownplay.player.ui
 
-import android.content.res.Configuration
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,7 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
@@ -33,21 +30,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -62,13 +52,8 @@ import kotlinx.coroutines.launch
 @Composable
 internal fun DownloadsSettingsScreen(
     onBack: (() -> Unit)? = null,
-    focusBackOnEntry: Boolean = false,
 ) {
     val context = LocalContext.current
-    val configuration = LocalConfiguration.current
-    val isTelevision =
-        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
-    val backFocusRequester = remember { FocusRequester() }
     val runtime = remember(context) {
         OfflineDownloadFeatureRuntime(context.applicationContext)
     }
@@ -76,16 +61,8 @@ internal fun DownloadsSettingsScreen(
         onDispose { runtime.close() }
     }
     val downloads by runtime.observeAll().collectAsState(initial = emptyList())
-    val downloadIds = remember(downloads) { downloads.map { it.downloadId } }
-    val downloadListState = rememberLazyListState()
-    val downloadItemFocusRequester = remember { FocusRequester() }
-    val focusReturnOwner = remember { Any() }
     val scope = rememberCoroutineScope()
     var pendingRemoval by remember { mutableStateOf<OfflineDownload?>(null) }
-    var focusDownloadId by remember { mutableStateOf<String?>(null) }
-    var focusRequestGeneration by remember { mutableIntStateOf(0) }
-    var rememberedDownloadId by remember { mutableStateOf<String?>(null) }
-    var initialDownloadFocusRequested by remember { mutableStateOf(false) }
 
     pendingRemoval?.let { download ->
         DownloadRemovalConfirmationDialog(
@@ -96,58 +73,6 @@ internal fun DownloadsSettingsScreen(
             },
             onDismiss = { pendingRemoval = null },
         )
-    }
-
-    DisposableEffect(isTelevision, focusReturnOwner) {
-        if (isTelevision) {
-            DownloadPlaybackBridge.registerFocusReturn(focusReturnOwner) { downloadId ->
-                focusDownloadId = downloadId
-                focusRequestGeneration += 1
-            }
-        }
-        onDispose { DownloadPlaybackBridge.clearFocusReturn(focusReturnOwner) }
-    }
-
-    LaunchedEffect(isTelevision, focusBackOnEntry, downloadIds.firstOrNull()) {
-        if (!isTelevision || initialDownloadFocusRequested) return@LaunchedEffect
-        initialDownloadFocusRequested = true
-        if (focusBackOnEntry && onBack != null) {
-            withFrameNanos { }
-            backFocusRequester.requestFocus()
-            return@LaunchedEffect
-        }
-        OfflineMediaTvFocusPolicy.preferredVisibleKey(
-            visibleKeys = downloadIds,
-            rememberedKey = rememberedDownloadId,
-        )?.let { target ->
-            focusDownloadId = target
-            focusRequestGeneration += 1
-        }
-    }
-
-    LaunchedEffect(
-        isTelevision,
-        focusDownloadId,
-        focusRequestGeneration,
-        downloadIds,
-    ) {
-        if (!isTelevision || focusRequestGeneration <= 0) return@LaunchedEffect
-        val target = focusDownloadId ?: return@LaunchedEffect
-        val index = downloadIds.indexOf(target)
-        if (index < 0) {
-            OfflineMediaTvFocusPolicy.preferredVisibleKey(
-                visibleKeys = downloadIds,
-                rememberedKey = rememberedDownloadId,
-            )?.takeIf { it != target }?.let { fallback ->
-                focusDownloadId = fallback
-                focusRequestGeneration += 1
-            }
-            return@LaunchedEffect
-        }
-        downloadListState.scrollToItem(index)
-        withFrameNanos { }
-        downloadItemFocusRequester.requestFocus()
-        rememberedDownloadId = target
     }
 
     Column(
@@ -166,10 +91,7 @@ internal fun DownloadsSettingsScreen(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             if (onBack != null) {
-                TextButton(
-                    onClick = onBack,
-                    modifier = Modifier.focusRequester(backFocusRequester),
-                ) { Text("‹ Settings") }
+                TextButton(onClick = onBack) { Text("‹ Settings") }
             }
             Column(
                 modifier = Modifier.weight(1f),
@@ -231,7 +153,6 @@ internal fun DownloadsSettingsScreen(
         }
 
         LazyColumn(
-            state = downloadListState,
             modifier = Modifier
                 .fillMaxSize()
                 .widthIn(max = 840.dp)
@@ -241,9 +162,6 @@ internal fun DownloadsSettingsScreen(
             items(downloads, key = { it.downloadId }) { download ->
                 DownloadRow(
                     download = download,
-                    primaryActionFocusRequester = downloadItemFocusRequester
-                        .takeIf { focusDownloadId == download.downloadId },
-                    onFocusWithin = { rememberedDownloadId = download.downloadId },
                     onPlayOffline = { DownloadPlaybackBridge.request(download) },
                     onPause = {
                         scope.launch { runtime.pause(download.downloadId) }
@@ -266,32 +184,14 @@ internal fun DownloadsSettingsScreen(
 @Composable
 private fun DownloadRow(
     download: OfflineDownload,
-    primaryActionFocusRequester: FocusRequester?,
-    onFocusWithin: () -> Unit,
     onPlayOffline: () -> Unit,
     onPause: () -> Unit,
     onResume: () -> Unit,
     onRetry: () -> Unit,
     onRemove: () -> Unit,
 ) {
-    var rowFocused by remember(download.downloadId) { mutableStateOf(false) }
-    val primaryActionModifier = primaryActionFocusRequester
-        ?.let { requester -> Modifier.focusRequester(requester) }
-        ?: Modifier
     Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(
-                if (rowFocused) {
-                    Modifier.border(
-                        width = 2.dp,
-                        color = MaterialTheme.colorScheme.primary,
-                        shape = RoundedCornerShape(18.dp),
-                    )
-                } else {
-                    Modifier
-                },
-            ),
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
         tonalElevation = 0.dp,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
@@ -301,10 +201,6 @@ private fun DownloadRow(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(
-                modifier = Modifier.onFocusChanged { focusState ->
-                    rowFocused = focusState.hasFocus
-                    if (focusState.hasFocus) onFocusWithin()
-                },
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
@@ -336,13 +232,13 @@ private fun DownloadRow(
                 when (download.state) {
                     DownloadStates.QUEUED,
                     DownloadStates.DOWNLOADING,
-                    -> IconButton(onClick = onPause, modifier = primaryActionModifier) {
+                    -> IconButton(onClick = onPause) {
                         Icon(Icons.Filled.Pause, contentDescription = "Pause download")
                     }
-                    DownloadStates.PAUSED -> IconButton(onClick = onResume, modifier = primaryActionModifier) {
+                    DownloadStates.PAUSED -> IconButton(onClick = onResume) {
                         Icon(Icons.Filled.PlayArrow, contentDescription = "Resume download")
                     }
-                    DownloadStates.COMPLETED -> TextButton(onClick = onPlayOffline, modifier = primaryActionModifier) {
+                    DownloadStates.COMPLETED -> TextButton(onClick = onPlayOffline) {
                         Icon(
                             Icons.Filled.PlayArrow,
                             contentDescription = null,
@@ -350,7 +246,7 @@ private fun DownloadRow(
                         )
                         Text("Play Offline")
                     }
-                    DownloadStates.FAILED -> IconButton(onClick = onRetry, modifier = primaryActionModifier) {
+                    DownloadStates.FAILED -> IconButton(onClick = onRetry) {
                         Icon(Icons.Filled.Refresh, contentDescription = "Retry download")
                     }
                     else -> Unit

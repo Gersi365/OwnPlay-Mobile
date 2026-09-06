@@ -1,7 +1,6 @@
 package app.ownplay.player.ui.view
 
 import android.content.Context
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -12,15 +11,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -28,8 +23,6 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import app.ownplay.player.ui.tv.TvPopupFocusAction
-import app.ownplay.player.ui.tv.TvPopupFocusPolicy
 import java.io.IOException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -118,80 +111,28 @@ internal fun ContentViewModeMenu(
     onModeSelected: (ContentViewMode) -> Unit,
     modifier: Modifier = Modifier,
     prefix: String? = null,
-    tvFocusManagement: Boolean = false,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    var wasExpanded by remember { mutableStateOf(false) }
-    val triggerFocusRequester = remember { FocusRequester() }
-    val selectedItemFocusRequester = remember(mode) { FocusRequester() }
-
-    BackHandler(enabled = tvFocusManagement && expanded) {
-        expanded = false
-    }
-
-    LaunchedEffect(expanded, tvFocusManagement, mode) {
-        val focusAction = TvPopupFocusPolicy.action(
-            enabled = tvFocusManagement,
-            expanded = expanded,
-            wasExpanded = wasExpanded,
-        )
-        wasExpanded = expanded
-        when (focusAction) {
-            TvPopupFocusAction.FOCUS_SELECTED_ITEM -> {
-                withFrameNanos { }
-                selectedItemFocusRequester.requestFocus()
-            }
-            TvPopupFocusAction.RESTORE_TRIGGER -> {
-                withFrameNanos { }
-                triggerFocusRequester.requestFocus()
-            }
-            TvPopupFocusAction.NONE -> Unit
-        }
-    }
 
     Box(modifier = modifier) {
-        TextButton(
-            onClick = { expanded = true },
-            modifier = if (tvFocusManagement) {
-                Modifier.focusRequester(triggerFocusRequester)
-            } else {
-                Modifier
-            },
-        ) {
-            Text(
-                text = buildString {
-                    prefix?.takeIf(String::isNotBlank)?.let {
-                        append(it)
-                        append(" · ")
-                    }
-                    append(mode.label)
-                },
-            )
+        TextButton(onClick = { expanded = true }) {
+            Text(buildString {
+                prefix?.takeIf(String::isNotBlank)?.let { append(it); append(" · ") }
+                append(mode.label)
+            })
             Icon(
                 imageVector = Icons.Filled.ArrowDropDown,
                 contentDescription = "Change view",
                 modifier = Modifier.size(18.dp),
             )
         }
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-        ) {
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             ContentViewMode.entries.forEach { option ->
                 DropdownMenuItem(
-                    text = {
-                        Text(
-                            if (option == mode) "${option.label} ✓" else option.label,
-                        )
-                    },
+                    text = { Text(if (option == mode) "${option.label} ✓" else option.label) },
                     onClick = {
                         expanded = false
                         if (option != mode) onModeSelected(option)
-                    },
-                    modifier = if (tvFocusManagement && option == mode) {
-                        Modifier.focusRequester(selectedItemFocusRequester)
-                    } else {
-                        Modifier
                     },
                 )
             }

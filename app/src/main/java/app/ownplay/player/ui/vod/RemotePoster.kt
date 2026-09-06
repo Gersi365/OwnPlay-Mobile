@@ -1,6 +1,5 @@
 package app.ownplay.player.ui.vod
 
-import android.content.res.Configuration
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -19,7 +18,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.ownplay.player.source.network.SourceHttpClient
@@ -59,9 +57,6 @@ internal fun RemotePoster(
     title: String,
     modifier: Modifier = Modifier,
 ) {
-    val configuration = LocalConfiguration.current
-    val isTelevision =
-        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
     val normalizedUrl = remember(url) {
         url?.trim()?.takeIf(String::isNotBlank)
     }
@@ -109,13 +104,11 @@ internal fun RemotePoster(
         when (val currentState = state) {
             is RemotePosterState.Loaded -> Image(
                 bitmap = currentState.image,
-                contentDescription = if (isTelevision) title else null,
+                contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
             )
-            RemotePosterState.Loading -> if (isTelevision) {
-                PosterFallbackLabel(title = title)
-            }
+            RemotePosterState.Loading -> Unit
             RemotePosterState.Unavailable -> PosterFallbackLabel(title = title)
         }
     }

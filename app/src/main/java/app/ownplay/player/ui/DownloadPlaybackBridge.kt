@@ -9,8 +9,6 @@ import app.ownplay.player.download.OfflineDownload
 internal object DownloadPlaybackBridge {
     private var owner: Any? = null
     private var action: ((OfflineDownload) -> Unit)? = null
-    private var focusReturnOwner: Any? = null
-    private var focusReturnAction: ((String) -> Unit)? = null
 
     fun register(
         owner: Any,
@@ -31,24 +29,5 @@ internal object DownloadPlaybackBridge {
         val current = action ?: return false
         current(download)
         return true
-    }
-
-    fun registerFocusReturn(
-        owner: Any,
-        action: (downloadId: String) -> Unit,
-    ) {
-        focusReturnOwner = owner
-        focusReturnAction = action
-    }
-
-    fun clearFocusReturn(owner: Any) {
-        if (focusReturnOwner === owner) {
-            focusReturnOwner = null
-            focusReturnAction = null
-        }
-    }
-
-    fun notifyPlaybackClosed(downloadId: String) {
-        focusReturnAction?.invoke(downloadId)
     }
 }
