@@ -1,6 +1,5 @@
 package app.ownplay.player.playback
 
-import app.ownplay.player.BuildConfig
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -49,14 +48,10 @@ class LiveActivityLifecyclePolicyTest {
     }
 
     @Test
-    fun nonLiveSuspendsOnlyOnMobileOutsidePipAndConfigurationChange() {
-        val expected = if (BuildConfig.IS_TV_BUILD) {
-            LiveActivityBackgroundAction.NONE
-        } else {
-            LiveActivityBackgroundAction.SUSPEND_AND_RETAIN_SURFACE
-        }
+    fun nonLiveSuspendsOutsidePipAndConfigurationChange() {
+        val expected = LiveActivityBackgroundAction.SUSPEND_AND_RETAIN_SURFACE
 
-        listOf(PlaybackMediaKind.MOVIE, PlaybackMediaKind.SERIES_EPISODE).forEach { kind ->
+listOf(PlaybackMediaKind.MOVIE, PlaybackMediaKind.SERIES_EPISODE).forEach { kind ->
             val request = request(kind)
             listOf(
                 PlaybackState.Loading(request),

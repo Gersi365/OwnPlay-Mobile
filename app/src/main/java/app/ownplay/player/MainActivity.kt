@@ -93,11 +93,7 @@ class MainActivity : ComponentActivity() {
         DownloadNotificationPermissionBridge.register(downloadNotificationPermissionOwner) {
             requestDownloadNotificationPermissionIfNeeded()
         }
-        offlineDownloadRuntime = if (BuildConfig.IS_TV_BUILD) {
-            null
-        } else {
-            OfflineDownloadFeatureRuntime(applicationContext)
-        }
+        offlineDownloadRuntime = OfflineDownloadFeatureRuntime(applicationContext)
         appDeviceProfileStore = AppDeviceProfileStore(applicationContext)
         playbackWindowController = PlaybackWindowController(this)
         playbackGestureDetector = GestureDetector(

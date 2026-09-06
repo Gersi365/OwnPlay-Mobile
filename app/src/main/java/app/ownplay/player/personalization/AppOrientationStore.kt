@@ -8,7 +8,6 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import app.ownplay.player.BuildConfig
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
@@ -114,10 +113,10 @@ sealed interface AppOrientationSelection {
 }
 
 /**
- * Compatibility facade for the compile-time Mobile/TV targets.
+ * Mobile orientation compatibility facade retained for existing call sites.
  *
- * Mobile may change Smartphone orientation. TV is permanently landscape and rejects orientation
- * writes. Runtime profile changes cannot switch either APK into the other target's input model.
+ * OwnPlay Mobile targets touch-first Android phones and tablets. Orientation writes apply to the
+ * Mobile profile only.
  */
 class AppOrientationStore(
     context: Context,
@@ -163,11 +162,7 @@ class AppOrientationStore(
         }
 }
 
-private fun buildTargetDeviceProfile(): AppDeviceProfile = if (BuildConfig.IS_TV_BUILD) {
-    AppDeviceProfile.ANDROID_TV
-} else {
-    AppDeviceProfile.SMARTPHONE
-}
+private fun buildTargetDeviceProfile(): AppDeviceProfile = AppDeviceProfile.SMARTPHONE
 
 private fun safePreferences(dataStore: DataStore<Preferences>): Flow<Preferences> = dataStore.data
     .catch { error ->
