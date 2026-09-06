@@ -1,6 +1,5 @@
 package app.ownplay.player.ui
 
-import android.content.res.Configuration
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,16 +14,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.ownplay.player.OwnPlayAppRuntime
 import app.ownplay.player.persistence.PlaylistSourceSummary
-import app.ownplay.player.personalization.AppDeviceProfile
 import app.ownplay.player.personalization.AppOrientationMode
 import app.ownplay.player.source.SourceSyncState
 
@@ -35,33 +29,17 @@ internal fun LandscapeSettingsShell(
     runtime: OwnPlayAppRuntime,
     summaries: List<PlaylistSourceSummary>,
     syncState: SourceSyncState,
-    deviceProfile: AppDeviceProfile?,
     orientationMode: AppOrientationMode,
     onSetOrientation: (AppOrientationMode) -> Unit,
     onOpenSourceInLive: (String) -> Unit,
 ) {
-    val configuration = LocalConfiguration.current
-    val isTelevision =
-        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
-    val resolvedDestination = if (isTelevision && destination == SettingsDestination.DOWNLOADS) {
-        SettingsDestination.CONTENT
-    } else {
-        destination
-    }
-    val selectedRailFocusRequester = remember { FocusRequester() }
-    val selectedRailDestination = when (resolvedDestination) {
+    val selectedRailDestination = when (destination) {
         SettingsDestination.LIVE_MANAGEMENT,
         SettingsDestination.PLAYLISTS,
         -> SettingsDestination.CONTENT
-        else -> resolvedDestination
+        else -> destination
     }
     val readySummaries = summaries.filter { summary -> summary.enabled }
-
-    LaunchedEffect(isTelevision, resolvedDestination) {
-        if (isTelevision) {
-            selectedRailFocusRequester.requestFocus()
-        }
-    }
 
     Row(
         modifier = Modifier
@@ -72,7 +50,6 @@ internal fun LandscapeSettingsShell(
     ) {
         LandscapeSettingsRail(
             selectedRailDestination = selectedRailDestination,
-            selectedRailFocusRequester = selectedRailFocusRequester,
             onDestinationChange = onDestinationChange,
         )
 
@@ -84,13 +61,12 @@ internal fun LandscapeSettingsShell(
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.14f),
             tonalElevation = 0.dp,
         ) {
-            when (resolvedDestination) {
+            when (destination) {
                 SettingsDestination.INTERFACE -> LandscapeSectionPage(
                     title = "Interface",
-                    subtitle = "Device behavior and orientation",
+                    subtitle = "Orientation",
                 ) {
                     InterfaceSettingsContent(
-                        deviceProfile = deviceProfile,
                         orientationMode = orientationMode,
                         onSetOrientation = onSetOrientation,
                     )
