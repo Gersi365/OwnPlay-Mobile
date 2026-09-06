@@ -9,6 +9,27 @@ import org.junit.Test
 
 class LivePlaybackContinuityContractTest {
     @Test
+    fun `same previewed channel activation opens fullscreen before new playback`() {
+        val live = sourceText("src/mobile/java/app/ownplay/player/ui/TargetLiveRoute.kt")
+        val selectChannel = normalizedSource(
+            sourceBlockAfter(
+                live,
+                "fun selectChannel(channelId: String)",
+            ),
+        )
+
+        val sameChannelCheck = "currentPreview?.request?.channelId == channelId"
+        val fullscreenCall = "onOpenFullscreen(currentPreview)"
+        val newPlaybackCall = "onPreviewRequested(action.selection)"
+
+        assertTrue(selectChannel.contains(sameChannelCheck))
+        assertTrue(selectChannel.contains(fullscreenCall))
+        assertTrue(selectChannel.contains("return"))
+        assertTrue(selectChannel.contains(newPlaybackCall))
+        assertTrue(selectChannel.indexOf(fullscreenCall) < selectChannel.indexOf(newPlaybackCall))
+    }
+
+    @Test
     fun `Mobile Preview to fullscreen uses the continuity transition gate`() {
         val shell = sourceText("src/mobile/java/app/ownplay/player/ui/MobileOwnPlayApp.kt")
         val handoff = normalizedSource(
