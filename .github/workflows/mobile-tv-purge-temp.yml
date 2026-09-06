@@ -16,13 +16,16 @@ jobs:
         with:
           ref: agent/mobile-only-source-normalization-no-apk
           fetch-depth: 0
-      - name: Apply guarded Mobile-only purge
+      - name: Apply guarded Mobile-only purge phase 1
         run: python3 .github/scripts/mobile_tv_purge.py
+      - name: Apply guarded Mobile-only purge phase 2
+        run: python3 .github/scripts/mobile_tv_purge_extra.py
       - name: Commit source-only purge
         shell: bash
         run: |
           rm .github/workflows/mobile-tv-purge-temp.yml
           rm .github/scripts/mobile_tv_purge.py
+          rm .github/scripts/mobile_tv_purge_extra.py
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add -A
