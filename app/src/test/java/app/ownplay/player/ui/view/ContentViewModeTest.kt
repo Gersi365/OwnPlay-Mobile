@@ -5,37 +5,20 @@ import org.junit.Test
 
 class ContentViewModeTest {
     @Test
-    fun storedValuesRoundTrip() {
-        ContentViewMode.entries.forEach { mode ->
+    fun `legacy view requests always resolve to canonical cards`() {
+        ContentViewMode.entries.forEach { legacyMode ->
             assertEquals(
-                mode,
-                ContentViewMode.fromStorageValue(
-                    value = mode.storageValue,
-                    default = ContentViewMode.LIST,
-                ),
+                ContentViewMode.CARDS,
+                canonicalContentViewMode(legacyMode),
             )
         }
     }
 
     @Test
-    fun invalidStoredValueFallsBackToRequestedDefault() {
-        assertEquals(
-            ContentViewMode.COMPACT,
-            ContentViewMode.fromStorageValue(
-                value = "not-a-view-mode",
-                default = ContentViewMode.COMPACT,
-            ),
-        )
-    }
-
-    @Test
-    fun missingStoredValueFallsBackToRequestedDefault() {
+    fun `missing historical preference resolves to canonical cards`() {
         assertEquals(
             ContentViewMode.CARDS,
-            ContentViewMode.fromStorageValue(
-                value = null,
-                default = ContentViewMode.CARDS,
-            ),
+            canonicalContentViewMode(null),
         )
     }
 }
