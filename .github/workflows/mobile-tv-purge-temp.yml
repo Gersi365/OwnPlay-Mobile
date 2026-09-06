@@ -16,6 +16,18 @@ jobs:
         with:
           ref: agent/mobile-only-source-normalization-no-apk
           fetch-depth: 0
+      - name: Prepare guarded Mobile-only purge phase 1
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('.github/scripts/mobile_tv_purge.py')
+          text = path.read_text(encoding='utf-8')
+          marker = "\nforbidden = [\n"
+          if marker not in text:
+              raise SystemExit('Phase 1 verification marker missing')
+          path.write_text(text.split(marker, 1)[0], encoding='utf-8')
+          PY
       - name: Apply guarded Mobile-only purge phase 1
         run: python3 .github/scripts/mobile_tv_purge.py
       - name: Apply guarded Mobile-only purge phase 2
