@@ -23,6 +23,7 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
           import sys
 
           gradle = Path('app/build.gradle.kts')
@@ -30,65 +31,99 @@ jobs:
           root = Path('app/src/main/java/app/ownplay/player/ui/OwnPlayRoot.kt')
           orientation = Path('app/src/main/java/app/ownplay/player/personalization/AppOrientationStore.kt')
 
+          def remove_braced_block(text: str, marker: str) -> tuple[str, int]:
+              lines = text.splitlines(keepends=True)
+              indexes = [i for i, line in enumerate(lines) if marker in line]
+              if not indexes:
+                  return text, 0
+              if len(indexes) != 1:
+                  raise RuntimeError(f'{marker}: expected one block, found {len(indexes)}')
+              start = indexes[0]
+              depth = 0
+              seen_open = False
+              end = None
+              for index in range(start, len(lines)):
+                  depth += lines[index].count('{')
+                  if lines[index].count('{'):
+                      seen_open = True
+                  depth -= lines[index].count('}')
+                  if seen_open and depth == 0:
+                      end = index
+                      break
+              if end is None:
+                  raise RuntimeError(f'{marker}: unterminated block')
+              if end + 1 < len(lines) and lines[end + 1].strip() == '':
+                  end += 1
+              return ''.join(lines[:start] + lines[end + 1:]), 1
+
           texts = {p: p.read_text(encoding='utf-8') for p in (gradle, activity, root, orientation)}
 
-          flag_line = '            buildConfigField("boolean", "IS_TV_BUILD", "false")\n'
-          target_line = '            buildConfigField("String", "TARGET_DEVICE", "\\\"mobile\\\"")\n'
-          activity_block = '''        offlineDownloadRuntime = if (BuildConfig.IS_TV_BUILD) {\n            null\n        } else {\n            OfflineDownloadFeatureRuntime(applicationContext)\n        }\n'''
-          root_imports = [
+          if (
+              'BuildConfig.IS_TV_BUILD' not in ''.join(texts.values())
+              and 'IS_TV_BUILD' not in texts[gradle]
+              and 'TARGET_DEVICE' not in texts[gradle]
+          ):
+              print('Mobile-only build routing is already normalized; no source mutation needed.')
+              raise SystemExit(0)
+
+          texts[gradle], flag_count = re.subn(
+              r'^\s*buildConfigField\("boolean", "IS_TV_BUILD", "false"\)\s*\n',
+              '',
+              texts[gradle],
+              flags=re.MULTILINE,
+          )
+          texts[gradle], target_count = re.subn(
+              r'^\s*buildConfigField\("String", "TARGET_DEVICE", "\\"mobile\\""\)\s*\n',
+              '',
+              texts[gradle],
+              flags=re.MULTILINE,
+          )
+
+          texts[activity], activity_count = re.subn(
+              r'offlineDownloadRuntime\s*=\s*if\s*\(BuildConfig\.IS_TV_BUILD\)\s*\{\s*null\s*\}\s*else\s*\{\s*OfflineDownloadFeatureRuntime\(applicationContext\)\s*\}',
+              'offlineDownloadRuntime = OfflineDownloadFeatureRuntime(applicationContext)',
+              texts[activity],
+              count=1,
+              flags=re.DOTALL,
+          )
+
+          for import_line in (
               'import androidx.compose.runtime.withFrameNanos\n',
               'import androidx.compose.ui.focus.FocusDirection\n',
               'import androidx.compose.ui.platform.LocalFocusManager\n',
               'import app.ownplay.player.BuildConfig\n',
-          ]
-          root_focus = '    val focusManager = LocalFocusManager.current\n'
-          root_block = '''\n    LaunchedEffect(BuildConfig.IS_TV_BUILD, contentVisible) {\n        if (BuildConfig.IS_TV_BUILD && contentVisible) {\n            withFrameNanos { }\n            if (!focusManager.moveFocus(FocusDirection.Next)) {\n                withFrameNanos { }\n                focusManager.moveFocus(FocusDirection.Next)\n            }\n        }\n    }\n'''
-          orientation_import = 'import app.ownplay.player.BuildConfig\n'
-          orientation_comment = '''/**\n * Compatibility facade for the compile-time Mobile/TV targets.\n *\n * Mobile may change Smartphone orientation. TV is permanently landscape and rejects orientation\n * writes. Runtime profile changes cannot switch either APK into the other target's input model.\n */'''
-          orientation_comment_new = '''/**\n * Mobile orientation compatibility facade retained for existing call sites.\n *\n * OwnPlay Mobile targets touch-first Android phones and tablets. Orientation writes apply to the\n * Mobile profile only.\n */'''
-          orientation_builder = '''private fun buildTargetDeviceProfile(): AppDeviceProfile = if (BuildConfig.IS_TV_BUILD) {\n    AppDeviceProfile.ANDROID_TV\n} else {\n    AppDeviceProfile.SMARTPHONE\n}\n'''
-          orientation_builder_new = 'private fun buildTargetDeviceProfile(): AppDeviceProfile = AppDeviceProfile.SMARTPHONE\n'
-
-          already_normalized = (
-              flag_line not in texts[gradle]
-              and target_line not in texts[gradle]
-              and 'BuildConfig.IS_TV_BUILD' not in ''.join(texts.values())
+          ):
+              texts[root] = texts[root].replace(import_line, '')
+          texts[root] = texts[root].replace('    val focusManager = LocalFocusManager.current\n', '')
+          texts[root], root_count = remove_braced_block(
+              texts[root],
+              'LaunchedEffect(BuildConfig.IS_TV_BUILD, contentVisible)',
           )
-          if already_normalized:
-              print('Mobile-only build routing is already normalized; no source mutation needed.')
-              raise SystemExit(0)
 
-          expected = [
-              ('IS_TV_BUILD Gradle field', texts[gradle].count(flag_line), 1),
-              ('TARGET_DEVICE Gradle field', texts[gradle].count(target_line), 1),
-              ('MainActivity target branch', texts[activity].count(activity_block), 1),
-              ('OwnPlayRoot target effect', texts[root].count(root_block), 1),
-              ('AppOrientationStore BuildConfig import', texts[orientation].count(orientation_import), 1),
-              ('AppOrientationStore target builder', texts[orientation].count(orientation_builder), 1),
-          ]
-          failures = [f'{name}: expected {want}, found {got}' for name, got, want in expected if got != want]
-          for item in root_imports:
-              if texts[root].count(item) != 1:
-                  failures.append(f'OwnPlayRoot import mismatch: {item.strip()}')
-          if texts[root].count(root_focus) != 1:
-              failures.append('OwnPlayRoot focus manager mismatch')
-          if texts[orientation].count(orientation_comment) != 1:
-              failures.append('AppOrientationStore compatibility comment mismatch')
+          texts[orientation] = texts[orientation].replace('import app.ownplay.player.BuildConfig\n', '')
+          texts[orientation], orientation_count = re.subn(
+              r'private fun buildTargetDeviceProfile\(\): AppDeviceProfile = if \(BuildConfig\.IS_TV_BUILD\) \{\s*AppDeviceProfile\.ANDROID_TV\s*\} else \{\s*AppDeviceProfile\.SMARTPHONE\s*\}',
+              'private fun buildTargetDeviceProfile(): AppDeviceProfile = AppDeviceProfile.SMARTPHONE',
+              texts[orientation],
+              count=1,
+              flags=re.DOTALL,
+          )
+          texts[orientation] = texts[orientation].replace(
+              '/**\n * Compatibility facade for the compile-time Mobile/TV targets.\n *\n * Mobile may change Smartphone orientation. TV is permanently landscape and rejects orientation\n * writes. Runtime profile changes cannot switch either APK into the other target\'s input model.\n */',
+              '/**\n * Mobile orientation compatibility facade retained for existing call sites.\n *\n * OwnPlay Mobile targets touch-first Android phones and tablets. Orientation writes apply to the\n * Mobile profile only.\n */',
+          )
+
+          counts = {
+              'IS_TV_BUILD Gradle field': flag_count,
+              'TARGET_DEVICE Gradle field': target_count,
+              'MainActivity dead target branch': activity_count,
+              'OwnPlayRoot dead target effect': root_count,
+              'AppOrientationStore target builder': orientation_count,
+          }
+          failures = [f'{name}: expected 1 edit, got {count}' for name, count in counts.items() if count != 1]
           if failures:
               print('\n'.join(failures), file=sys.stderr)
               raise SystemExit(2)
-
-          texts[gradle] = texts[gradle].replace(flag_line, '').replace(target_line, '')
-          texts[activity] = texts[activity].replace(
-              activity_block,
-              '        offlineDownloadRuntime = OfflineDownloadFeatureRuntime(applicationContext)\n',
-          )
-          for item in root_imports:
-              texts[root] = texts[root].replace(item, '')
-          texts[root] = texts[root].replace(root_focus, '').replace(root_block, '')
-          texts[orientation] = texts[orientation].replace(orientation_import, '')
-          texts[orientation] = texts[orientation].replace(orientation_comment, orientation_comment_new)
-          texts[orientation] = texts[orientation].replace(orientation_builder, orientation_builder_new)
 
           for path, text in texts.items():
               path.write_text(text, encoding='utf-8')
