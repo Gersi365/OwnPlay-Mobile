@@ -48,7 +48,10 @@ class OfflineDownloadFeatureRuntime(
             }
         }
 
-    suspend fun enqueue(spec: OfflineDownloadSpec): String = repository.enqueue(spec)
+    suspend fun enqueue(spec: OfflineDownloadSpec): String {
+        DownloadNotificationPermissionBridge.requestIfNeeded()
+        return repository.enqueue(spec)
+    }
 
     suspend fun pause(downloadId: String) = repository.pause(downloadId)
 
