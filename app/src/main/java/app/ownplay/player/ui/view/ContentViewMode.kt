@@ -2,6 +2,7 @@ package app.ownplay.player.ui.view
 
 import android.content.Context
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 
@@ -40,4 +41,6 @@ internal class ContentViewModeStore(context: Context) {
 internal fun ContentViewModeMenu(
     mode: ContentViewMode,
     onModeSelected: (ContentViewMode) -> Unit,
+    modifier: Modifier = Modifier,
+    prefix: String? = null,
 ) = Unit
