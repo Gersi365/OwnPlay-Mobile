@@ -985,21 +985,13 @@ private fun VodPlaybackScreen(
     onFullscreenStateChanged: (Boolean) -> Unit,
 ) {
     val playbackState by runtime.playbackController.state.collectAsState()
-    val playbackControls = PlaybackPresentationPolicy.controlsFor(playbackState)
     val scope = rememberCoroutineScope()
     val backOwner = remember(movie.movieId) { Any() }
     var playerView by remember(movie.movieId) { mutableStateOf<PlayerView?>(null) }
     var currentPosition by remember(movie.movieId) { mutableStateOf(movie.positionMs ?: 0L) }
     var duration by remember(movie.movieId) { mutableStateOf(movie.durationMs ?: 0L) }
     var resumeApplied by remember(movie.movieId) { mutableStateOf(false) }
-    var controlsVisible by remember(movie.movieId) { mutableStateOf(true) }
-    var controlsInteractionToken by remember(movie.movieId) { mutableStateOf(0) }
     var exitRequested by remember(movie.movieId) { mutableStateOf(false) }
-
-    fun revealControls() {
-        controlsVisible = true
-        controlsInteractionToken += 1
-    }
 
     fun exitPlayback() {
         if (exitRequested) return
@@ -1073,178 +1065,21 @@ private fun VodPlaybackScreen(
         }
     }
 
-    LaunchedEffect(playbackState, controlsVisible, controlsInteractionToken, movie.movieId) {
-        when (playbackState) {
-            is PlaybackState.Playing -> {
-                if (controlsVisible) {
-                    delay(VOD_CONTROLS_AUTO_HIDE_MILLIS)
-                    controlsVisible = false
-                }
-            }
-            is PlaybackState.Loading,
-            is PlaybackState.Paused,
-            is PlaybackState.Failed,
-            -> controlsVisible = true
-            PlaybackState.Idle -> Unit
-        }
-    }
-
-
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = Color.Black,
-    ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            AndroidView(
-                factory = { context ->
-                    PlayerView(context).apply {
-                        useController = false
-                        resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                        setShutterBackgroundColor(AndroidColor.BLACK)
-                        runtime.playbackVideoOutput.bind(this)
-                        playerView = this
-                    }
-                },
-                modifier = Modifier.fillMaxSize(),
-                update = { view ->
-                    view.useController = false
-                    view.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                    playerView = view
-                },
-                onRelease = { view ->
-                    runtime.playbackVideoOutput.unbind(view)
-                    if (playerView === view) playerView = null
-                },
-            )
-
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .pointerInput(movie.movieId, controlsVisible) {
-                        detectTapGestures {
-                            if (controlsVisible) {
-                                controlsVisible = false
-                            } else {
-                                revealControls()
-                            }
-                        }
-                    }
-                    ,
-            )
-
-            if (controlsVisible) {
-                Row(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .fillMaxWidth()
-                        .background(Color.Black.copy(alpha = 0.65f))
-                        .padding(horizontal = 8.dp, vertical = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    IconButton(
-                        modifier = Modifier,
-                        enabled = !exitRequested,
-                        onClick = ::exitPlayback,
-                    ) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
-                    }
-                    Text(
-                        text = movie.name,
-                        modifier = Modifier.weight(1f),
-                        color = Color.White,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .background(Color.Black.copy(alpha = 0.70f))
-                        .padding(horizontal = 14.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    val maxDuration = max(duration, 1L)
-                    Slider(
-                        value = currentPosition.coerceIn(0L, maxDuration).toFloat(),
-                        onValueChange = {
-                            currentPosition = it.toLong()
-                            revealControls()
-                        },
-                        onValueChangeFinished = {
-                            playerView?.player?.seekTo(currentPosition)
-                            revealControls()
-                        },
-                        valueRange = 0f..maxDuration.toFloat(),
-                    )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        val playbackActionEnabled =
-                            playbackState is PlaybackState.Playing ||
-                                playbackState is PlaybackState.Paused ||
-                                (playbackState is PlaybackState.Failed && playbackControls.canRetry)
-                        IconButton(
-                            modifier = Modifier,
-                            enabled = playbackActionEnabled,
-                            onClick = {
-                                when (playbackState) {
-                                    is PlaybackState.Playing -> runtime.playbackController.pause()
-                                    is PlaybackState.Paused -> runtime.playbackController.play()
-                                    is PlaybackState.Failed -> if (playbackControls.canRetry) {
-                                        runtime.playbackController.retry()
-                                    }
-                                    else -> Unit
-                                }
-                                revealControls()
-                            },
-                        ) {
-                            val playing = playbackState is PlaybackState.Playing
-                            val failed = playbackState is PlaybackState.Failed
-                            Icon(
-                                when {
-                                    failed -> Icons.Filled.Refresh
-                                    playing -> Icons.Filled.Pause
-                                    else -> Icons.Filled.PlayArrow
-                                },
-                                contentDescription = when {
-                                    failed -> "Retry"
-                                    playing -> "Pause"
-                                    else -> "Play"
-                                },
-                                tint = if (playbackActionEnabled) {
-                                    Color.White
-                                } else {
-                                    Color.White.copy(alpha = 0.38f)
-                                },
-                            )
-                        }
-                        Text(
-                            text = "${formatDuration(currentPosition)} / ${formatDuration(duration)}",
-                            color = Color.White.copy(alpha = 0.82f),
-                            style = MaterialTheme.typography.labelMedium,
-                        )
-                        Spacer(Modifier.weight(1f))
-                        when (playbackState) {
-                            is PlaybackState.Loading -> CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                strokeWidth = 2.dp,
-                            )
-                            is PlaybackState.Failed -> Text(
-                                text = "Playback failed",
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.labelMedium,
-                            )
-                            else -> Unit
-                        }
-                    }
-                }
-            }
-        }
-    }
+    app.ownplay.player.ui.OnDemandPlaybackSurface(
+        runtime = runtime,
+        contentKey = movie.movieId,
+        title = movie.name,
+        playbackState = playbackState,
+        currentPositionMs = currentPosition,
+        durationMs = duration,
+        exitRequested = exitRequested,
+        onExit = ::exitPlayback,
+        onPlayerViewAvailable = { view -> playerView = view },
+        onPlayerViewReleased = { view ->
+            if (playerView === view) playerView = null
+        },
+        onSeekPositionChanged = { position -> currentPosition = position },
+    )
 }
 
 @Composable
