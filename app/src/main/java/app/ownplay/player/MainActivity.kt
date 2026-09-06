@@ -7,7 +7,6 @@ import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.view.GestureDetector
-import android.view.KeyEvent
 import android.view.MotionEvent
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -256,16 +255,6 @@ class MainActivity : ComponentActivity() {
                 playbackWindowController.updatePlaybackState(state is PlaybackState.Playing)
             }
         }
-    }
-
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (event.keyCode == KeyEvent.KEYCODE_ESCAPE) {
-            if (event.action == KeyEvent.ACTION_UP) {
-                onBackPressedDispatcher.onBackPressed()
-            }
-            return true
-        }
-        return super.dispatchKeyEvent(event)
     }
 
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
