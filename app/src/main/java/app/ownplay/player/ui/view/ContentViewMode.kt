@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.flowOf
  * OwnPlay Mobile exposes one canonical browsing presentation and never restores a persisted alternate
  * view mode.
  */
-enum class ContentViewMode {
+internal enum class ContentViewMode {
     LIST,
     COMPACT,
     CARDS,
@@ -25,7 +25,7 @@ internal fun canonicalContentViewMode(
  * Those values are intentionally ignored: Mobile now has one canonical Cards presentation.
  */
 @Suppress("UNUSED_PARAMETER")
-class ContentViewModeStore(context: Context) {
+internal class ContentViewModeStore(context: Context) {
     val liveMode: Flow<ContentViewMode> = flowOf(canonicalContentViewMode())
     val libraryMode: Flow<ContentViewMode> = flowOf(canonicalContentViewMode())
 
@@ -37,7 +37,7 @@ class ContentViewModeStore(context: Context) {
 /** Alternate view selection is intentionally not part of the OwnPlay Mobile UI. */
 @Suppress("UNUSED_PARAMETER")
 @Composable
-fun ContentViewModeMenu(
+internal fun ContentViewModeMenu(
     mode: ContentViewMode,
     onModeSelected: (ContentViewMode) -> Unit,
 ) = Unit
