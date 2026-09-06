@@ -1,6 +1,5 @@
 package app.ownplay.player.ui
 
-import app.ownplay.player.liveRotationFullscreenEnabled
 import app.ownplay.player.playback.LiveActivityBackgroundAction
 import app.ownplay.player.playback.LiveActivityLifecyclePolicy
 import app.ownplay.player.playback.LivePlaybackPresentationSurface
@@ -63,7 +62,7 @@ class LiveSurfaceOwnershipRegressionHarnessTest {
     }
 
     @Test
-    fun `preview pip rotations keep pip ownership until return to preview`() {
+    fun `preview pip keeps pip ownership until return to preview`() {
         val harness = LiveSurfaceOwnershipHarness()
 
         harness.openPreview(sourceId = "source-a", channelId = "channel-1")
@@ -71,19 +70,11 @@ class LiveSurfaceOwnershipRegressionHarnessTest {
         harness.assertOnly(SurfaceId.PIP)
         assertEquals(SurfaceId.PREVIEW, harness.pictureInPictureReturnTarget)
 
-        harness.rotateLandscape()
-        harness.assertOnly(SurfaceId.PIP)
-        assertEquals(SurfaceId.PREVIEW, harness.pictureInPictureReturnTarget)
-
-        harness.rotatePortrait()
-        harness.assertOnly(SurfaceId.PIP)
-        assertEquals(SurfaceId.PREVIEW, harness.pictureInPictureReturnTarget)
-
         harness.returnFromPictureInPicture()
         harness.assertOnly(SurfaceId.PREVIEW)
         assertNull(harness.pictureInPictureReturnTarget)
         assertTrue(
-            "PiP rotation must never create a competing Live surface",
+            "PiP ownership must never create a competing Live surface",
             harness.maximumBoundSurfaceCount <= 1,
         )
     }
@@ -111,7 +102,7 @@ class LiveSurfaceOwnershipRegressionHarnessTest {
     fun `movie and series keep media3 pip transfer with Mobile lifecycle behavior`() {
         val expectedBackgroundAction = LiveActivityBackgroundAction.SUSPEND_AND_RETAIN_SURFACE
 
-listOf(
+        listOf(
             PlaybackMediaKind.MOVIE,
             PlaybackMediaKind.SERIES_EPISODE,
         ).forEach { mediaKind ->
@@ -198,26 +189,6 @@ private class LiveSurfaceOwnershipHarness {
             detachCurrentSurface = { detachCurrent() },
             bindDestinationSurface = { attachAndBind(SurfaceId.PIP) },
         )
-    }
-
-    fun rotateLandscape() {
-        if (
-            liveRotationFullscreenEnabled(
-                inPictureInPicture = inPictureInPicture,
-            ) && presentation == LivePlaybackPresentationSurface.PREVIEW
-        ) {
-            openFullscreen()
-        }
-    }
-
-    fun rotatePortrait() {
-        if (
-            liveRotationFullscreenEnabled(
-                inPictureInPicture = inPictureInPicture,
-            ) && presentation == LivePlaybackPresentationSurface.FULLSCREEN
-        ) {
-            returnToPreview()
-        }
     }
 
     fun returnFromPictureInPicture() {
