@@ -1,6 +1,5 @@
 package app.ownplay.player.ui
 
-import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.scrollBy
@@ -22,7 +21,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -33,10 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -56,22 +51,12 @@ internal fun CategoryReorderSheet(
     onOrderChanged: (List<String>) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val configuration = LocalConfiguration.current
-    val isTelevision =
-        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
-    val doneFocusRequester = remember { FocusRequester() }
     var working by remember(categories) { mutableStateOf(categories) }
     var draggedKey by remember { mutableStateOf<String?>(null) }
     var pointerY by remember { mutableStateOf<Float?>(null) }
     var dropTarget by remember { mutableStateOf<CategoryDropTarget?>(null) }
     var dragAutoScrollStep by remember { mutableFloatStateOf(0f) }
     val listState = rememberLazyListState()
-
-    LaunchedEffect(isTelevision) {
-        if (isTelevision) {
-            doneFocusRequester.requestFocus()
-        }
-    }
 
     fun clearDrag() {
         draggedKey = null
@@ -84,23 +69,6 @@ internal fun CategoryReorderSheet(
         if (next == working) return
         working = next
         onOrderChanged(next.map(LiveCategory::providerCategoryKey))
-    }
-
-    fun moveWithRemote(index: Int, delta: Int) {
-        val category = working.getOrNull(index) ?: return
-        val anchor = working.getOrNull(index + delta) ?: return
-        applyOrder(
-            moveRelative(
-                categories = working,
-                draggedKey = category.providerCategoryKey,
-                anchorKey = anchor.providerCategoryKey,
-                placement = if (delta < 0) {
-                    ManualOrderPlacement.BEFORE
-                } else {
-                    ManualOrderPlacement.AFTER
-                },
-            ),
-        )
     }
 
     LaunchedEffect(draggedKey, dragAutoScrollStep) {
@@ -146,81 +114,67 @@ internal fun CategoryReorderSheet(
                         fontWeight = FontWeight.SemiBold,
                     )
                     Text(
-                        text = if (isTelevision) {
-                            "Use Up / Down with the remote. Press Done when finished."
-                        } else {
-                            "Hold a category, then drag it. Keep holding near an edge to scroll."
-                        },
+                        text = "Hold a category, then drag it. Keep holding near an edge to scroll.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                if (isTelevision) {
-                    TextButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.focusRequester(doneFocusRequester),
-                    ) { Text("Done") }
-                }
             }
 
-            val listDragModifier = if (isTelevision) {
-                Modifier
-            } else {
-                Modifier.pointerInput(working) {
-                    detectDragGesturesAfterLongPress(
-                        onDragStart = { start ->
-                            val itemInfo = listState.layoutInfo.visibleItemsInfo.firstOrNull { info ->
-                                start.y >= info.offset && start.y <= info.offset + info.size
-                            }
-                            val key = itemInfo?.key as? String
-                            if (key == null) {
-                                clearDrag()
-                            } else {
-                                draggedKey = key
-                                pointerY = start.y
-                                dragAutoScrollStep = 0f
-                                dropTarget = resolveCategoryTarget(
-                                    pointerY = start.y,
-                                    draggedKey = key,
-                                    visibleItems = listState.layoutInfo.visibleItemsInfo,
-                                )
-                            }
-                        },
-                        onDrag = { change, dragAmount ->
-                            change.consume()
-                            val dragged = draggedKey ?: return@detectDragGesturesAfterLongPress
-                            val nextY = (pointerY ?: return@detectDragGesturesAfterLongPress) + dragAmount.y
-                            pointerY = nextY
-                            val layout = listState.layoutInfo
-                            dragAutoScrollStep = categoryAutoScrollStepForPointer(
-                                pointerY = nextY,
-                                viewportStartOffset = layout.viewportStartOffset,
-                                viewportEndOffset = layout.viewportEndOffset,
-                            )
-                            dropTarget = resolveCategoryTarget(
-                                pointerY = nextY,
-                                draggedKey = dragged,
-                                visibleItems = layout.visibleItemsInfo,
-                            )
-                        },
-                        onDragEnd = {
-                            val dragged = draggedKey
-                            val target = dropTarget
-                            if (dragged != null && target != null) {
-                                applyOrder(
-                                    moveRelative(
-                                        categories = working,
-                                        draggedKey = dragged,
-                                        anchorKey = target.anchorKey,
-                                        placement = target.placement,
-                                    ),
-                                )
-                            }
+            val listDragModifier = Modifier.pointerInput(working) {
+                detectDragGesturesAfterLongPress(
+                    onDragStart = { start ->
+                        val itemInfo = listState.layoutInfo.visibleItemsInfo.firstOrNull { info ->
+                            start.y >= info.offset && start.y <= info.offset + info.size
+                        }
+                        val key = itemInfo?.key as? String
+                        if (key == null) {
                             clearDrag()
-                        },
-                        onDragCancel = ::clearDrag,
-                    )
-                }
+                        } else {
+                            draggedKey = key
+                            pointerY = start.y
+                            dragAutoScrollStep = 0f
+                            dropTarget = resolveCategoryTarget(
+                                pointerY = start.y,
+                                draggedKey = key,
+                                visibleItems = listState.layoutInfo.visibleItemsInfo,
+                            )
+                        }
+                    },
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        val dragged = draggedKey ?: return@detectDragGesturesAfterLongPress
+                        val nextY = (pointerY ?: return@detectDragGesturesAfterLongPress) + dragAmount.y
+                        pointerY = nextY
+                        val layout = listState.layoutInfo
+                        dragAutoScrollStep = categoryAutoScrollStepForPointer(
+                            pointerY = nextY,
+                            viewportStartOffset = layout.viewportStartOffset,
+                            viewportEndOffset = layout.viewportEndOffset,
+                        )
+                        dropTarget = resolveCategoryTarget(
+                            pointerY = nextY,
+                            draggedKey = dragged,
+                            visibleItems = layout.visibleItemsInfo,
+                        )
+                    },
+                    onDragEnd = {
+                        val dragged = draggedKey
+                        val target = dropTarget
+                        if (dragged != null && target != null) {
+                            applyOrder(
+                                moveRelative(
+                                    categories = working,
+                                    draggedKey = dragged,
+                                    anchorKey = target.anchorKey,
+                                    placement = target.placement,
+                                ),
+                            )
+                        }
+                        clearDrag()
+                    },
+                    onDragCancel = ::clearDrag,
+                )
             }
 
             LazyColumn(
@@ -237,7 +191,7 @@ internal fun CategoryReorderSheet(
                 itemsIndexed(
                     items = working,
                     key = { _, category -> category.providerCategoryKey },
-                ) { index, category ->
+                ) { _, category ->
                     val key = category.providerCategoryKey
                     val isDragging = draggedKey == key
                     val isTarget = dropTarget?.anchorKey == key
@@ -269,27 +223,25 @@ internal fun CategoryReorderSheet(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                             ) {
-                                if (!isTelevision) {
-                                    Text(
-                                        text = "≡",
-                                        modifier = Modifier
-                                            .background(
-                                                color = if (isDragging) {
-                                                    MaterialTheme.colorScheme.primary
-                                                } else {
-                                                    MaterialTheme.colorScheme.surfaceVariant
-                                                },
-                                                shape = RoundedCornerShape(8.dp),
-                                            )
-                                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                                        style = MaterialTheme.typography.titleLarge,
-                                        color = if (isDragging) {
-                                            MaterialTheme.colorScheme.onPrimary
-                                        } else {
-                                            MaterialTheme.colorScheme.onSurfaceVariant
-                                        },
-                                    )
-                                }
+                                Text(
+                                    text = "≡",
+                                    modifier = Modifier
+                                        .background(
+                                            color = if (isDragging) {
+                                                MaterialTheme.colorScheme.primary
+                                            } else {
+                                                MaterialTheme.colorScheme.surfaceVariant
+                                            },
+                                            shape = RoundedCornerShape(8.dp),
+                                        )
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = if (isDragging) {
+                                        MaterialTheme.colorScheme.onPrimary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                                )
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         text = category.name,
@@ -306,14 +258,7 @@ internal fun CategoryReorderSheet(
                                         )
                                     }
                                 }
-                                if (isTelevision) {
-                                    TextButton(onClick = { moveWithRemote(index, -1) }) {
-                                        Text("Up")
-                                    }
-                                    TextButton(onClick = { moveWithRemote(index, 1) }) {
-                                        Text("Down")
-                                    }
-                                } else if (isDragging) {
+                                if (isDragging) {
                                     Text(
                                         text = "MOVING",
                                         style = MaterialTheme.typography.labelSmall,
