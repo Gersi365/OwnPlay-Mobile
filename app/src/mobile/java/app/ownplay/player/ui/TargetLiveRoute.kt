@@ -1,6 +1,5 @@
 package app.ownplay.player.ui
 
-import android.content.res.Configuration
 import android.graphics.BitmapFactory
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -17,11 +16,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -60,7 +57,6 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -151,8 +147,6 @@ internal fun TargetLiveRoute(
     onOpenFullscreen: (LivePlaybackSelection) -> Unit,
     onNavigatePreview: (PlaybackNavigationDirection) -> Unit,
 ) {
-    val configuration = LocalConfiguration.current
-    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     val browseSession = remember(sourceId) { LiveBrowseSession() }
     val browseFlow = remember(sourceId) {
         browseSession.observe(runtime.observeLiveCatalog(sourceId))
@@ -333,19 +327,15 @@ internal fun TargetLiveRoute(
         )
     }
 
-    if (isLandscape && preview != null) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .navigationBarsPadding()
-                .padding(10.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            browseContent(Modifier.weight(0.43f).fillMaxHeight())
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding(),
+    ) {
+        if (preview != null) {
             Column(
-                modifier = Modifier.weight(0.57f).fillMaxHeight(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 LivePreviewPanel(
                     selection = preview,
@@ -367,39 +357,7 @@ internal fun TargetLiveRoute(
                 )
             }
         }
-    } else {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding(),
-        ) {
-            if (preview != null) {
-                Column(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    LivePreviewPanel(
-                        selection = preview,
-                        state = playbackState,
-                        videoOutput = videoOutput,
-                        onPlay = onPlay,
-                        onPause = onPause,
-                        onRetry = onRetry,
-                        onNavigate = onNavigatePreview,
-                        onOpenFullscreen = { onOpenFullscreen(preview) },
-                        onClose = onPreviewClosed,
-                        showLiveBadge = false,
-                    )
-                    EpgPanel(
-                        snapshot = epgSnapshot,
-                        loading = loadingEpg || epgLookupLoading,
-                        failed = selectedEpgFailed,
-                        onOpenGuide = { showEpgGuide = true },
-                    )
-                }
-            }
-            browseContent(Modifier.weight(1f))
-        }
+        browseContent(Modifier.weight(1f))
     }
 
     if (showEpgGuide && preview != null) {
