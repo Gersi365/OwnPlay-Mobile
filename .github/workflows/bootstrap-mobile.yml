@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   bootstrap:
-    if: ${{ github.event.head_commit.message == 'Run verified Mobile bootstrap' }}
+    if: ${{ github.event.head_commit.message == 'Run source-only Mobile bootstrap' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -67,131 +67,6 @@ jobs:
           path.write_text(''.join(lines[:start] + lines[end:]), encoding='utf-8')
           PY
 
-          mkdir -p target/.github/workflows
-          cat > target/.github/workflows/android-validation-no-apk.yml <<'YAML'
-          name: Android Validation No APK
-
-          on:
-            workflow_dispatch:
-            pull_request:
-            push:
-              branches:
-                - main
-
-          permissions:
-            contents: read
-
-          concurrency:
-            group: android-validation-no-apk-${{ github.ref }}
-            cancel-in-progress: true
-
-          jobs:
-            validate-no-apk:
-              runs-on: ubuntu-latest
-              timeout-minutes: 35
-
-              steps:
-                - name: Checkout
-                  uses: actions/checkout@v6
-
-                - name: Set up JDK 17
-                  uses: actions/setup-java@v5
-                  with:
-                    distribution: temurin
-                    java-version: "17"
-
-                - name: Set up Gradle 9.5.0
-                  uses: gradle/actions/setup-gradle@v6
-                  with:
-                    gradle-version: "9.5.0"
-
-                - name: Verify Android SDK 36
-                  shell: bash
-                  run: |
-                    test -d "${ANDROID_HOME}/platforms/android-36"
-                    test -d "${ANDROID_HOME}/build-tools/36.0.0"
-
-                - name: Validate Mobile without APK
-                  run: >-
-                    gradle
-                    :app:kspMobileDebugKotlin
-                    :app:testMobileDebugUnitTest
-                    :app:lintMobileDebug
-                    :app:compileMobileDebugAndroidTestKotlin
-                    --stacktrace
-
-                - name: Verify no APK was produced
-                  shell: bash
-                  run: |
-                    if find app/build -type f -name '*.apk' -print -quit | grep -q .; then
-                      echo 'Unexpected APK produced by no-APK validation.' >&2
-                      find app/build -type f -name '*.apk' -print >&2
-                      exit 1
-                    fi
-
-                - name: Upload Room schema only
-                  if: success()
-                  uses: actions/upload-artifact@v4
-                  with:
-                    name: ownplay-mobile-room-schema-no-apk
-                    path: app/schemas
-                    if-no-files-found: error
-                    retention-days: 7
-
-                - name: Verify Room schema is committed
-                  if: success()
-                  shell: bash
-                  run: |
-                    python3 - <<'PY'
-                    import json
-                    import pathlib
-                    import subprocess
-                    import sys
-
-                    root = pathlib.Path('app/schemas')
-                    problems = []
-
-                    generated = sorted(root.rglob('*.json'))
-                    if not generated:
-                        problems.append('No Room schema JSON generated.')
-
-                    for path in generated:
-                        relative = path.as_posix()
-                        try:
-                            committed_text = subprocess.check_output(
-                                ['git', 'show', f'HEAD:{relative}'],
-                                text=True,
-                                stderr=subprocess.DEVNULL,
-                            )
-                        except subprocess.CalledProcessError:
-                            problems.append(f'Uncommitted Room schema: {relative}')
-                            continue
-
-                        try:
-                            generated_json = json.loads(path.read_text(encoding='utf-8'))
-                            committed_json = json.loads(committed_text)
-                        except json.JSONDecodeError as error:
-                            problems.append(f'Invalid Room schema JSON in {relative}: {error}')
-                            continue
-
-                        if generated_json != committed_json:
-                            problems.append(f'Room schema drift: {relative}')
-
-                    committed_paths = subprocess.check_output(
-                        ['git', 'ls-tree', '-r', '--name-only', 'HEAD', 'app/schemas'],
-                        text=True,
-                    ).splitlines()
-                    for relative in committed_paths:
-                        if relative.endswith('.json') and not pathlib.Path(relative).is_file():
-                            problems.append(f'Committed Room schema missing from generated output: {relative}')
-
-                    if problems:
-                        print('\n'.join(problems))
-                        sys.exit(2)
-                    PY
-          YAML
-
-          rm -f target/.github/workflows/bootstrap-mobile.yml
           rm -f target/.bootstrap-trigger
 
           cd target
@@ -199,7 +74,6 @@ jobs:
           grep -F 'applicationId = "app.ownplay.mobile"' app/build.gradle.kts
           ! grep -F 'applicationId = "app.ownplay.tv"' app/build.gradle.kts
           ! grep -F 'create("tv")' app/build.gradle.kts
-          ! grep -E ':app:[A-Za-z]*Tv' .github/workflows/android-validation-no-apk.yml
 
           git config user.name "OwnPlay Mobile Bootstrap"
           git config user.email "actions@users.noreply.github.com"
