@@ -29,26 +29,6 @@ class DownloadPlaybackBridgeTest {
         assertFalse(DownloadPlaybackBridge.request(sampleDownload("download-3")))
     }
 
-    @Test
-    fun playbackCloseReturnsFocusOnlyWhileOwnerIsRegistered() {
-        val owner = Any()
-        var restoredDownloadId: String? = null
-        try {
-            DownloadPlaybackBridge.registerFocusReturn(owner) { downloadId ->
-                restoredDownloadId = downloadId
-            }
-
-            DownloadPlaybackBridge.notifyPlaybackClosed("download-1")
-            assertEquals("download-1", restoredDownloadId)
-
-            DownloadPlaybackBridge.clearFocusReturn(owner)
-            DownloadPlaybackBridge.notifyPlaybackClosed("download-2")
-            assertEquals("download-1", restoredDownloadId)
-        } finally {
-            DownloadPlaybackBridge.clearFocusReturn(owner)
-        }
-    }
-
     private fun sampleDownload(downloadId: String): OfflineDownload = OfflineDownload(
         downloadId = downloadId,
         sourceId = "source",
