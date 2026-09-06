@@ -1,11 +1,8 @@
 package app.ownplay.player.ui
 
-import android.content.res.Configuration
 import android.graphics.Color as AndroidColor
-import android.view.KeyEvent
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -36,13 +33,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -75,12 +67,6 @@ internal fun OnDemandPlaybackSurface(
     onSeekPositionChanged: (Long) -> Unit,
 ) {
     val playbackControls = PlaybackPresentationPolicy.controlsFor(playbackState)
-    val configuration = LocalConfiguration.current
-    val isTelevision =
-        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
-    val backFocusRequester = remember(contentKey) { FocusRequester() }
-    val controlsFocusRequester = remember(contentKey) { FocusRequester() }
-    val wakeFocusRequester = remember(contentKey) { FocusRequester() }
     var playerView by remember(contentKey) { mutableStateOf<PlayerView?>(null) }
     var controlsVisible by remember(contentKey) { mutableStateOf(true) }
     var controlsInteractionToken by remember(contentKey) { mutableStateOf(0) }
@@ -114,48 +100,13 @@ internal fun OnDemandPlaybackSurface(
         }
     }
 
-    LaunchedEffect(isTelevision, controlsVisible, playbackState, contentKey) {
-        if (!isTelevision) return@LaunchedEffect
-        when {
-            playbackState is PlaybackState.Failed -> backFocusRequester.requestFocus()
-            controlsVisible -> controlsFocusRequester.requestFocus()
-            else -> wakeFocusRequester.requestFocus()
-        }
-    }
-
-    val remoteWakeModifier = if (isTelevision && !controlsVisible) {
-        Modifier
-            .focusRequester(wakeFocusRequester)
-            .onKeyEvent { event ->
-                if (event.nativeKeyEvent.isOnDemandRemoteNavigationKeyDown()) {
-                    revealControls()
-                    true
-                } else {
-                    false
-                }
-            }
-            .focusable()
-    } else {
-        Modifier
-    }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = Color.Black,
     ) {
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .onPreviewKeyEvent { event ->
-                    if (
-                        isTelevision &&
-                        controlsVisible &&
-                        event.nativeKeyEvent.isOnDemandRemoteNavigationKeyDown()
-                    ) {
-                        controlsInteractionToken += 1
-                    }
-                    false
-                },
+            modifier = Modifier.fillMaxSize(),
         ) {
             AndroidView(
                 factory = { context ->
@@ -202,8 +153,7 @@ internal fun OnDemandPlaybackSurface(
                                 revealControls()
                             }
                         }
-                    }
-                    .then(remoteWakeModifier),
+                    },
             )
 
             if (controlsVisible) {
@@ -216,7 +166,7 @@ internal fun OnDemandPlaybackSurface(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     IconButton(
-                        modifier = Modifier.focusRequester(backFocusRequester),
+                        modifier = Modifier,
                         enabled = !exitRequested,
                         onClick = onExit,
                     ) {
@@ -264,7 +214,7 @@ internal fun OnDemandPlaybackSurface(
                                 playbackState is PlaybackState.Paused ||
                                 (playbackState is PlaybackState.Failed && playbackControls.canRetry)
                         IconButton(
-                            modifier = Modifier.focusRequester(controlsFocusRequester),
+                            modifier = Modifier,
                             enabled = playbackActionEnabled,
                             onClick = {
                                 when (playbackState) {
@@ -323,17 +273,6 @@ internal fun OnDemandPlaybackSurface(
     }
 }
 
-private fun KeyEvent.isOnDemandRemoteNavigationKeyDown(): Boolean =
-    action == KeyEvent.ACTION_DOWN &&
-        keyCode in setOf(
-            KeyEvent.KEYCODE_DPAD_UP,
-            KeyEvent.KEYCODE_DPAD_DOWN,
-            KeyEvent.KEYCODE_DPAD_LEFT,
-            KeyEvent.KEYCODE_DPAD_RIGHT,
-            KeyEvent.KEYCODE_DPAD_CENTER,
-            KeyEvent.KEYCODE_ENTER,
-            KeyEvent.KEYCODE_NUMPAD_ENTER,
-        )
 
 private fun formatOnDemandDuration(milliseconds: Long): String {
     if (milliseconds <= 0L) return "00:00"

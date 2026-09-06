@@ -1,6 +1,5 @@
 package app.ownplay.player.ui.library
 
-import android.content.res.Configuration
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -61,7 +60,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -79,7 +77,6 @@ import app.ownplay.player.series.SeriesEpisode
 import app.ownplay.player.series.SeriesFeatureRuntime
 import app.ownplay.player.series.SeriesSummary
 import app.ownplay.player.source.SourceResult
-import app.ownplay.player.ui.OfflineMediaTvFocusPolicy
 import app.ownplay.player.ui.view.ContentViewMode
 import app.ownplay.player.ui.view.ContentViewModeMenu
 import app.ownplay.player.ui.view.ContentViewModeStore
@@ -108,9 +105,6 @@ internal fun UnifiedLibraryRoute(
     onFullscreenStateChanged: (Boolean) -> Unit,
 ) {
     val context = LocalContext.current
-    val configuration = LocalConfiguration.current
-    val isTelevision =
-        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
     val scope = rememberCoroutineScope()
     val downloadRuntime = remember(context) {
         OfflineDownloadFeatureRuntime(context.applicationContext)
@@ -133,7 +127,7 @@ internal fun UnifiedLibraryRoute(
     }
 
     val downloads by downloadRuntime.observeAll().collectAsState(initial = emptyList())
-    val presentationDownloads = if (isTelevision) emptyList() else downloads
+    val presentationDownloads = downloads
     val libraryViewMode by viewModeStore.libraryMode.collectAsState(initial = ContentViewMode.CARDS)
     val vodFlow = remember(sourceId, vodRuntime) {
         sourceId?.let(vodRuntime::observeCatalog) ?: flowOf(VodCatalog())
@@ -144,14 +138,14 @@ internal fun UnifiedLibraryRoute(
     val vodCatalog by vodFlow.collectAsState(initial = VodCatalog())
     val seriesCatalog by seriesFlow.collectAsState(initial = SeriesCatalog())
 
-    var filter by remember(isTelevision) {
+    var filter by remember {
         mutableStateOf(UnifiedLibraryFilter.MOVIES)
     }
     var movieCategoryKey by remember(sourceId) { mutableStateOf<String?>(null) }
     var seriesCategoryKey by remember(sourceId) { mutableStateOf<String?>(null) }
-    var offlineOnly by remember(isTelevision) { mutableStateOf(false) }
+    var offlineOnly by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
-    var searchExpanded by remember(isTelevision) { mutableStateOf(isTelevision) }
+    var searchExpanded by remember { mutableStateOf(false) }
     val refreshDemand = remember(sourceId, sourceKind) { LibraryCatalogRefreshDemand() }
     var movieRefreshDemanded by remember(sourceId, sourceKind) { mutableStateOf(false) }
     var seriesRefreshDemanded by remember(sourceId, sourceKind) { mutableStateOf(false) }
@@ -183,15 +177,6 @@ internal fun UnifiedLibraryRoute(
     var seriesReturnEpisodeId by remember(sourceId) { mutableStateOf<String?>(null) }
     var seriesReturnFocusGeneration by remember(sourceId) { mutableIntStateOf(0) }
 
-    LaunchedEffect(isTelevision) {
-        if (isTelevision) {
-            offlineOnly = false
-            searchExpanded = true
-            if (filter == UnifiedLibraryFilter.ALL) {
-                filter = UnifiedLibraryFilter.MOVIES
-            }
-        }
-    }
 
     LaunchedEffect(vodCatalog.categories, movieCategoryKey) {
         val categories = vodCatalog.categories
@@ -527,7 +512,6 @@ internal fun UnifiedLibraryRoute(
     val hasItems =
         movieCount + seriesCount > 0 || showMovieContinueWatching || showSeriesContinueWatching
     val showInitialMobileLoading = shouldShowMobileLibraryInitialLoading(
-        isTelevision = isTelevision,
         offlineOnly = offlineOnly,
         hasItems = hasItems,
         refreshing = refreshing,
@@ -551,86 +535,16 @@ internal fun UnifiedLibraryRoute(
         )
     }
 
-    LaunchedEffect(isTelevision, visibleFocusKeys, libraryViewMode) {
-        if (!isTelevision || visibleFocusKeys.isEmpty()) return@LaunchedEffect
-        val currentTargetStillVisible = focusItemKey?.let(visibleFocusKeys::contains) == true
-        if (initialLibraryItemFocusRequested && currentTargetStillVisible) return@LaunchedEffect
-        val target = OfflineMediaTvFocusPolicy.preferredVisibleKey(
-            visibleKeys = visibleFocusKeys,
-            rememberedKey = rememberedFocusItemKey,
-        ) ?: return@LaunchedEffect
-        initialLibraryItemFocusRequested = true
-        focusItemKey = target
-        focusRequestGeneration += 1
-    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(
-                horizontal = if (isTelevision) 20.dp else 10.dp,
-                vertical = if (isTelevision) 12.dp else 4.dp,
+                horizontal = 10.dp,
+                vertical = 4.dp,
             ),
-        verticalArrangement = Arrangement.spacedBy(if (isTelevision) 10.dp else 4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        if (isTelevision) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    Text(
-                        text = "Library",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Text(
-                        text = if (offlineOnly) {
-                            "Local files on this device · playback works without internet"
-                        } else {
-                            "Movies and Series from your active playlist"
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                if (refreshing) {
-                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                }
-                ContentViewModeMenu(
-                    mode = libraryViewMode,
-                    onModeSelected = { mode ->
-                        scope.launch { viewModeStore.setLibraryMode(mode) }
-                    },
-                    prefix = "View",
-                )
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(UnifiedLibraryFilter.MOVIES, UnifiedLibraryFilter.SERIES).forEach { option ->
-                    FilterChip(
-                        selected = filter == option,
-                        onClick = {
-                            filter = option
-                            offlineOnly = false
-                            query = ""
-                        },
-                        label = {
-                            Text(
-                                when (option) {
-                                    UnifiedLibraryFilter.ALL -> "Offline"
-                                    UnifiedLibraryFilter.MOVIES -> "Movies"
-                                    UnifiedLibraryFilter.SERIES -> "Series"
-                                },
-                            )
-                        },
-                    )
-                }
-            }
-        } else {
             LazyRow(
                 modifier = Modifier.fillMaxWidth(),
                 contentPadding = PaddingValues(end = 8.dp),
@@ -702,19 +616,18 @@ internal fun UnifiedLibraryRoute(
                     }
                 }
             }
-        }
 
         when (filter) {
             UnifiedLibraryFilter.MOVIES -> LibraryCategoryStrip(
                 label = "Movie categories",
-                showLabel = isTelevision,
+                showLabel = false,
                 selectedCategoryKey = movieCategoryKey,
                 categories = vodCatalog.categories.map { it.providerCategoryKey to it.name },
                 onCategorySelected = { movieCategoryKey = it },
             )
             UnifiedLibraryFilter.SERIES -> LibraryCategoryStrip(
                 label = "Series categories",
-                showLabel = isTelevision,
+                showLabel = false,
                 selectedCategoryKey = seriesCategoryKey,
                 categories = seriesCatalog.categories.map { it.providerCategoryKey to it.name },
                 onCategorySelected = { seriesCategoryKey = it },
@@ -722,7 +635,7 @@ internal fun UnifiedLibraryRoute(
             UnifiedLibraryFilter.ALL -> Unit
         }
 
-        if (isTelevision || searchExpanded || query.isNotBlank()) {
+        if (searchExpanded || query.isNotBlank()) {
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
@@ -989,11 +902,8 @@ private fun LibraryCatalogView(
     onRemoveMovie: (OfflineDownload) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val configuration = LocalConfiguration.current
-    val isTelevision =
-        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
-    val cardMinSize = if (isTelevision) 172.dp else 150.dp
-    val compactMinSize = if (isTelevision) 120.dp else 108.dp
+    val cardMinSize = 150.dp
+    val compactMinSize = 108.dp
     val focusIndex = remember(focusKeys, focusItemKey) { focusKeys.indexOf(focusItemKey) }
 
     LaunchedEffect(
@@ -2005,14 +1915,12 @@ private fun libraryVisibleFocusKeys(
 }
 
 internal fun shouldShowMobileLibraryInitialLoading(
-    isTelevision: Boolean,
     offlineOnly: Boolean,
     hasItems: Boolean,
     refreshing: Boolean,
     initialRefreshPending: Boolean,
 ): Boolean =
-    !isTelevision &&
-        !offlineOnly &&
+    !offlineOnly &&
         !hasItems &&
         (refreshing || initialRefreshPending)
 

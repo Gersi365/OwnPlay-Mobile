@@ -35,14 +35,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -59,7 +53,6 @@ internal fun MovieDetailsPane(
     loading: Boolean,
     error: SourceError?,
     download: OfflineDownload?,
-    focusBackOnEntry: Boolean,
     onDismiss: () -> Unit,
     onFavoriteChanged: (Boolean) -> Unit,
     onDownload: (VodMovie) -> Unit,
@@ -71,19 +64,7 @@ internal fun MovieDetailsPane(
     onPlay: (VodMovie) -> Unit,
     modifier: Modifier,
 ) {
-    val configuration = LocalConfiguration.current
-    val isTelevision =
-        configuration.uiMode and android.content.res.Configuration.UI_MODE_TYPE_MASK ==
-            android.content.res.Configuration.UI_MODE_TYPE_TELEVISION
-    val detailPrimaryFocusRequester = remember(movie.movieId) { FocusRequester() }
-    val offlineCopyAvailable = !isTelevision && download?.state == DownloadStates.COMPLETED
-
-    LaunchedEffect(isTelevision, focusBackOnEntry, movie.movieId) {
-        if (isTelevision) {
-            withFrameNanos { }
-            detailPrimaryFocusRequester.requestFocus()
-        }
-    }
+    val offlineCopyAvailable = download?.state == DownloadStates.COMPLETED
 
     Surface(
         modifier = modifier,
@@ -165,9 +146,7 @@ internal fun MovieDetailsPane(
             ) {
                 Button(
                     onClick = { onPlay(movie) },
-                    modifier = Modifier
-                        .weight(1f)
-                        .focusRequester(detailPrimaryFocusRequester),
+                    modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(10.dp),
                 ) {
                     Icon(Icons.Filled.PlayArrow, contentDescription = null)
@@ -198,8 +177,7 @@ internal fun MovieDetailsPane(
                 }
             }
 
-            if (!isTelevision) {
-                val target = details?.movie ?: movie
+            val target = details?.movie ?: movie
                 if (offlineCopyAvailable) {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
@@ -319,7 +297,6 @@ internal fun MovieDetailsPane(
                         color = MaterialTheme.colorScheme.error,
                     )
                 }
-            }
 
             details?.let { info ->
                 val hasAbout =

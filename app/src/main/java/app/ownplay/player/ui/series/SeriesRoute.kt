@@ -462,7 +462,6 @@ internal fun SeriesRoute(
             selectedSeasonNumber = selectedSeasonNumber,
             selectedEpisodeId = selectedEpisodeId,
             downloads = downloads,
-            focusBackOnEntry = true,
             onSeasonSelected = {
                 selectedSeasonNumber = it
                 selectedEpisodeId = null
@@ -539,7 +538,6 @@ internal fun SeriesRoute(
                 selectedSeasonNumber = selectedSeasonNumber,
                 selectedEpisodeId = selectedEpisodeId,
                 downloads = downloads,
-                focusBackOnEntry = returnToLibraryOnDetailBack,
                 onSeasonSelected = {
                     selectedSeasonNumber = it
                     selectedEpisodeId = null
@@ -595,21 +593,12 @@ private fun SeriesCatalogPane(
     onContinueEpisode: (SeriesEpisode) -> Unit,
     modifier: Modifier,
 ) {
-    val configuration = LocalConfiguration.current
-    val isTelevision =
-        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
-    val catalogReturnFocusRequester = remember { FocusRequester() }
     val focusCategoryKey = selectedCategoryKey
         ?.takeIf { key -> catalog.categories.any { it.providerCategoryKey == key } }
         ?: catalog.categories.firstOrNull()?.providerCategoryKey
 
-    LaunchedEffect(isTelevision, restoreFocusOnEntry, focusCategoryKey) {
-        if (isTelevision && restoreFocusOnEntry) {
-            catalogReturnFocusRequester.requestFocus()
-        }
-        if (restoreFocusOnEntry) {
-            onFocusRestored()
-        }
+    LaunchedEffect(restoreFocusOnEntry, focusCategoryKey) {
+        if (restoreFocusOnEntry) onFocusRestored()
     }
 
     Column(modifier = modifier.fillMaxSize()) {
@@ -651,7 +640,7 @@ private fun SeriesCatalogPane(
                 onClick = { onFavoritesChanged(!favoritesOnly) },
                 label = { Text("Favorites") },
                 modifier = if (focusCategoryKey == null) {
-                    Modifier.focusRequester(catalogReturnFocusRequester)
+                    Modifier
                 } else {
                     Modifier
                 },
@@ -664,7 +653,7 @@ private fun SeriesCatalogPane(
                     onClick = { onCategoryChanged(category.providerCategoryKey) },
                     label = { Text(category.name, maxLines = 1) },
                     modifier = if (category.providerCategoryKey == focusCategoryKey) {
-                        Modifier.focusRequester(catalogReturnFocusRequester)
+                        Modifier
                     } else {
                         Modifier
                     },
