@@ -1,0 +1,378 @@
+name: P8.6 Source Edit
+
+on:
+  push:
+    branches:
+      - agent/p8-6-download-notification-ux-no-apk
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: ${{ github.event.head_commit.message == 'Run P8.6 source edit' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Apply P8.6 notification permission UX
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected one match, found {count}')
+              return text.replace(old, new, 1)
+
+          main_path = Path('app/src/main/java/app/ownplay/player/MainActivity.kt')
+          main = main_path.read_text(encoding='utf-8')
+          main = replace_once(
+              main,
+              'import android.annotation.SuppressLint\n',
+              'import android.Manifest\nimport android.annotation.SuppressLint\n',
+              'MainActivity Manifest import',
+          )
+          main = replace_once(
+              main,
+              'import android.content.res.Configuration\n',
+              'import android.content.pm.PackageManager\nimport android.content.res.Configuration\n',
+              'MainActivity PackageManager import',
+          )
+          main = replace_once(
+              main,
+              'import android.os.Bundle\n',
+              'import android.os.Build\nimport android.os.Bundle\n',
+              'MainActivity Build import',
+          )
+          main = replace_once(
+              main,
+              'import androidx.activity.enableEdgeToEdge\n',
+              'import androidx.activity.enableEdgeToEdge\nimport androidx.activity.result.contract.ActivityResultContracts\n',
+              'MainActivity ActivityResult import',
+          )
+          main = replace_once(
+              main,
+              'import androidx.core.view.WindowCompat\n',
+              'import androidx.core.content.ContextCompat\nimport androidx.core.view.WindowCompat\n',
+              'MainActivity ContextCompat import',
+          )
+          main = replace_once(
+              main,
+              'import app.ownplay.player.download.OfflineDownloadFeatureRuntime\n',
+              'import app.ownplay.player.download.DownloadNotificationPermissionBridge\n'
+              'import app.ownplay.player.download.DownloadNotificationPermissionPolicy\n'
+              'import app.ownplay.player.download.DownloadNotificationPermissionStore\n'
+              'import app.ownplay.player.download.OfflineDownloadFeatureRuntime\n',
+              'MainActivity download permission imports',
+          )
+          main = replace_once(
+              main,
+              '    private lateinit var playbackGestureDetector: GestureDetector\n'
+              '    private val activityScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)\n',
+              '    private lateinit var playbackGestureDetector: GestureDetector\n'
+              '    private lateinit var downloadNotificationPermissionStore: DownloadNotificationPermissionStore\n'
+              '    private val downloadNotificationPermissionOwner = Any()\n'
+              '    private val downloadNotificationPermissionLauncher =\n'
+              '        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }\n'
+              '    private val activityScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)\n',
+              'MainActivity permission fields',
+          )
+          main = replace_once(
+              main,
+              '        runtime = (application as OwnPlayApplication).runtime\n'
+              '        offlineDownloadRuntime = if (BuildConfig.IS_TV_BUILD) {\n',
+              '        runtime = (application as OwnPlayApplication).runtime\n'
+              '        downloadNotificationPermissionStore = DownloadNotificationPermissionStore(applicationContext)\n'
+              '        DownloadNotificationPermissionBridge.register(downloadNotificationPermissionOwner) {\n'
+              '            requestDownloadNotificationPermissionIfNeeded()\n'
+              '        }\n'
+              '        offlineDownloadRuntime = if (BuildConfig.IS_TV_BUILD) {\n',
+              'MainActivity permission registration',
+          )
+          main = replace_once(
+              main,
+              '        PlaybackInteractionBridge.discardLifecycleSuspendedSurface()\n'
+              '        activityScope.cancel()\n',
+              '        PlaybackInteractionBridge.discardLifecycleSuspendedSurface()\n'
+              '        DownloadNotificationPermissionBridge.clear(downloadNotificationPermissionOwner)\n'
+              '        activityScope.cancel()\n',
+              'MainActivity permission cleanup',
+          )
+          main = replace_once(
+              main,
+              '    private fun currentPlaybackMediaKind(): PlaybackMediaKind? =\n',
+              '    private fun requestDownloadNotificationPermissionIfNeeded() {\n'
+              '        if (isFinishing || isDestroyed) return\n'
+              '        val permissionGranted =\n'
+              '            Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||\n'
+              '                ContextCompat.checkSelfPermission(\n'
+              '                    this,\n'
+              '                    Manifest.permission.POST_NOTIFICATIONS,\n'
+              '                ) == PackageManager.PERMISSION_GRANTED\n'
+              '        val state = DownloadNotificationPermissionPolicy.resolve(\n'
+              '            sdkInt = Build.VERSION.SDK_INT,\n'
+              '            permissionGranted = permissionGranted,\n'
+              '            requestAttempted = downloadNotificationPermissionStore.wasRequestAttempted(),\n'
+              '        )\n'
+              '        if (!DownloadNotificationPermissionPolicy.shouldRequest(state)) return\n'
+              '        downloadNotificationPermissionStore.markRequestAttempted()\n'
+              '        downloadNotificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)\n'
+              '    }\n\n'
+              '    private fun currentPlaybackMediaKind(): PlaybackMediaKind? =\n',
+              'MainActivity permission request method',
+          )
+          main_path.write_text(main, encoding='utf-8')
+
+          runtime_path = Path(
+              'app/src/main/java/app/ownplay/player/download/OfflineDownloadFeatureRuntime.kt'
+          )
+          runtime = runtime_path.read_text(encoding='utf-8')
+          runtime = replace_once(
+              runtime,
+              '    suspend fun enqueue(spec: OfflineDownloadSpec): String = repository.enqueue(spec)\n',
+              '    suspend fun enqueue(spec: OfflineDownloadSpec): String {\n'
+              '        DownloadNotificationPermissionBridge.requestIfNeeded()\n'
+              '        return repository.enqueue(spec)\n'
+              '    }\n',
+              'OfflineDownloadFeatureRuntime contextual request hook',
+          )
+          runtime_path.write_text(runtime, encoding='utf-8')
+          PY
+
+          cat > app/src/main/java/app/ownplay/player/download/DownloadNotificationPermissionPolicy.kt <<'KOTLIN'
+          package app.ownplay.player.download
+
+          internal enum class DownloadNotificationPermissionState {
+              NOT_REQUIRED,
+              GRANTED,
+              NEVER_REQUESTED,
+              DENIED,
+          }
+
+          internal object DownloadNotificationPermissionPolicy {
+              private const val RUNTIME_PERMISSION_API_LEVEL = 33
+
+              fun resolve(
+                  sdkInt: Int,
+                  permissionGranted: Boolean,
+                  requestAttempted: Boolean,
+              ): DownloadNotificationPermissionState =
+                  when {
+                      sdkInt < RUNTIME_PERMISSION_API_LEVEL ->
+                          DownloadNotificationPermissionState.NOT_REQUIRED
+                      permissionGranted -> DownloadNotificationPermissionState.GRANTED
+                      !requestAttempted -> DownloadNotificationPermissionState.NEVER_REQUESTED
+                      else -> DownloadNotificationPermissionState.DENIED
+                  }
+
+              fun shouldRequest(state: DownloadNotificationPermissionState): Boolean =
+                  state == DownloadNotificationPermissionState.NEVER_REQUESTED
+          }
+          KOTLIN
+
+          cat > app/src/main/java/app/ownplay/player/download/DownloadNotificationPermissionStore.kt <<'KOTLIN'
+          package app.ownplay.player.download
+
+          import android.content.Context
+
+          internal class DownloadNotificationPermissionStore(context: Context) {
+              private val preferences = context.applicationContext.getSharedPreferences(
+                  PREFERENCES_NAME,
+                  Context.MODE_PRIVATE,
+              )
+
+              fun wasRequestAttempted(): Boolean =
+                  preferences.getBoolean(KEY_REQUEST_ATTEMPTED, false)
+
+              fun markRequestAttempted() {
+                  preferences.edit().putBoolean(KEY_REQUEST_ATTEMPTED, true).apply()
+              }
+
+              private companion object {
+                  const val PREFERENCES_NAME = "ownplay_download_notification_permission"
+                  const val KEY_REQUEST_ATTEMPTED = "request_attempted"
+              }
+          }
+          KOTLIN
+
+          cat > app/src/main/java/app/ownplay/player/download/DownloadNotificationPermissionBridge.kt <<'KOTLIN'
+          package app.ownplay.player.download
+
+          /**
+           * Narrow contextual handoff from a user-initiated fresh download to the activity-owned
+           * runtime permission launcher. Permission state never gates repository enqueue/reliability.
+           */
+          internal object DownloadNotificationPermissionBridge {
+              private var owner: Any? = null
+              private var action: (() -> Unit)? = null
+
+              fun register(owner: Any, action: () -> Unit) {
+                  this.owner = owner
+                  this.action = action
+              }
+
+              fun clear(owner: Any) {
+                  if (this.owner === owner) {
+                      this.owner = null
+                      action = null
+                  }
+              }
+
+              fun requestIfNeeded(): Boolean {
+                  val current = action ?: return false
+                  current()
+                  return true
+              }
+          }
+          KOTLIN
+
+          mkdir -p app/src/test/java/app/ownplay/player/download
+          cat > app/src/test/java/app/ownplay/player/download/DownloadNotificationPermissionPolicyTest.kt <<'KOTLIN'
+          package app.ownplay.player.download
+
+          import org.junit.Assert.assertEquals
+          import org.junit.Assert.assertFalse
+          import org.junit.Assert.assertTrue
+          import org.junit.Test
+
+          class DownloadNotificationPermissionPolicyTest {
+              @Test
+              fun preAndroid13DoesNotRequireRuntimePermission() {
+                  val state = DownloadNotificationPermissionPolicy.resolve(
+                      sdkInt = 32,
+                      permissionGranted = false,
+                      requestAttempted = false,
+                  )
+                  assertEquals(DownloadNotificationPermissionState.NOT_REQUIRED, state)
+                  assertFalse(DownloadNotificationPermissionPolicy.shouldRequest(state))
+              }
+
+              @Test
+              fun grantedPermissionWinsOverPriorRequestState() {
+                  val state = DownloadNotificationPermissionPolicy.resolve(
+                      sdkInt = 36,
+                      permissionGranted = true,
+                      requestAttempted = true,
+                  )
+                  assertEquals(DownloadNotificationPermissionState.GRANTED, state)
+                  assertFalse(DownloadNotificationPermissionPolicy.shouldRequest(state))
+              }
+
+              @Test
+              fun firstRelevantDownloadRequestsPermissionOnce() {
+                  val state = DownloadNotificationPermissionPolicy.resolve(
+                      sdkInt = 33,
+                      permissionGranted = false,
+                      requestAttempted = false,
+                  )
+                  assertEquals(DownloadNotificationPermissionState.NEVER_REQUESTED, state)
+                  assertTrue(DownloadNotificationPermissionPolicy.shouldRequest(state))
+              }
+
+              @Test
+              fun previouslyAttemptedAndStillNotGrantedDoesNotReprompt() {
+                  val state = DownloadNotificationPermissionPolicy.resolve(
+                      sdkInt = 36,
+                      permissionGranted = false,
+                      requestAttempted = true,
+                  )
+                  assertEquals(DownloadNotificationPermissionState.DENIED, state)
+                  assertFalse(DownloadNotificationPermissionPolicy.shouldRequest(state))
+              }
+          }
+          KOTLIN
+
+          cat > app/src/test/java/app/ownplay/player/download/DownloadNotificationUxContractTest.kt <<'KOTLIN'
+          package app.ownplay.player.download
+
+          import app.ownplay.player.testing.sourceBlockAfter
+          import app.ownplay.player.testing.sourceText
+          import org.junit.Assert.assertFalse
+          import org.junit.Assert.assertTrue
+          import org.junit.Test
+
+          class DownloadNotificationUxContractTest {
+              @Test
+              fun freshEnqueueRequestsPermissionContextuallyWithoutGatingRepository() {
+                  val runtime = sourceText(
+                      "src/main/java/app/ownplay/player/download/OfflineDownloadFeatureRuntime.kt",
+                  )
+                  val enqueue = sourceBlockAfter(
+                      runtime,
+                      "suspend fun enqueue(spec: OfflineDownloadSpec): String",
+                  )
+                  assertTrue(enqueue.contains("DownloadNotificationPermissionBridge.requestIfNeeded()"))
+                  assertTrue(enqueue.contains("return repository.enqueue(spec)"))
+              }
+
+              @Test
+              fun activityOwnsPermissionLauncherAndDoesNotRequestAtStartup() {
+                  val source = sourceText("src/main/java/app/ownplay/player/MainActivity.kt")
+                  assertTrue(
+                      source.contains(
+                          "registerForActivityResult(ActivityResultContracts.RequestPermission())",
+                      ),
+                  )
+                  assertTrue(source.contains("DownloadNotificationPermissionBridge.register("))
+                  val requestMethod = sourceBlockAfter(
+                      source,
+                      "private fun requestDownloadNotificationPermissionIfNeeded()",
+                  )
+                  assertTrue(requestMethod.contains("DownloadNotificationPermissionPolicy.resolve("))
+                  assertTrue(requestMethod.contains("markRequestAttempted()"))
+                  assertTrue(
+                      requestMethod.contains(
+                          "downloadNotificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)",
+                      ),
+                  )
+                  val onCreate = sourceBlockAfter(source, "override fun onCreate(savedInstanceState: Bundle?)")
+                  assertFalse(
+                      onCreate.contains(
+                          "downloadNotificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)",
+                      ),
+                  )
+              }
+
+              @Test
+              fun workerKeepsStableLowNoiseForegroundNotificationContract() {
+                  val worker = sourceText(
+                      "src/main/java/app/ownplay/player/download/OfflineDownloadWorker.kt",
+                  )
+                  assertTrue(worker.contains("NotificationManager.IMPORTANCE_LOW"))
+                  assertTrue(worker.contains(".setOnlyAlertOnce(true)"))
+                  assertTrue(worker.contains(".setOngoing(true)"))
+                  assertTrue(worker.contains("ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC"))
+                  assertTrue(
+                      worker.contains(
+                          "NOTIFICATION_ID_BASE + (row.downloadId.hashCode() and 0x3fffffff)",
+                      ),
+                  )
+                  assertFalse(worker.contains("setDeleteIntent("))
+              }
+
+              @Test
+              fun manifestRetainsNotificationAndDataSyncForegroundPermissions() {
+                  val manifest = sourceText("src/main/AndroidManifest.xml")
+                  assertTrue(manifest.contains("android.permission.POST_NOTIFICATIONS"))
+                  assertTrue(manifest.contains("android.permission.FOREGROUND_SERVICE"))
+                  assertTrue(manifest.contains("android.permission.FOREGROUND_SERVICE_DATA_SYNC"))
+                  assertTrue(manifest.contains("android:foregroundServiceType=\"dataSync\""))
+              }
+          }
+          KOTLIN
+
+          rm -f .p8-6-trigger
+
+          git config user.name "OwnPlay Mobile P8.6"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -m "Add contextual download notification permission UX -no-apk"
+          git push origin HEAD:agent/p8-6-download-notification-ux-no-apk
