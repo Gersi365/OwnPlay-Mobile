@@ -30,6 +30,20 @@ jobs:
           activity = Path('app/src/main/java/app/ownplay/player/MainActivity.kt')
           root = Path('app/src/main/java/app/ownplay/player/ui/OwnPlayRoot.kt')
           orientation = Path('app/src/main/java/app/ownplay/player/personalization/AppOrientationStore.kt')
+          lifecycle = Path('app/src/main/java/app/ownplay/player/playback/LiveActivityLifecyclePolicy.kt')
+          lifecycle_test = Path('app/src/test/java/app/ownplay/player/playback/LiveActivityLifecyclePolicyTest.kt')
+          surface_test = Path('app/src/test/java/app/ownplay/player/ui/LiveSurfaceOwnershipRegressionHarnessTest.kt')
+
+          paths = (
+              gradle,
+              activity,
+              root,
+              orientation,
+              lifecycle,
+              lifecycle_test,
+              surface_test,
+          )
+          texts = {p: p.read_text(encoding='utf-8') for p in paths}
 
           def remove_braced_block(text: str, marker: str) -> tuple[str, int]:
               lines = text.splitlines(keepends=True)
@@ -56,27 +70,23 @@ jobs:
                   end += 1
               return ''.join(lines[:start] + lines[end + 1:]), 1
 
-          texts = {p: p.read_text(encoding='utf-8') for p in (gradle, activity, root, orientation)}
-
-          if (
-              'BuildConfig.IS_TV_BUILD' not in ''.join(texts.values())
-              and 'IS_TV_BUILD' not in texts[gradle]
-              and 'TARGET_DEVICE' not in texts[gradle]
+          if not any(
+              'BuildConfig.IS_TV_BUILD' in text or 'TARGET_DEVICE' in text
+              for text in texts.values()
           ):
               print('Mobile-only build routing is already normalized; no source mutation needed.')
               raise SystemExit(0)
 
-          texts[gradle], flag_count = re.subn(
-              r'^\s*buildConfigField\("boolean", "IS_TV_BUILD", "false"\)\s*\n',
-              '',
-              texts[gradle],
-              flags=re.MULTILINE,
-          )
-          texts[gradle], target_count = re.subn(
-              r'^\s*buildConfigField\("String", "TARGET_DEVICE", "\\"mobile\\""\)\s*\n',
-              '',
-              texts[gradle],
-              flags=re.MULTILINE,
+          # Keep the single `mobile` flavor so existing MobileDebug CI task names stay stable,
+          # but remove compile-time target flags that can no longer vary in this repository.
+          gradle_lines = texts[gradle].splitlines(keepends=True)
+          removed_flag_lines = [
+              line for line in gradle_lines
+              if 'buildConfigField' in line and ('IS_TV_BUILD' in line or 'TARGET_DEVICE' in line)
+          ]
+          texts[gradle] = ''.join(
+              line for line in gradle_lines
+              if not ('buildConfigField' in line and ('IS_TV_BUILD' in line or 'TARGET_DEVICE' in line))
           )
 
           texts[activity], activity_count = re.subn(
@@ -113,14 +123,68 @@ jobs:
               '/**\n * Mobile orientation compatibility facade retained for existing call sites.\n *\n * OwnPlay Mobile targets touch-first Android phones and tablets. Orientation writes apply to the\n * Mobile profile only.\n */',
           )
 
+          texts[lifecycle] = texts[lifecycle].replace('import app.ownplay.player.BuildConfig\n\n', '')
+          texts[lifecycle] = texts[lifecycle].replace(
+              '''/**\n * Activity-level background policy used by the shared MainActivity.\n *\n * Live suspends outside PiP/configuration changes on both targets. Mobile additionally suspends\n * long-form Movie/Series playback so the existing PlaybackController can retain resume position.\n * TV non-Live playback remains delegated to TvPlaybackLifecyclePolicy.\n */''',
+              '''/**\n * Activity-level background policy for OwnPlay Mobile.\n *\n * Active Live, Movie, and Series playback suspends outside PiP/configuration changes so the\n * existing PlaybackController can retain a recoverable session and resume position.\n */''',
+          )
+          texts[lifecycle], lifecycle_count = re.subn(
+              r'PlaybackMediaKind\.MOVIE,\s*PlaybackMediaKind\.SERIES_EPISODE,\s*-> !BuildConfig\.IS_TV_BUILD',
+              'PlaybackMediaKind.MOVIE,\n            PlaybackMediaKind.SERIES_EPISODE,\n            -> true',
+              texts[lifecycle],
+              count=1,
+              flags=re.DOTALL,
+          )
+
+          texts[lifecycle_test] = texts[lifecycle_test].replace('import app.ownplay.player.BuildConfig\n', '')
+          texts[lifecycle_test] = texts[lifecycle_test].replace(
+              'fun nonLiveSuspendsOnlyOnMobileOutsidePipAndConfigurationChange() {',
+              'fun nonLiveSuspendsOutsidePipAndConfigurationChange() {',
+          )
+          texts[lifecycle_test], lifecycle_test_count = re.subn(
+              r'\s*val expected = if \(BuildConfig\.IS_TV_BUILD\) \{\s*LiveActivityBackgroundAction\.NONE\s*\} else \{\s*LiveActivityBackgroundAction\.SUSPEND_AND_RETAIN_SURFACE\s*\}\s*',
+              '\n        val expected = LiveActivityBackgroundAction.SUSPEND_AND_RETAIN_SURFACE\n\n',
+              texts[lifecycle_test],
+              count=1,
+              flags=re.DOTALL,
+          )
+
+          texts[surface_test] = texts[surface_test].replace('import app.ownplay.player.BuildConfig\n', '')
+          texts[surface_test] = texts[surface_test].replace(
+              'fun `movie and series keep media3 pip transfer with target specific lifecycle behavior`() {',
+              'fun `movie and series keep media3 pip transfer with Mobile lifecycle behavior`() {',
+          )
+          texts[surface_test], surface_test_count = re.subn(
+              r'\s*val expectedBackgroundAction = if \(BuildConfig\.IS_TV_BUILD\) \{\s*LiveActivityBackgroundAction\.NONE\s*\} else \{\s*LiveActivityBackgroundAction\.SUSPEND_AND_RETAIN_SURFACE\s*\}\s*',
+              '\n        val expectedBackgroundAction = LiveActivityBackgroundAction.SUSPEND_AND_RETAIN_SURFACE\n\n',
+              texts[surface_test],
+              count=1,
+              flags=re.DOTALL,
+          )
+
           counts = {
-              'IS_TV_BUILD Gradle field': flag_count,
-              'TARGET_DEVICE Gradle field': target_count,
+              'Gradle target flags': len(removed_flag_lines),
               'MainActivity dead target branch': activity_count,
               'OwnPlayRoot dead target effect': root_count,
               'AppOrientationStore target builder': orientation_count,
+              'Live lifecycle target branch': lifecycle_count,
+              'Live lifecycle test target branch': lifecycle_test_count,
+              'Surface regression target branch': surface_test_count,
           }
-          failures = [f'{name}: expected 1 edit, got {count}' for name, count in counts.items() if count != 1]
+          expected = {
+              'Gradle target flags': 2,
+              'MainActivity dead target branch': 1,
+              'OwnPlayRoot dead target effect': 1,
+              'AppOrientationStore target builder': 1,
+              'Live lifecycle target branch': 1,
+              'Live lifecycle test target branch': 1,
+              'Surface regression target branch': 1,
+          }
+          failures = [
+              f'{name}: expected {expected[name]} edit(s), got {count}'
+              for name, count in counts.items()
+              if count != expected[name]
+          ]
           if failures:
               print('\n'.join(failures), file=sys.stderr)
               raise SystemExit(2)
@@ -130,7 +194,7 @@ jobs:
 
           remaining = []
           for path in Path('app').rglob('*'):
-              if not path.is_file() or path.suffix not in {'.kt', '.kts'}:
+              if not path.is_file():
                   continue
               text = path.read_text(encoding='utf-8', errors='ignore')
               if 'BuildConfig.IS_TV_BUILD' in text or 'BuildConfig.TARGET_DEVICE' in text:
@@ -143,15 +207,12 @@ jobs:
       - name: Commit normalized source
         shell: bash
         run: |
-          if git diff --quiet -- app/build.gradle.kts app/src/main/java/app/ownplay/player/MainActivity.kt app/src/main/java/app/ownplay/player/ui/OwnPlayRoot.kt app/src/main/java/app/ownplay/player/personalization/AppOrientationStore.kt; then
+          if git diff --quiet -- app; then
             echo 'No source changes to commit.'
             exit 0
           fi
           git config user.name 'Gersi365'
           git config user.email 'Gersi365@outlook.com'
-          git add app/build.gradle.kts \
-            app/src/main/java/app/ownplay/player/MainActivity.kt \
-            app/src/main/java/app/ownplay/player/ui/OwnPlayRoot.kt \
-            app/src/main/java/app/ownplay/player/personalization/AppOrientationStore.kt
+          git add app
           git commit -m 'Normalize Mobile-only build routing -no-apk'
           git push origin HEAD:agent/mobile-only-source-normalization-no-apk
