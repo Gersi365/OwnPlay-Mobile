@@ -233,8 +233,17 @@ internal fun SeriesRoute(
         }
     }
 
-    fun playEpisode(episode: SeriesEpisode, returnFocusToCatalog: Boolean) {
+    fun playEpisode(
+        episode: SeriesEpisode,
+        returnFocusToCatalog: Boolean,
+        startFromBeginning: Boolean = false,
+    ) {
         restoreCatalogFocusAfterPlayback = false
+        val playbackEpisode = if (startFromBeginning) {
+            episode.copy(positionMs = 0L, progressCompleted = false)
+        } else {
+            episode
+        }
         runtime.playbackController.start(
             PlaybackRequest(
                 sourceId = sourceId,
@@ -246,7 +255,7 @@ internal fun SeriesRoute(
         )
         runtime.onDemandPresentationSession.showSeriesPlayback(
             sourceId = sourceId,
-            episode = episode,
+            episode = playbackEpisode,
             returnToLibraryOnDetailBack = returnToLibraryOnDetailBack,
             returnToCatalog = returnFocusToCatalog,
             selectedSeasonNumber = selectedSeasonNumber,
@@ -483,10 +492,8 @@ internal fun SeriesRoute(
             onResumeDownload = ::resumeDownload,
             onRetryDownload = ::retryDownload,
             onRemoveDownload = ::removeDownload,
-            onClearProgress = { episode ->
-                scope.launch {
-                    featureRuntime.clearEpisodeProgress(sourceId, episode.episodeId)
-                }
+            onPlayFromBeginning = { episode ->
+                playEpisode(episode, returnFocusToCatalog = false, startFromBeginning = true)
             },
             onClose = ::closeSeriesLevel,
             modifier = Modifier.fillMaxSize(),
@@ -559,10 +566,8 @@ internal fun SeriesRoute(
                 onResumeDownload = ::resumeDownload,
                 onRetryDownload = ::retryDownload,
                 onRemoveDownload = ::removeDownload,
-                onClearProgress = { episode ->
-                    scope.launch {
-                        featureRuntime.clearEpisodeProgress(sourceId, episode.episodeId)
-                    }
+                onPlayFromBeginning = { episode ->
+                    playEpisode(episode, returnFocusToCatalog = false, startFromBeginning = true)
                 },
                 onClose = ::closeSeriesLevel,
                 modifier = Modifier
