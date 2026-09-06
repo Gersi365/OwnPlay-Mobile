@@ -1,1 +1,0 @@
-Temporary validation trigger for the Mobile-only normalization branch. This file will be removed before final validation.
