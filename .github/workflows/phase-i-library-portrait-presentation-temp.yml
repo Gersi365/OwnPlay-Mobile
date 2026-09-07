@@ -1,0 +1,66 @@
+name: Phase I Library Portrait Presentation Temp
+
+on:
+  push:
+    branches:
+      - agent/phase-i-library-portrait-presentation-no-apk
+    paths:
+      - .github/workflows/phase-i-library-portrait-presentation-temp.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: agent/phase-i-library-portrait-presentation-no-apk
+          fetch-depth: 0
+
+      - name: Guard Phase I branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git branch --show-current)" = "agent/phase-i-library-portrait-presentation-no-apk"
+          git merge-base --is-ancestor 3d3ed5469c2dffbb83a1a7ecd5e56e37deba1967 HEAD
+
+      - name: Apply focused Library portrait simplification
+        shell: bash
+        run: python .github/scripts/phase_i_library_portrait_presentation.py
+
+      - name: Remove temporary mutation helpers
+        shell: bash
+        run: |
+          rm .github/scripts/phase_i_library_portrait_presentation.py
+          rm .github/workflows/phase-i-library-portrait-presentation-temp.yml
+
+      - name: Verify focused source-only diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected=$(cat <<'EOF'
+          .github/scripts/phase_i_library_portrait_presentation.py
+          .github/workflows/phase-i-library-portrait-presentation-temp.yml
+          app/src/main/java/app/ownplay/player/ui/library/UnifiedLibraryRoute.kt
+          EOF
+          )
+          actual=$(git status --porcelain | sed -E 's/^.. //' | sort)
+          test "$actual" = "$(printf '%s\n' "$expected" | sort)"
+          test -z "$(find . -type f -name '*.apk' -print -quit)"
+          ! git diff -- app/src/main/java/app/ownplay/player/ui/library/UnifiedLibraryRoute.kt | grep -E 'WorkManager|MediaStore|PlaybackController|savePlaybackProgress|DownloadStates\.(QUEUED|DOWNLOADING|PAUSED|FAILED|COMPLETED)'
+
+      - name: Commit focused Phase I source change
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A \
+            .github/scripts/phase_i_library_portrait_presentation.py \
+            .github/workflows/phase-i-library-portrait-presentation-temp.yml \
+            app/src/main/java/app/ownplay/player/ui/library/UnifiedLibraryRoute.kt
+          git commit -m "Simplify Library portrait hierarchy -no-apk"
+          git push origin HEAD:agent/phase-i-library-portrait-presentation-no-apk
