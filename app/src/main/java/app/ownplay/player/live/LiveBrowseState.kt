@@ -121,7 +121,17 @@ class LiveBrowseSession(
     }
 
     fun selectCategory(categoryKey: String?) {
-        query.update { current -> current.copy(categoryKey = categoryKey) }
+        query.update { current ->
+            if (
+                categoryKey == null &&
+                current.categoryKey != null &&
+                current.usesCanonicalCategoryBrowsing()
+            ) {
+                current
+            } else {
+                current.copy(categoryKey = categoryKey)
+            }
+        }
     }
 
     fun selectCustomGroup(groupId: String?) {
@@ -162,11 +172,13 @@ class LiveBrowseSession(
     }
 }
 
-private fun LiveBrowseQuery.usesDefaultCategoryEntry(): Boolean =
-    categoryKey == null &&
-        customGroupId == null &&
+private fun LiveBrowseQuery.usesCanonicalCategoryBrowsing(): Boolean =
+    customGroupId == null &&
         !favoritesOnly &&
         !hiddenOnly &&
         !includeHidden &&
         !includeRemoved &&
         searchTerm.isBlank()
+
+private fun LiveBrowseQuery.usesDefaultCategoryEntry(): Boolean =
+    categoryKey == null && usesCanonicalCategoryBrowsing()
