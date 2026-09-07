@@ -33,47 +33,93 @@ import app.ownplay.player.ui.vod.RemotePoster
 import app.ownplay.player.vod.VodMovie
 import kotlin.math.roundToInt
 
-@Composable
-internal fun LibraryMovieContinueWatchingStrip(
+internal sealed interface LibraryContinueWatchingItem {
+    val stableKey: String
+    val progressUpdatedAtEpochMillis: Long?
+
+    data class Movie(
+        val movie: VodMovie,
+    ) : LibraryContinueWatchingItem {
+        override val stableKey: String = "movie:${movie.movieId}"
+        override val progressUpdatedAtEpochMillis: Long? = movie.progressUpdatedAtEpochMillis
+    }
+
+    data class Episode(
+        val episode: SeriesEpisode,
+    ) : LibraryContinueWatchingItem {
+        override val stableKey: String = "episode:${episode.episodeId}"
+        override val progressUpdatedAtEpochMillis: Long? = episode.progressUpdatedAtEpochMillis
+    }
+}
+
+internal fun unifiedContinueWatching(
     movies: List<VodMovie>,
-    onOpenMovie: (VodMovie) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    if (movies.isEmpty()) return
-    LibraryContinueWatchingStrip(
-        modifier = modifier,
-        items = movies,
-        key = { it.movieId },
-        posterUrl = { it.posterUrl },
-        title = { it.name },
-        subtitle = { "Continue movie" },
-        hideSubtitleOnMobile = true,
-        positionMs = { it.positionMs },
-        durationMs = { it.durationMs },
-        onOpen = onOpenMovie,
-    )
+    episodes: List<SeriesEpisode>,
+    limit: Int = 24,
+): List<LibraryContinueWatchingItem> {
+    if (limit <= 0) return emptyList()
+    return buildList<LibraryContinueWatchingItem> {
+        movies.forEach { movie -> add(LibraryContinueWatchingItem.Movie(movie)) }
+        episodes.forEach { episode -> add(LibraryContinueWatchingItem.Episode(episode)) }
+    }
+        .sortedWith(
+            compareByDescending<LibraryContinueWatchingItem> {
+                it.progressUpdatedAtEpochMillis ?: Long.MIN_VALUE
+            }.thenBy(LibraryContinueWatchingItem::stableKey),
+        )
+        .take(limit)
 }
 
 @Composable
-internal fun LibrarySeriesContinueWatchingStrip(
-    episodes: List<SeriesEpisode>,
+internal fun LibraryUnifiedContinueWatchingStrip(
+    items: List<LibraryContinueWatchingItem>,
+    onOpenMovie: (VodMovie) -> Unit,
     onOpenSeries: (SeriesEpisode) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    if (episodes.isEmpty()) return
+    if (items.isEmpty()) return
     LibraryContinueWatchingStrip(
         modifier = modifier,
-        items = episodes,
-        key = { it.episodeId },
-        posterUrl = { it.posterUrl },
-        title = { it.seriesTitle },
-        subtitle = { episode ->
-            "S${episode.seasonNumber} · E${episode.episodeNumber} · ${episode.title}"
+        items = items,
+        key = LibraryContinueWatchingItem::stableKey,
+        posterUrl = { item ->
+            when (item) {
+                is LibraryContinueWatchingItem.Movie -> item.movie.posterUrl
+                is LibraryContinueWatchingItem.Episode -> item.episode.posterUrl
+            }
         },
-        hideSubtitleOnMobile = false,
-        positionMs = { it.positionMs },
-        durationMs = { it.durationMs },
-        onOpen = onOpenSeries,
+        title = { item ->
+            when (item) {
+                is LibraryContinueWatchingItem.Movie -> item.movie.name
+                is LibraryContinueWatchingItem.Episode -> item.episode.seriesTitle
+            }
+        },
+        subtitle = { item ->
+            when (item) {
+                is LibraryContinueWatchingItem.Movie -> null
+                is LibraryContinueWatchingItem.Episode -> with(item.episode) {
+                    "S$seasonNumber · E$episodeNumber · $title"
+                }
+            }
+        },
+        positionMs = { item ->
+            when (item) {
+                is LibraryContinueWatchingItem.Movie -> item.movie.positionMs
+                is LibraryContinueWatchingItem.Episode -> item.episode.positionMs
+            }
+        },
+        durationMs = { item ->
+            when (item) {
+                is LibraryContinueWatchingItem.Movie -> item.movie.durationMs
+                is LibraryContinueWatchingItem.Episode -> item.episode.durationMs
+            }
+        },
+        onOpen = { item ->
+            when (item) {
+                is LibraryContinueWatchingItem.Movie -> onOpenMovie(item.movie)
+                is LibraryContinueWatchingItem.Episode -> onOpenSeries(item.episode)
+            }
+        },
     )
 }
 
@@ -83,8 +129,7 @@ private fun <T> LibraryContinueWatchingStrip(
     key: (T) -> String,
     posterUrl: (T) -> String?,
     title: (T) -> String,
-    subtitle: (T) -> String,
-    hideSubtitleOnMobile: Boolean,
+    subtitle: (T) -> String?,
     positionMs: (T) -> Long?,
     durationMs: (T) -> Long?,
     onOpen: (T) -> Unit,
@@ -141,25 +186,24 @@ private fun <T> LibraryContinueWatchingStrip(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        if (!hideSubtitleOnMobile) {
+                        subtitle(item)?.let { secondaryText ->
                             Text(
-                                text = subtitle(item),
+                                text = secondaryText,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
                         }
-                            Text(
-                                text = continueWatchingResumeLabel(
-                                    positionMs = positionMs(item),
-                                    durationMs = durationMs(item),
-                                ),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                maxLines = 1,
-                            )
-
+                        Text(
+                            text = continueWatchingResumeLabel(
+                                positionMs = positionMs(item),
+                                durationMs = durationMs(item),
+                            ),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1,
+                        )
                     }
                 }
             }
