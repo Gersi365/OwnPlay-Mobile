@@ -42,6 +42,8 @@ jobs:
         run: |
           set -euo pipefail
           expected=$(cat <<'EOF'
+          .github/scripts/phase_g_download_ux_consistency.py
+          .github/workflows/phase-g-download-ux-consistency-temp.yml
           app/src/main/java/app/ownplay/player/ui/DownloadsSettingsScreen.kt
           app/src/main/java/app/ownplay/player/ui/library/LibraryOfflinePresentation.kt
           app/src/main/java/app/ownplay/player/ui/series/SeriesDetailsPane.kt
@@ -52,7 +54,10 @@ jobs:
           )
           actual=$(git status --porcelain | sed -E 's/^.. //' | sort)
           test "$actual" = "$(printf '%s\n' "$expected" | sort)"
-          ! git diff -- app/src/main/java app/src/test/java | grep -E 'WorkManager|MediaStore\.Downloads\.RELATIVE_PATH|updateActiveTransfer|PlaybackController' || true
+          if git diff -- app/src/main/java app/src/test/java | grep -E 'WorkManager|MediaStore\.Downloads\.RELATIVE_PATH|updateActiveTransfer|PlaybackController'; then
+            echo "Phase G unexpectedly touched transfer/playback implementation vocabulary" >&2
+            exit 1
+          fi
           test -z "$(find . -type f -name '*.apk' -print -quit)"
 
       - name: Commit focused Phase G source change
@@ -61,12 +66,6 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add \
-            app/src/main/java/app/ownplay/player/ui/DownloadsSettingsScreen.kt \
-            app/src/main/java/app/ownplay/player/ui/library/LibraryOfflinePresentation.kt \
-            app/src/main/java/app/ownplay/player/ui/series/SeriesDetailsPane.kt \
-            app/src/main/java/app/ownplay/player/ui/vod/MovieDetailsPane.kt \
-            app/src/test/java/app/ownplay/player/DownloadUxVocabularyContractTest.kt \
-            app/src/test/java/app/ownplay/player/ui/library/LibraryOfflinePresentationTest.kt
+          git add -A
           git commit -m "Align download UX with OwnPlay Downloads -no-apk"
           git push origin HEAD:agent/phase-g-download-ux-consistency-no-apk
