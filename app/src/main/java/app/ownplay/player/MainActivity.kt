@@ -36,6 +36,10 @@ import app.ownplay.player.download.DownloadNotificationPermissionStore
 import app.ownplay.player.download.OfflineDownloadFeatureRuntime
 import app.ownplay.player.playback.LiveActivityBackgroundAction
 import app.ownplay.player.playback.LiveActivityLifecyclePolicy
+import app.ownplay.player.playback.LiveFullscreenEntryReason
+import app.ownplay.player.playback.LivePlaybackPresentationPolicy
+import app.ownplay.player.playback.LivePlaybackPresentationSurface
+import app.ownplay.player.playback.LivePlaybackSurfaceHandoff
 import app.ownplay.player.playback.PlaybackInteractionBridge
 import app.ownplay.player.playback.PlaybackMediaKind
 import app.ownplay.player.playback.PlaybackState
@@ -78,6 +82,10 @@ class MainActivity : ComponentActivity() {
         }
         offlineDownloadRuntime = OfflineDownloadFeatureRuntime(applicationContext)
         playbackWindowController = PlaybackWindowController(this)
+        playbackWindowController.updateLivePreviewState(
+            runtime.livePlaybackPresentationSession.state.value.surface ==
+                LivePlaybackPresentationSurface.PREVIEW,
+        )
         playbackGestureDetector = GestureDetector(
             this,
             object : GestureDetector.SimpleOnGestureListener() {
@@ -241,6 +249,13 @@ class MainActivity : ComponentActivity() {
                 playbackWindowController.updatePlaybackState(state is PlaybackState.Playing)
             }
         }
+        activityScope.launch {
+            runtime.livePlaybackPresentationSession.state.collectLatest { state ->
+                playbackWindowController.updateLivePreviewState(
+                    state.surface == LivePlaybackPresentationSurface.PREVIEW,
+                )
+            }
+        }
     }
 
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
@@ -303,6 +318,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
+        handleLivePlaybackRotation(newConfig)
         playbackWindowController.refreshWindowState()
         hideStatusBar()
     }
@@ -320,6 +336,61 @@ class MainActivity : ComponentActivity() {
         offlineDownloadRuntime = null
         playbackWindowController.release()
         super.onDestroy()
+    }
+
+    private fun handleLivePlaybackRotation(newConfig: Configuration) {
+        if (!::runtime.isInitialized || isInPictureInPictureMode) return
+        val presentationSession = runtime.livePlaybackPresentationSession
+        val presentation = presentationSession.state.value
+        val selection = presentation.selection ?: return
+        val isFullscreen = presentation.surface == LivePlaybackPresentationSurface.FULLSCREEN
+        val rotationEnabled = true
+
+        if (
+            LivePlaybackPresentationPolicy.shouldEnterFullscreenFromRotation(
+                rotationFullscreenEnabled = rotationEnabled,
+                isLandscape = newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE,
+                hasSelection = true,
+                alreadyFullscreen = isFullscreen,
+            )
+        ) {
+            LivePlaybackSurfaceHandoff.transferAcrossPresentation(
+                detachCurrentSurface = {
+                    PlaybackInteractionBridge.detachCurrent(runtime.playbackVideoOutput)
+                },
+                switchPresentation = {
+                    playbackFullscreen = true
+                    playbackWindowController.updateFullscreenState(true)
+                    playbackWindowController.updateLivePreviewState(false)
+                    presentationSession.showFullscreen(
+                        selection = selection,
+                        entryReason = LiveFullscreenEntryReason.ROTATION,
+                    )
+                },
+            )
+            return
+        }
+
+        if (
+            LivePlaybackPresentationPolicy.shouldReturnToPreviewFromRotation(
+                rotationFullscreenEnabled = rotationEnabled,
+                isPortrait = newConfig.orientation == Configuration.ORIENTATION_PORTRAIT,
+                entryReason = presentation.fullscreenEntryReason,
+                isFullscreen = isFullscreen,
+            )
+        ) {
+            LivePlaybackSurfaceHandoff.transferAcrossPresentation(
+                detachCurrentSurface = {
+                    PlaybackInteractionBridge.detachCurrent(runtime.playbackVideoOutput)
+                },
+                switchPresentation = {
+                    playbackFullscreen = false
+                    playbackWindowController.updateLivePreviewState(true)
+                    playbackWindowController.updateFullscreenState(false)
+                    presentationSession.showPreview(selection)
+                },
+            )
+        }
     }
 
     private fun requestDownloadNotificationPermissionIfNeeded() {

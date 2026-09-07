@@ -31,6 +31,26 @@ class LiveBrowseSessionTest {
     }
 
     @Test
+    fun neutralSessionDefaultsToFirstVisibleOrderedCategory() = runBlocking {
+        val state = LiveBrowseSession().observe(flowOf(snapshot())).first()
+
+        assertEquals(listOf("news", "sports"), state.categories.map { it.providerCategoryKey })
+        assertEquals("news", state.query.categoryKey)
+        assertEquals(listOf("news-one", "news-two"), state.channels.map { it.channelId })
+    }
+
+    @Test
+    fun searchModeDoesNotForceDefaultCategory() = runBlocking {
+        val session = LiveBrowseSession()
+        session.updateSearch("news")
+
+        val state = session.observe(flowOf(snapshot())).first()
+
+        assertEquals(null, state.query.categoryKey)
+        assertEquals(listOf("news-one", "news-two"), state.channels.map { it.channelId })
+    }
+
+    @Test
     fun transientSearchAndCategoryChangesReuseCatalogDerivedNavigationState() {
         val projector = LiveBrowseStateProjector()
         val snapshot = snapshot()
@@ -94,6 +114,7 @@ class LiveBrowseSessionTest {
         assertEquals(listOf("sports"), normal.channels.map { it.channelId })
 
         session.setIncludeHidden(true)
+        session.selectCategory(null)
         val editing = session.observe(flowOf(hiddenCategorySnapshot)).first()
         assertEquals(listOf("news", "sports"), editing.categories.map { it.providerCategoryKey })
         assertEquals(

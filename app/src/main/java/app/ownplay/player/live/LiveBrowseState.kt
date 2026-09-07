@@ -101,7 +101,18 @@ class LiveBrowseSession(
         ) { snapshot, currentQuery ->
             projector.project(snapshot, currentQuery)
         }.collect { state ->
-            emit(state)
+            val firstCategoryKey = state.categories.firstOrNull()?.providerCategoryKey
+            if (firstCategoryKey != null && state.query.usesDefaultCategoryEntry()) {
+                query.update { current ->
+                    if (current == state.query && current.usesDefaultCategoryEntry()) {
+                        current.copy(categoryKey = firstCategoryKey)
+                    } else {
+                        current
+                    }
+                }
+            } else {
+                emit(state)
+            }
         }
     }
 
@@ -150,3 +161,12 @@ class LiveBrowseSession(
         query.update { current -> current.copy(includeRemoved = enabled) }
     }
 }
+
+private fun LiveBrowseQuery.usesDefaultCategoryEntry(): Boolean =
+    categoryKey == null &&
+        customGroupId == null &&
+        !favoritesOnly &&
+        !hiddenOnly &&
+        !includeHidden &&
+        !includeRemoved &&
+        searchTerm.isBlank()
