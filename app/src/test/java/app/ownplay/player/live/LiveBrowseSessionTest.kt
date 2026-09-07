@@ -51,6 +51,32 @@ class LiveBrowseSessionTest {
     }
 
     @Test
+    fun canonicalBrowsingDoesNotClearAnActiveCategory() = runBlocking {
+        val session = LiveBrowseSession()
+        session.selectCategory("sports")
+        session.selectCategory(null)
+
+        val state = session.observe(flowOf(snapshot())).first()
+
+        assertEquals("sports", state.query.categoryKey)
+        assertEquals(listOf("sports"), state.channels.map { it.channelId })
+    }
+
+    @Test
+    fun searchModeMayClearCategoryForCrossCategoryResults() = runBlocking {
+        val session = LiveBrowseSession()
+        session.selectCategory("sports")
+        session.updateSearch("news")
+        session.selectCategory(null)
+
+        val state = session.observe(flowOf(snapshot())).first()
+
+        assertEquals(null, state.query.categoryKey)
+        assertEquals("news", state.query.searchTerm)
+        assertEquals(listOf("news-one", "news-two"), state.channels.map { it.channelId })
+    }
+
+    @Test
     fun transientSearchAndCategoryChangesReuseCatalogDerivedNavigationState() {
         val projector = LiveBrowseStateProjector()
         val snapshot = snapshot()
