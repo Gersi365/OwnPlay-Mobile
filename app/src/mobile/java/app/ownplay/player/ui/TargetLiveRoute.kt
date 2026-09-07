@@ -185,20 +185,6 @@ internal fun TargetLiveRoute(
         onPreviewClosed()
     }
 
-    LaunchedEffect(state.categories, state.query.categoryKey, preview?.categoryKey) {
-        val categories = state.categories
-        if (categories.isEmpty()) return@LaunchedEffect
-        val selected = state.query.categoryKey
-        val target = selected?.takeIf { categoryKey ->
-            categories.any { category -> category.providerCategoryKey == categoryKey }
-        } ?: preview?.categoryKey?.takeIf { categoryKey ->
-            categories.any { category -> category.providerCategoryKey == categoryKey }
-        } ?: categories.first().providerCategoryKey
-        if (selected != target) {
-            browseSession.selectCategory(target)
-        }
-    }
-
     LaunchedEffect(sourceId, syncState.sourceId, syncState.stage) {
         if (loadingEpg) return@LaunchedEffect
         while (true) {
@@ -403,7 +389,7 @@ private fun MobileLiveBrowsePane(
         if (state.categories.size < 2) return
         val currentIndex = state.categories.indexOfFirst { category ->
             category.providerCategoryKey == state.query.categoryKey
-        }.takeIf { it >= 0 } ?: 0
+        }.takeIf { it >= 0 } ?: -1
         val targetIndex = if (totalHorizontalDrag < 0f) {
             currentIndex + 1
         } else {
@@ -459,7 +445,15 @@ private fun MobileLiveBrowsePane(
                     ) { category ->
                         FilterChip(
                             selected = state.query.categoryKey == category.providerCategoryKey,
-                            onClick = { onCategorySelected(category.providerCategoryKey) },
+                            onClick = {
+                                onCategorySelected(
+                                    if (state.query.categoryKey == category.providerCategoryKey) {
+                                        null
+                                    } else {
+                                        category.providerCategoryKey
+                                    },
+                                )
+                            },
                             label = {
                                 Text(
                                     text = category.name,

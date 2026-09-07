@@ -78,8 +78,6 @@ import app.ownplay.player.series.SeriesFeatureRuntime
 import app.ownplay.player.series.SeriesSummary
 import app.ownplay.player.source.SourceResult
 import app.ownplay.player.ui.view.ContentViewMode
-import app.ownplay.player.ui.view.ContentViewModeMenu
-import app.ownplay.player.ui.view.ContentViewModeStore
 import app.ownplay.player.ui.vod.RemotePoster
 import app.ownplay.player.vod.VodCatalog
 import app.ownplay.player.vod.VodFeatureRuntime
@@ -92,7 +90,7 @@ private const val MISSING_FILE_REASON = "Downloaded file is missing"
 private enum class UnifiedLibraryFilter {
     MOVIES,
     SERIES,
-    ALL,
+    OFFLINE,
 }
 
 @Composable
@@ -111,9 +109,6 @@ internal fun UnifiedLibraryRoute(
     }
     val vodRuntime = remember(context) { VodFeatureRuntime(context.applicationContext) }
     val seriesRuntime = remember(context) { SeriesFeatureRuntime(context.applicationContext) }
-    val viewModeStore = remember(context) {
-        ContentViewModeStore(context.applicationContext)
-    }
     val libraryListState = rememberLazyListState()
     val libraryGridState = rememberLazyGridState()
     val libraryItemFocusRequester = remember { FocusRequester() }
@@ -128,7 +123,6 @@ internal fun UnifiedLibraryRoute(
 
     val downloads by downloadRuntime.observeAll().collectAsState(initial = emptyList())
     val presentationDownloads = downloads
-    val libraryViewMode by viewModeStore.libraryMode.collectAsState(initial = ContentViewMode.CARDS)
     val vodFlow = remember(sourceId, vodRuntime) {
         sourceId?.let(vodRuntime::observeCatalog) ?: flowOf(VodCatalog())
     }
@@ -159,12 +153,12 @@ internal fun UnifiedLibraryRoute(
     val refreshing = when (filter) {
         UnifiedLibraryFilter.MOVIES -> vodRefreshing
         UnifiedLibraryFilter.SERIES -> seriesRefreshing
-        UnifiedLibraryFilter.ALL -> false
+        UnifiedLibraryFilter.OFFLINE -> false
     }
     val refreshWarning = when (filter) {
         UnifiedLibraryFilter.MOVIES -> vodRefreshWarning
         UnifiedLibraryFilter.SERIES -> seriesRefreshWarning
-        UnifiedLibraryFilter.ALL -> false
+        UnifiedLibraryFilter.OFFLINE -> false
     }
     val playbackSession by LibraryPlaybackPresentationSession.state.collectAsState()
     var playbackError by remember { mutableStateOf<String?>(null) }
@@ -212,7 +206,7 @@ internal fun UnifiedLibraryRoute(
                     seriesRefreshDemanded = true
                 }
             }
-            UnifiedLibraryFilter.ALL -> initialCatalogRefreshPending = false
+            UnifiedLibraryFilter.OFFLINE -> initialCatalogRefreshPending = false
         }
     }
 
@@ -568,14 +562,6 @@ internal fun UnifiedLibraryRoute(
                         )
                     }
                 }
-                item(key = "library-view") {
-                    ContentViewModeMenu(
-                        mode = libraryViewMode,
-                        onModeSelected = { mode ->
-                            scope.launch { viewModeStore.setLibraryMode(mode) }
-                        },
-                    )
-                }
                 listItems(
                     items = UnifiedLibraryFilter.entries,
                     key = { it.name },
@@ -584,20 +570,20 @@ internal fun UnifiedLibraryRoute(
                         selected = filter == option,
                         onClick = {
                             filter = option
-                            offlineOnly = option == UnifiedLibraryFilter.ALL
+                            offlineOnly = option == UnifiedLibraryFilter.OFFLINE
                             query = ""
                             searchExpanded = false
                         },
                         label = {
                             Text(
                                 when (option) {
-                                    UnifiedLibraryFilter.ALL -> "Offline"
+                                    UnifiedLibraryFilter.OFFLINE -> "Offline"
                                     UnifiedLibraryFilter.MOVIES -> "Movies"
                                     UnifiedLibraryFilter.SERIES -> "Series"
                                 },
                             )
                         },
-                        leadingIcon = if (option == UnifiedLibraryFilter.ALL) {
+                        leadingIcon = if (option == UnifiedLibraryFilter.OFFLINE) {
                             {
                                 Icon(
                                     Icons.Filled.DownloadDone,
@@ -632,7 +618,7 @@ internal fun UnifiedLibraryRoute(
                 categories = seriesCatalog.categories.map { it.providerCategoryKey to it.name },
                 onCategorySelected = { seriesCategoryKey = it },
             )
-            UnifiedLibraryFilter.ALL -> Unit
+            UnifiedLibraryFilter.OFFLINE -> Unit
         }
 
         if (searchExpanded || query.isNotBlank()) {
@@ -651,7 +637,7 @@ internal fun UnifiedLibraryRoute(
                 placeholder = {
                     Text(
                         when (filter) {
-                            UnifiedLibraryFilter.ALL -> "Search Offline"
+                            UnifiedLibraryFilter.OFFLINE -> "Search Offline"
                             UnifiedLibraryFilter.MOVIES -> "Search Movies"
                             UnifiedLibraryFilter.SERIES -> "Search Series"
                         },
@@ -718,7 +704,7 @@ internal fun UnifiedLibraryRoute(
         }
 
         LibraryCatalogView(
-            viewMode = libraryViewMode,
+            viewMode = ContentViewMode.CARDS,
             filter = filter,
             sourceId = sourceId,
             offlineOnly = offlineOnly,
