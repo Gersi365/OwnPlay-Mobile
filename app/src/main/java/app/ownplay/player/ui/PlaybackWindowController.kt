@@ -27,10 +27,11 @@ internal object PlaybackWindowPolicy {
 
     fun orientationIntent(
         fullscreen: Boolean,
+        livePreviewActive: Boolean = false,
         inPictureInPicture: Boolean,
     ): PlaybackOrientationIntent = when {
         inPictureInPicture -> PlaybackOrientationIntent.FOLLOW_SYSTEM
-        fullscreen -> PlaybackOrientationIntent.SENSOR
+        fullscreen || livePreviewActive -> PlaybackOrientationIntent.SENSOR
         else -> PlaybackOrientationIntent.PORTRAIT
     }
 }
@@ -48,6 +49,7 @@ class PlaybackWindowController(
 
     private var isPlaying = false
     private var fullscreenRequested = false
+    private var livePreviewActive = false
     private var pictureInPictureEnabled = true
     private var playbackSurfaceActive = false
     private var sourceRectHint: Rect? = null
@@ -84,6 +86,12 @@ class PlaybackWindowController(
     fun updateFullscreenState(fullscreen: Boolean) {
         if (fullscreenRequested == fullscreen) return
         fullscreenRequested = fullscreen
+        applyOrientationPolicy()
+    }
+
+    fun updateLivePreviewState(active: Boolean) {
+        if (livePreviewActive == active) return
+        livePreviewActive = active
         applyOrientationPolicy()
     }
 
@@ -138,6 +146,7 @@ class PlaybackWindowController(
     fun release() {
         isPlaying = false
         fullscreenRequested = false
+        livePreviewActive = false
         pictureInPictureEnabled = true
         playbackSurfaceActive = false
         detachWindowRoot()
@@ -204,6 +213,7 @@ class PlaybackWindowController(
         val target = when (
             PlaybackWindowPolicy.orientationIntent(
                 fullscreen = fullscreenRequested,
+                livePreviewActive = livePreviewActive,
                 inPictureInPicture = _isInPictureInPictureMode.value,
             )
         ) {
