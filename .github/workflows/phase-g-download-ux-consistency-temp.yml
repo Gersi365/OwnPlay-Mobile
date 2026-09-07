@@ -1,0 +1,72 @@
+name: Phase G Download UX Consistency Temp
+
+on:
+  push:
+    branches:
+      - agent/phase-g-download-ux-consistency-no-apk
+    paths:
+      - .github/workflows/phase-g-download-ux-consistency-temp.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: agent/phase-g-download-ux-consistency-no-apk
+          fetch-depth: 0
+
+      - name: Guard Phase G branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git branch --show-current)" = "agent/phase-g-download-ux-consistency-no-apk"
+          git merge-base --is-ancestor 34d89592169348feb805e09d0c0001c93810b599 HEAD
+
+      - name: Apply focused download UX vocabulary change
+        shell: bash
+        run: python .github/scripts/phase_g_download_ux_consistency.py
+
+      - name: Remove temporary mutation helpers
+        shell: bash
+        run: |
+          rm .github/scripts/phase_g_download_ux_consistency.py
+          rm .github/workflows/phase-g-download-ux-consistency-temp.yml
+
+      - name: Verify focused source-only diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected=$(cat <<'EOF'
+          app/src/main/java/app/ownplay/player/ui/DownloadsSettingsScreen.kt
+          app/src/main/java/app/ownplay/player/ui/library/LibraryOfflinePresentation.kt
+          app/src/main/java/app/ownplay/player/ui/series/SeriesDetailsPane.kt
+          app/src/main/java/app/ownplay/player/ui/vod/MovieDetailsPane.kt
+          app/src/test/java/app/ownplay/player/DownloadUxVocabularyContractTest.kt
+          app/src/test/java/app/ownplay/player/ui/library/LibraryOfflinePresentationTest.kt
+          EOF
+          )
+          actual=$(git status --porcelain | sed -E 's/^.. //' | sort)
+          test "$actual" = "$(printf '%s\n' "$expected" | sort)"
+          ! git diff -- app/src/main/java app/src/test/java | grep -E 'WorkManager|MediaStore\.Downloads\.RELATIVE_PATH|updateActiveTransfer|PlaybackController' || true
+          test -z "$(find . -type f -name '*.apk' -print -quit)"
+
+      - name: Commit focused Phase G source change
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            app/src/main/java/app/ownplay/player/ui/DownloadsSettingsScreen.kt \
+            app/src/main/java/app/ownplay/player/ui/library/LibraryOfflinePresentation.kt \
+            app/src/main/java/app/ownplay/player/ui/series/SeriesDetailsPane.kt \
+            app/src/main/java/app/ownplay/player/ui/vod/MovieDetailsPane.kt \
+            app/src/test/java/app/ownplay/player/DownloadUxVocabularyContractTest.kt \
+            app/src/test/java/app/ownplay/player/ui/library/LibraryOfflinePresentationTest.kt
+          git commit -m "Align download UX with OwnPlay Downloads -no-apk"
+          git push origin HEAD:agent/phase-g-download-ux-consistency-no-apk
