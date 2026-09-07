@@ -206,8 +206,9 @@ internal object OfflineDownloadStorage {
         mediaKind: String,
         seriesTitle: String?,
         seasonNumber: Int?,
+        downloadsDirectory: String,
     ): String {
-        val root = "${Environment.DIRECTORY_DOWNLOADS}/$PUBLIC_ROOT_DIRECTORY"
+        val root = "$downloadsDirectory/$PUBLIC_ROOT_DIRECTORY"
         return when (mediaKind) {
             DownloadMediaKinds.MOVIE -> "$root/$PUBLIC_MOVIES_DIRECTORY"
             DownloadMediaKinds.SERIES_EPISODE -> {
@@ -229,6 +230,7 @@ internal object OfflineDownloadStorage {
             mediaKind = row.mediaKind,
             seriesTitle = row.seriesTitle,
             seasonNumber = row.seasonNumber,
+            downloadsDirectory = Environment.DIRECTORY_DOWNLOADS,
         )
 
     internal fun pendingDownloadMarker(downloadId: String): String =

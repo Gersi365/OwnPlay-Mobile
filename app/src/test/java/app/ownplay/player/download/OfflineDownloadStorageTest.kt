@@ -111,6 +111,7 @@ class OfflineDownloadStorageTest {
                 mediaKind = DownloadMediaKinds.MOVIE,
                 seriesTitle = null,
                 seasonNumber = null,
+                downloadsDirectory = "Download",
             ),
         )
     }
@@ -123,6 +124,7 @@ class OfflineDownloadStorageTest {
                 mediaKind = DownloadMediaKinds.SERIES_EPISODE,
                 seriesTitle = "My/Series:*?",
                 seasonNumber = 2,
+                downloadsDirectory = "Download",
             ),
         )
     }
@@ -135,6 +137,7 @@ class OfflineDownloadStorageTest {
                 mediaKind = DownloadMediaKinds.SERIES_EPISODE,
                 seriesTitle = "Show Name",
                 seasonNumber = 0,
+                downloadsDirectory = "Download",
             ),
         )
     }
@@ -147,6 +150,7 @@ class OfflineDownloadStorageTest {
                 mediaKind = DownloadMediaKinds.SERIES_EPISODE,
                 seriesTitle = null,
                 seasonNumber = null,
+                downloadsDirectory = "Download",
             ),
         )
     }
