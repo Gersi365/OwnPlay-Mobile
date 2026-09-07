@@ -65,7 +65,7 @@ class MobilePortraitFoundationContractTest {
     @Test
     fun `Library retains Offline without rendering a global All filter`() {
         val library = sourceText("src/main/java/app/ownplay/player/ui/library/UnifiedLibraryRoute.kt")
-        assertTrue(library.contains("\"Offline\""))
+        assertTrue(library.contains("UnifiedLibraryFilter.OFFLINE -> \"Downloads\""))
         assertFalse(library.contains("Text(\"All\")"))
     }
 }
