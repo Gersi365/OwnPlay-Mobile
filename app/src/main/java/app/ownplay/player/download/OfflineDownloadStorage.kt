@@ -11,6 +11,7 @@ import android.os.ParcelFileDescriptor
 import android.provider.MediaStore
 import android.system.Os
 import android.webkit.MimeTypeMap
+import app.ownplay.player.persistence.download.DownloadMediaKinds
 import app.ownplay.player.persistence.download.MediaDownloadEntity
 import java.io.BufferedOutputStream
 import java.io.File
@@ -21,6 +22,9 @@ internal object OfflineDownloadStorage {
     private const val PRIVATE_DIRECTORY = "offline"
     private const val MEDIASTORE_URI_PREFIX = "content://media/"
     private const val PENDING_DOWNLOAD_MARKER_PREFIX = "ownplay://offline-download/"
+    private const val PUBLIC_ROOT_DIRECTORY = "OwnPlay Downloads"
+    private const val PUBLIC_MOVIES_DIRECTORY = "Movies"
+    private const val PUBLIC_SERIES_DIRECTORY = "Series"
 
     fun supportsPublicDownloads(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
 
@@ -68,7 +72,7 @@ internal object OfflineDownloadStorage {
         val values = ContentValues().apply {
             put(MediaStore.Downloads.DISPLAY_NAME, publicDisplayName(row, extension))
             put(MediaStore.Downloads.MIME_TYPE, mimeType(extension))
-            put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+            put(MediaStore.Downloads.RELATIVE_PATH, publicRelativePath(row))
             put(MediaStore.Downloads.DOWNLOAD_URI, pendingDownloadMarker(row.downloadId))
             put(MediaStore.Downloads.IS_PENDING, 1)
         }
@@ -197,6 +201,35 @@ internal object OfflineDownloadStorage {
             .trim('.')
         return cleaned.take(120).ifBlank { "OwnPlay" }
     }
+
+    internal fun publicRelativePath(
+        mediaKind: String,
+        seriesTitle: String?,
+        seasonNumber: Int?,
+    ): String {
+        val root = "${Environment.DIRECTORY_DOWNLOADS}/$PUBLIC_ROOT_DIRECTORY"
+        return when (mediaKind) {
+            DownloadMediaKinds.MOVIE -> "$root/$PUBLIC_MOVIES_DIRECTORY"
+            DownloadMediaKinds.SERIES_EPISODE -> {
+                val seriesDirectory = safeFileStem(
+                    seriesTitle?.takeIf(String::isNotBlank) ?: PUBLIC_SERIES_DIRECTORY,
+                )
+                val season = (seasonNumber ?: 0)
+                    .coerceAtLeast(0)
+                    .toString()
+                    .padStart(2, '0')
+                "$root/$PUBLIC_SERIES_DIRECTORY/$seriesDirectory/Season $season"
+            }
+            else -> throw IllegalArgumentException("Unsupported download media kind: $mediaKind")
+        }
+    }
+
+    internal fun publicRelativePath(row: MediaDownloadEntity): String =
+        publicRelativePath(
+            mediaKind = row.mediaKind,
+            seriesTitle = row.seriesTitle,
+            seasonNumber = row.seasonNumber,
+        )
 
     internal fun pendingDownloadMarker(downloadId: String): String =
         "$PENDING_DOWNLOAD_MARKER_PREFIX$downloadId"
