@@ -12,26 +12,24 @@ import app.ownplay.player.BuildConfig
 import app.ownplay.player.persistence.PlaylistSourceSummary
 
 @Composable
-internal fun ContentSettingsContent(
+internal fun SourcesSettingsContent(
     summaries: List<PlaylistSourceSummary>,
     onOpenLiveManagement: () -> Unit,
-    onOpenPlaylists: () -> Unit,
+    onOpenSources: () -> Unit,
 ) {
     SettingsActionRow(
-        title = "Live management",
-        detail = "Categories, channels and custom groups",
-        actionLabel = "Manage",
-        onClick = onOpenLiveManagement,
+        title = "Sources",
+        detail = "${summaries.size} configured · add, edit and refresh",
+        actionLabel = "Open sources",
+        onClick = onOpenSources,
     )
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     SettingsActionRow(
-        title = "Playlists",
-        detail = "${summaries.size} configured · add, edit and refresh sources",
-        actionLabel = "Manage",
-        onClick = onOpenPlaylists,
+        title = "Live organization",
+        detail = "Categories, channels and custom groups",
+        actionLabel = "Open Live organization",
+        onClick = onOpenLiveManagement,
     )
-    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-    BackupRestoreSettingsContent()
 }
 
 @Composable
