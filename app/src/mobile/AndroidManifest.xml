@@ -7,7 +7,7 @@
     <application>
         <activity
             android:name=".MainActivity"
-            android:configChanges="screenSize|smallestScreenSize|screenLayout"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout"
             android:exported="true"
             android:screenOrientation="portrait"
             android:supportsPictureInPicture="true">
