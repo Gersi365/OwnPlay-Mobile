@@ -44,15 +44,13 @@ class MobilePortraitFoundationContractTest {
     }
 
     @Test
-    fun `alternate content presentation selector is hidden and canonicalized to Cards`() {
-        val viewMode = sourceText("src/main/java/app/ownplay/player/ui/view/ContentViewMode.kt")
-        assertTrue(viewMode.contains("canonicalContentViewMode"))
-        assertTrue(viewMode.contains("ContentViewMode.CARDS"))
-        assertTrue(viewMode.contains("fun ContentViewModeMenu("))
-        assertTrue(viewMode.contains(") = Unit"))
-        assertFalse(viewMode.contains("\"List\""))
-        assertFalse(viewMode.contains("\"Compact\""))
-        assertFalse(viewMode.contains("\"Gallery\""))
+    fun `Library uses one canonical portrait presentation path`() {
+        val library = sourceText("src/main/java/app/ownplay/player/ui/library/UnifiedLibraryRoute.kt")
+        assertFalse(library.contains("ContentViewMode"))
+        assertFalse(library.contains("viewMode ="))
+        assertFalse(library.contains("LazyColumn("))
+        assertTrue(library.contains("LazyVerticalGrid("))
+        assertTrue(library.contains("GridCells.Adaptive(minSize = 150.dp)"))
     }
 
     @Test

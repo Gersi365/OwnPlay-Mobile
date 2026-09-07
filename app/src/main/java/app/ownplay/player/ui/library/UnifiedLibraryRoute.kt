@@ -13,8 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -22,7 +20,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items as listItems
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -37,7 +34,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -77,7 +73,6 @@ import app.ownplay.player.series.SeriesEpisode
 import app.ownplay.player.series.SeriesFeatureRuntime
 import app.ownplay.player.series.SeriesSummary
 import app.ownplay.player.source.SourceResult
-import app.ownplay.player.ui.view.ContentViewMode
 import app.ownplay.player.ui.vod.RemotePoster
 import app.ownplay.player.vod.VodCatalog
 import app.ownplay.player.vod.VodFeatureRuntime
@@ -109,7 +104,6 @@ internal fun UnifiedLibraryRoute(
     }
     val vodRuntime = remember(context) { VodFeatureRuntime(context.applicationContext) }
     val seriesRuntime = remember(context) { SeriesFeatureRuntime(context.applicationContext) }
-    val libraryListState = rememberLazyListState()
     val libraryGridState = rememberLazyGridState()
     val libraryItemFocusRequester = remember { FocusRequester() }
 
@@ -170,7 +164,6 @@ internal fun UnifiedLibraryRoute(
     var pendingMovieReturnFocusKey by remember(sourceId) { mutableStateOf<String?>(null) }
     var seriesReturnEpisodeId by remember(sourceId) { mutableStateOf<String?>(null) }
     var seriesReturnFocusGeneration by remember(sourceId) { mutableIntStateOf(0) }
-
 
     LaunchedEffect(vodCatalog.categories, movieCategoryKey) {
         val categories = vodCatalog.categories
@@ -530,7 +523,6 @@ internal fun UnifiedLibraryRoute(
         )
     }
 
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -688,7 +680,6 @@ internal fun UnifiedLibraryRoute(
         }
 
         LibraryCatalogView(
-            viewMode = ContentViewMode.CARDS,
             filter = filter,
             sourceId = sourceId,
             offlineOnly = offlineOnly,
@@ -702,7 +693,6 @@ internal fun UnifiedLibraryRoute(
             focusItemKey = focusItemKey,
             focusRequestGeneration = focusRequestGeneration,
             itemFocusRequester = libraryItemFocusRequester,
-            listState = libraryListState,
             gridState = libraryGridState,
             onItemFocused = { itemKey -> rememberedFocusItemKey = itemKey },
             onOpenMovie = { movieSourceId, movieId ->
@@ -845,7 +835,6 @@ private fun LibraryEmptyState(
 
 @Composable
 private fun LibraryCatalogView(
-    viewMode: ContentViewMode,
     filter: UnifiedLibraryFilter,
     sourceId: String?,
     offlineOnly: Boolean,
@@ -859,7 +848,6 @@ private fun LibraryCatalogView(
     focusItemKey: String?,
     focusRequestGeneration: Int,
     itemFocusRequester: FocusRequester,
-    listState: LazyListState,
     gridState: LazyGridState,
     onItemFocused: (String) -> Unit,
     onOpenMovie: (sourceId: String, movieId: String) -> Unit,
@@ -872,23 +860,15 @@ private fun LibraryCatalogView(
     onRemoveMovie: (OfflineDownload) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val cardMinSize = 150.dp
-    val compactMinSize = 108.dp
     val focusIndex = remember(focusKeys, focusItemKey) { focusKeys.indexOf(focusItemKey) }
 
     LaunchedEffect(
-        viewMode,
         focusItemKey,
         focusRequestGeneration,
         focusIndex,
     ) {
         if (focusRequestGeneration <= 0 || focusIndex < 0) return@LaunchedEffect
-        when (viewMode) {
-            ContentViewMode.LIST -> listState.scrollToItem(focusIndex)
-            ContentViewMode.COMPACT,
-            ContentViewMode.CARDS,
-            -> gridState.scrollToItem(focusIndex)
-        }
+        gridState.scrollToItem(focusIndex)
         withFrameNanos { }
         itemFocusRequester.requestFocus()
     }
@@ -906,185 +886,63 @@ private fun LibraryCatalogView(
         }
     }
 
-    when (viewMode) {
-        ContentViewMode.CARDS -> LazyVerticalGrid(
-            state = gridState,
-            columns = GridCells.Adaptive(minSize = cardMinSize),
-            modifier = modifier.fillMaxSize(),
-            contentPadding = PaddingValues(top = 2.dp, bottom = 18.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            if (filter != UnifiedLibraryFilter.SERIES) {
-                gridItems(visibleMovies, key = { "catalog-movie:${it.movieId}" }) { movie ->
-                    val movieSourceId = sourceId ?: return@gridItems
-                    UnifiedMovieCard(
-                        movie = movie,
-                        download = movieDownloadsByKey["$movieSourceId:${movie.movieId}"],
-                        onOpen = { onOpenMovie(movieSourceId, movie.movieId) },
-                        onPlayOffline = onPlayOfflineMovie,
-                        onPause = onPauseMovie,
-                        onResume = onResumeMovie,
-                        onRetry = onRetryMovie,
-                        onRemove = onRemoveMovie,
-                        modifier = itemModifier(
-                            libraryCatalogMovieFocusKey(movieSourceId, movie.movieId),
-                        ),
-                    )
-                }
-                gridItems(orphanedOfflineMovies, key = { "offline-movie:${it.downloadId}" }) { download ->
-                    OfflineOnlyMovieCard(
-                        download = download,
-                        onPlay = { onPlayOfflineMovie(download) },
-                        onRetry = { onRetryMovie(download) },
-                        onRemove = { onRemoveMovie(download) },
-                        modifier = itemModifier(libraryOfflineMovieFocusKey(download.downloadId)),
-                    )
-                }
+    LazyVerticalGrid(
+        state = gridState,
+        columns = GridCells.Adaptive(minSize = 150.dp),
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(top = 2.dp, bottom = 18.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        if (filter != UnifiedLibraryFilter.SERIES) {
+            gridItems(visibleMovies, key = { "catalog-movie:${it.movieId}" }) { movie ->
+                val movieSourceId = sourceId ?: return@gridItems
+                UnifiedMovieCard(
+                    movie = movie,
+                    download = movieDownloadsByKey["$movieSourceId:${movie.movieId}"],
+                    onOpen = { onOpenMovie(movieSourceId, movie.movieId) },
+                    onPlayOffline = onPlayOfflineMovie,
+                    onPause = onPauseMovie,
+                    onResume = onResumeMovie,
+                    onRetry = onRetryMovie,
+                    onRemove = onRemoveMovie,
+                    modifier = itemModifier(
+                        libraryCatalogMovieFocusKey(movieSourceId, movie.movieId),
+                    ),
+                )
             }
-
-            if (filter != UnifiedLibraryFilter.MOVIES) {
-                gridItems(visibleSeries, key = { "catalog-series:${it.seriesId}" }) { series ->
-                    val seriesSourceId = sourceId ?: return@gridItems
-                    val group = seriesGroupByIdentity["$seriesSourceId:${series.seriesId}"]
-                    UnifiedSeriesCard(
-                        series = series,
-                        group = group,
-                        offlineMode = offlineOnly,
-                        onOpen = { onOpenCatalogSeries(seriesSourceId, series.seriesId, group) },
-                        onOpenOfflineSeries = onOpenOfflineSeries,
-                        modifier = itemModifier(
-                            libraryCatalogSeriesFocusKey(seriesSourceId, series.seriesId),
-                        ),
-                    )
-                }
-                gridItems(orphanedOfflineSeries, key = { "offline-series:${it.key}" }) { group ->
-                    LibrarySeriesCard(
-                        group = group,
-                        onOpenOfflineSeries = { onOpenOfflineSeries(group) },
-                        modifier = itemModifier(libraryOfflineSeriesFocusKey(group)),
-                    )
-                }
+            gridItems(orphanedOfflineMovies, key = { "offline-movie:${it.downloadId}" }) { download ->
+                OfflineOnlyMovieCard(
+                    download = download,
+                    onPlay = { onPlayOfflineMovie(download) },
+                    onRetry = { onRetryMovie(download) },
+                    onRemove = { onRemoveMovie(download) },
+                    modifier = itemModifier(libraryOfflineMovieFocusKey(download.downloadId)),
+                )
             }
         }
 
-        ContentViewMode.COMPACT -> LazyVerticalGrid(
-            state = gridState,
-            columns = GridCells.Adaptive(minSize = compactMinSize),
-            modifier = modifier.fillMaxSize(),
-            contentPadding = PaddingValues(top = 2.dp, bottom = 18.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            if (filter != UnifiedLibraryFilter.SERIES) {
-                gridItems(visibleMovies, key = { "compact-movie:${it.movieId}" }) { movie ->
-                    val movieSourceId = sourceId ?: return@gridItems
-                    CompactMovieCard(
-                        movie = movie,
-                        download = movieDownloadsByKey["$movieSourceId:${movie.movieId}"],
-                        onOpen = { onOpenMovie(movieSourceId, movie.movieId) },
-                        onPlayOffline = onPlayOfflineMovie,
-                        onPause = onPauseMovie,
-                        onResume = onResumeMovie,
-                        onRetry = onRetryMovie,
-                        onRemove = onRemoveMovie,
-                        modifier = itemModifier(
-                            libraryCatalogMovieFocusKey(movieSourceId, movie.movieId),
-                        ),
-                    )
-                }
-                gridItems(orphanedOfflineMovies, key = { "compact-offline-movie:${it.downloadId}" }) { download ->
-                    CompactOfflineMovieCard(
-                        download = download,
-                        onPlay = { onPlayOfflineMovie(download) },
-                        onRemove = { onRemoveMovie(download) },
-                        modifier = itemModifier(libraryOfflineMovieFocusKey(download.downloadId)),
-                    )
-                }
+        if (filter != UnifiedLibraryFilter.MOVIES) {
+            gridItems(visibleSeries, key = { "catalog-series:${it.seriesId}" }) { series ->
+                val seriesSourceId = sourceId ?: return@gridItems
+                val group = seriesGroupByIdentity["$seriesSourceId:${series.seriesId}"]
+                UnifiedSeriesCard(
+                    series = series,
+                    group = group,
+                    offlineMode = offlineOnly,
+                    onOpen = { onOpenCatalogSeries(seriesSourceId, series.seriesId, group) },
+                    onOpenOfflineSeries = onOpenOfflineSeries,
+                    modifier = itemModifier(
+                        libraryCatalogSeriesFocusKey(seriesSourceId, series.seriesId),
+                    ),
+                )
             }
-
-            if (filter != UnifiedLibraryFilter.MOVIES) {
-                gridItems(visibleSeries, key = { "compact-series:${it.seriesId}" }) { series ->
-                    val seriesSourceId = sourceId ?: return@gridItems
-                    val group = seriesGroupByIdentity["$seriesSourceId:${series.seriesId}"]
-                    CompactSeriesCard(
-                        series = series,
-                        group = group,
-                        onOpen = { onOpenCatalogSeries(seriesSourceId, series.seriesId, group) },
-                        onOpenOfflineSeries = onOpenOfflineSeries,
-                        modifier = itemModifier(
-                            libraryCatalogSeriesFocusKey(seriesSourceId, series.seriesId),
-                        ),
-                    )
-                }
-                gridItems(orphanedOfflineSeries, key = { "compact-offline-series:${it.key}" }) { group ->
-                    CompactOfflineSeriesCard(
-                        group = group,
-                        onOpen = { onOpenOfflineSeries(group) },
-                        modifier = itemModifier(libraryOfflineSeriesFocusKey(group)),
-                    )
-                }
-            }
-        }
-
-        ContentViewMode.LIST -> LazyColumn(
-            state = listState,
-            modifier = modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 18.dp),
-        ) {
-            if (filter != UnifiedLibraryFilter.SERIES) {
-                listItems(visibleMovies, key = { "list-movie:${it.movieId}" }) { movie ->
-                    val movieSourceId = sourceId ?: return@listItems
-                    MovieListRow(
-                        movie = movie,
-                        download = movieDownloadsByKey["$movieSourceId:${movie.movieId}"],
-                        onOpen = { onOpenMovie(movieSourceId, movie.movieId) },
-                        onPlayOffline = onPlayOfflineMovie,
-                        onPause = onPauseMovie,
-                        onResume = onResumeMovie,
-                        onRetry = onRetryMovie,
-                        onRemove = onRemoveMovie,
-                        modifier = itemModifier(
-                            libraryCatalogMovieFocusKey(movieSourceId, movie.movieId),
-                        ),
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(start = 70.dp))
-                }
-                listItems(orphanedOfflineMovies, key = { "list-offline-movie:${it.downloadId}" }) { download ->
-                    OfflineMovieListRow(
-                        download = download,
-                        onPlay = { onPlayOfflineMovie(download) },
-                        onRemove = { onRemoveMovie(download) },
-                        modifier = itemModifier(libraryOfflineMovieFocusKey(download.downloadId)),
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(start = 70.dp))
-                }
-            }
-
-            if (filter != UnifiedLibraryFilter.MOVIES) {
-                listItems(visibleSeries, key = { "list-series:${it.seriesId}" }) { series ->
-                    val seriesSourceId = sourceId ?: return@listItems
-                    val group = seriesGroupByIdentity["$seriesSourceId:${series.seriesId}"]
-                    SeriesListRow(
-                        series = series,
-                        group = group,
-                        offlineMode = offlineOnly,
-                        onOpen = { onOpenCatalogSeries(seriesSourceId, series.seriesId, group) },
-                        onOpenOfflineSeries = onOpenOfflineSeries,
-                        modifier = itemModifier(
-                            libraryCatalogSeriesFocusKey(seriesSourceId, series.seriesId),
-                        ),
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(start = 70.dp))
-                }
-                listItems(orphanedOfflineSeries, key = { "list-offline-series:${it.key}" }) { group ->
-                    OfflineSeriesListRow(
-                        group = group,
-                        onOpen = { onOpenOfflineSeries(group) },
-                        modifier = itemModifier(libraryOfflineSeriesFocusKey(group)),
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(start = 70.dp))
-                }
+            gridItems(orphanedOfflineSeries, key = { "offline-series:${it.key}" }) { group ->
+                LibrarySeriesCard(
+                    group = group,
+                    onOpenOfflineSeries = { onOpenOfflineSeries(group) },
+                    modifier = itemModifier(libraryOfflineSeriesFocusKey(group)),
+                )
             }
         }
     }
