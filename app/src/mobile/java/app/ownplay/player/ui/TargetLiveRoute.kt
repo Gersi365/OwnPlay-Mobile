@@ -87,6 +87,9 @@ import java.io.ByteArrayOutputStream
 import java.util.LinkedHashMap
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -99,6 +102,7 @@ private const val MOBILE_LOGO_MAX_EDGE_PX = 256
 private const val MOBILE_LOGO_CACHE_ENTRIES = 32
 private const val MOBILE_EPG_PREFETCH_STEP = 6
 private const val MOBILE_EPG_PREFETCH_WINDOW = 14
+private const val MOBILE_EPG_PREFETCH_CONCURRENCY = 4
 private const val MOBILE_CATEGORY_SWIPE_TRIGGER_FRACTION = 0.12f
 
 private val mobileChannelLogoCacheLock = Any()
@@ -207,19 +211,32 @@ internal fun TargetLiveRoute(
             state.channels.size,
             startIndex + MOBILE_EPG_PREFETCH_WINDOW,
         )
-        for (index in startIndex until endExclusive) {
-            val channel = state.channels[index]
-            if (currentEpgByChannelId.containsKey(channel.channelId)) continue
-            try {
-                val currentProgram = runtime.epgSnapshot(
-                    sourceId = sourceId,
-                    channelId = channel.channelId,
-                )?.current ?: continue
-                currentEpgByChannelId = currentEpgByChannelId + (channel.channelId to currentProgram)
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: Exception) {
-                // Visible-list EPG is best-effort. Never block channel browsing on a guide lookup.
+        val missingChannels = state.channels
+            .subList(startIndex, endExclusive)
+            .filterNot { channel -> currentEpgByChannelId.containsKey(channel.channelId) }
+
+        for (batch in missingChannels.chunked(MOBILE_EPG_PREFETCH_CONCURRENCY)) {
+            val loadedPrograms = coroutineScope {
+                batch.map { channel ->
+                    async {
+                        try {
+                            channel.channelId to runtime.epgSnapshot(
+                                sourceId = sourceId,
+                                channelId = channel.channelId,
+                            )?.current
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (_: Exception) {
+                            channel.channelId to null
+                        }
+                    }
+                }.awaitAll()
+            }.mapNotNull { (channelId, currentProgram) ->
+                currentProgram?.let { channelId to it }
+            }.toMap()
+
+            if (loadedPrograms.isNotEmpty()) {
+                currentEpgByChannelId = currentEpgByChannelId + loadedPrograms
             }
         }
     }
