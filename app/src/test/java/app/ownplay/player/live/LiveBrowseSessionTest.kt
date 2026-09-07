@@ -114,6 +114,7 @@ class LiveBrowseSessionTest {
         assertEquals(listOf("sports"), normal.channels.map { it.channelId })
 
         session.setIncludeHidden(true)
+        session.selectCategory(null)
         val editing = session.observe(flowOf(hiddenCategorySnapshot)).first()
         assertEquals(listOf("news", "sports"), editing.categories.map { it.providerCategoryKey })
         assertEquals(
