@@ -42,7 +42,7 @@ class PortraitUiSimplificationContractTest {
         assertFalse(library.contains("ContentViewModeMenu"))
         assertFalse(library.contains("ContentViewModeStore"))
         assertFalse(library.contains("libraryViewMode"))
-        assertTrue(library.contains("viewMode = ContentViewMode.CARDS"))
+        assertFalse(library.contains("ContentViewMode"))
     }
 
     @Test
