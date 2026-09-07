@@ -7,9 +7,9 @@
     <application>
         <activity
             android:name=".MainActivity"
-            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout"
             android:exported="true"
-            android:screenOrientation="unspecified"
+            android:screenOrientation="portrait"
             android:supportsPictureInPicture="true">
             <property
                 android:name="android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY"
