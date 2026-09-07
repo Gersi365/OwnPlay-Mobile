@@ -52,6 +52,19 @@ class PlaybackWindowPolicyTest {
             PlaybackOrientationIntent.PORTRAIT,
             PlaybackWindowPolicy.orientationIntent(
                 fullscreen = false,
+                livePreviewActive = false,
+                inPictureInPicture = false,
+            ),
+        )
+    }
+
+    @Test
+    fun livePreviewFollowsPhysicalSensor() {
+        assertEquals(
+            PlaybackOrientationIntent.SENSOR,
+            PlaybackWindowPolicy.orientationIntent(
+                fullscreen = false,
+                livePreviewActive = true,
                 inPictureInPicture = false,
             ),
         )
@@ -63,6 +76,7 @@ class PlaybackWindowPolicyTest {
             PlaybackOrientationIntent.SENSOR,
             PlaybackWindowPolicy.orientationIntent(
                 fullscreen = true,
+                livePreviewActive = false,
                 inPictureInPicture = false,
             ),
         )
@@ -74,6 +88,7 @@ class PlaybackWindowPolicyTest {
             PlaybackOrientationIntent.FOLLOW_SYSTEM,
             PlaybackWindowPolicy.orientationIntent(
                 fullscreen = true,
+                livePreviewActive = true,
                 inPictureInPicture = true,
             ),
         )
