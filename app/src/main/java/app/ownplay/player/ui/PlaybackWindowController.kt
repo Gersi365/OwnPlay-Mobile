@@ -219,12 +219,15 @@ class PlaybackWindowController(
         layoutListener = null
     }
 
+    private fun isPictureInPictureOwned(): Boolean =
+        _isInPictureInPictureMode.value || activity.isInPictureInPictureMode
+
     private fun applyOrientationPolicy() {
         val target = when (
             PlaybackWindowPolicy.orientationIntent(
                 fullscreen = fullscreenRequested,
                 livePreviewActive = livePreviewActive,
-                inPictureInPicture = _isInPictureInPictureMode.value,
+                inPictureInPicture = isPictureInPictureOwned(),
             )
         ) {
             PlaybackOrientationIntent.PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
@@ -237,7 +240,7 @@ class PlaybackWindowController(
     }
 
     private fun applySystemBarPolicy() {
-        if (_isInPictureInPictureMode.value || activity.isFinishing) return
+        if (isPictureInPictureOwned() || activity.isFinishing) return
         WindowCompat.getInsetsController(activity.window, activity.window.decorView).apply {
             systemBarsBehavior =
                 WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
