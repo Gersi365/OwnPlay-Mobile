@@ -77,6 +77,8 @@ internal fun OnDemandPlaybackSurface(
     var scrubPositionMs by remember(contentKey) { mutableStateOf(currentPositionMs.coerceAtLeast(0L)) }
     var scrubbing by remember(contentKey) { mutableStateOf(false) }
 
+    PlayerFullscreenSystemBarsEffect(enabled = true)
+
     fun revealControls() {
         controlsVisible = true
         controlsInteractionToken += 1
