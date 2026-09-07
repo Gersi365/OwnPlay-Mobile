@@ -2,20 +2,19 @@ package app.ownplay.player.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import app.ownplay.player.OwnPlayAppRuntime
 import app.ownplay.player.persistence.PlaylistSourceSummary
 import app.ownplay.player.source.SourceSyncState
 
 internal enum class SettingsDestination {
-    CONTENT,
+    HOME,
+    SOURCES,
     DOWNLOADS,
-    ABOUT,
     LIVE_MANAGEMENT,
-    PLAYLISTS,
 }
 
 @Composable
@@ -29,15 +28,11 @@ internal fun SettingsScreen(
     onOpenSourceInLive: (String) -> Unit,
     onStopPlayback: () -> Unit,
 ) {
-    var destination by remember { mutableStateOf(SettingsDestination.CONTENT) }
+    var destination by remember { mutableStateOf(SettingsDestination.HOME) }
     val readySummaries = summaries.filter { summary -> summary.enabled }
 
-    val nestedDestinationBackEnabled =
-        destination == SettingsDestination.LIVE_MANAGEMENT ||
-            destination == SettingsDestination.PLAYLISTS ||
-            destination == SettingsDestination.DOWNLOADS
-    BackHandler(enabled = nestedDestinationBackEnabled) {
-        destination = SettingsDestination.CONTENT
+    BackHandler(enabled = destination != SettingsDestination.HOME) {
+        destination = SettingsDestination.HOME
     }
 
     when (destination) {
@@ -45,35 +40,33 @@ internal fun SettingsScreen(
             LiveManagementScreen(
                 runtime = runtime,
                 summaries = readySummaries,
-                onBack = { destination = SettingsDestination.CONTENT },
+                onBack = { destination = SettingsDestination.HOME },
             )
             return
         }
-        SettingsDestination.PLAYLISTS -> {
+        SettingsDestination.SOURCES -> {
             PlaylistManagementSubscreen(
                 runtime = runtime,
                 summaries = summaries,
                 syncState = syncState,
-                onBack = { destination = SettingsDestination.CONTENT },
+                onBack = { destination = SettingsDestination.HOME },
                 onOpenInLive = onOpenSourceInLive,
             )
             return
         }
         SettingsDestination.DOWNLOADS -> {
             DownloadsSettingsScreen(
-                onBack = { destination = SettingsDestination.CONTENT },
+                onBack = { destination = SettingsDestination.HOME },
             )
             return
         }
-        SettingsDestination.CONTENT,
-        SettingsDestination.ABOUT,
-        -> Unit
+        SettingsDestination.HOME -> Unit
     }
 
     PortraitSettingsMenu(
         summaries = summaries,
         onOpenLiveManagement = { destination = SettingsDestination.LIVE_MANAGEMENT },
-        onOpenPlaylists = { destination = SettingsDestination.PLAYLISTS },
+        onOpenSources = { destination = SettingsDestination.SOURCES },
         onOpenDownloads = { destination = SettingsDestination.DOWNLOADS },
     )
 }
