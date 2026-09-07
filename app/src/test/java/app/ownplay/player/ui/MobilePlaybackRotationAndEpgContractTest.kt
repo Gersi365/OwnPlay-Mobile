@@ -55,7 +55,6 @@ class MobilePlaybackRotationAndEpgContractTest {
         val fullscreen = sourceBlockAfter(controller, "fun updateFullscreenState(")
         val pip = sourceBlockAfter(controller, "fun onPictureInPictureModeChanged(")
         val refresh = sourceBlockAfter(controller, "fun refreshWindowState()")
-        val pipOwnership = sourceBlockAfter(controller, "private fun isPictureInPictureOwned()")
         val orientation = sourceBlockAfter(controller, "private fun applyOrientationPolicy()")
         val systemBars = sourceBlockAfter(controller, "private fun applySystemBarPolicy()")
         val shellStatusBar = sourceBlockAfter(activity, "private fun hideStatusBar()")
@@ -66,8 +65,12 @@ class MobilePlaybackRotationAndEpgContractTest {
         assertTrue(pip.contains("if (!isInPictureInPictureMode)"))
         assertTrue(pip.contains("scheduleSystemBarPolicyRefresh()"))
         assertTrue(refresh.contains("applySystemBarPolicy()"))
-        assertTrue(pipOwnership.contains("_isInPictureInPictureMode.value"))
-        assertTrue(pipOwnership.contains("activity.isInPictureInPictureMode"))
+        assertTrue(controller.contains("private fun isPictureInPictureOwned(): Boolean ="))
+        assertTrue(
+            controller.contains(
+                "_isInPictureInPictureMode.value || activity.isInPictureInPictureMode",
+            ),
+        )
         assertTrue(orientation.contains("inPictureInPicture = isPictureInPictureOwned()"))
         assertTrue(
             systemBars.contains(
