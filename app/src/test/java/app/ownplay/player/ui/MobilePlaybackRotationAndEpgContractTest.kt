@@ -49,6 +49,30 @@ class MobilePlaybackRotationAndEpgContractTest {
     }
 
     @Test
+    fun `fullscreen chrome is reasserted after pip without overriding pip window ownership`() {
+        val controller = sourceText("src/main/java/app/ownplay/player/ui/PlaybackWindowController.kt")
+        val fullscreen = sourceBlockAfter(controller, "fun updateFullscreenState(")
+        val pip = sourceBlockAfter(controller, "fun onPictureInPictureModeChanged(")
+        val refresh = sourceBlockAfter(controller, "fun refreshWindowState()")
+        val systemBars = sourceBlockAfter(controller, "private fun applySystemBarPolicy()")
+
+        assertTrue(fullscreen.contains("applySystemBarPolicy()"))
+        assertTrue(fullscreen.contains("scheduleSystemBarPolicyRefresh()"))
+        assertTrue(pip.contains("applySystemBarPolicy()"))
+        assertTrue(pip.contains("if (!isInPictureInPictureMode)"))
+        assertTrue(pip.contains("scheduleSystemBarPolicyRefresh()"))
+        assertTrue(refresh.contains("applySystemBarPolicy()"))
+        assertTrue(
+            systemBars.contains(
+                "if (_isInPictureInPictureMode.value || activity.isFinishing) return",
+            ),
+        )
+        assertTrue(systemBars.contains("hide(WindowInsetsCompat.Type.systemBars())"))
+        assertTrue(systemBars.contains("hide(WindowInsetsCompat.Type.statusBars())"))
+        assertTrue(systemBars.contains("show(WindowInsetsCompat.Type.navigationBars())"))
+    }
+
+    @Test
     fun `movie series and offline playback stay on the shared fullscreen rotation contract`() {
         val vod = sourceText("src/main/java/app/ownplay/player/ui/vod/VodRoute.kt")
         val moviePlayback = sourceBlockAfter(vod, "private fun VodPlaybackScreen(")
