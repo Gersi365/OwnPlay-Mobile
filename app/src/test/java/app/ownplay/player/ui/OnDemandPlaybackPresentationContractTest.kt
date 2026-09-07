@@ -23,6 +23,7 @@ class OnDemandPlaybackPresentationContractTest {
         assertTrue(shared.contains("Icons.Filled.Pause"))
         assertTrue(shared.contains("navigationBarsPadding()"))
         assertTrue(shared.contains(".size(34.dp)"))
+        assertTrue(shared.contains("PlayerFullscreenSystemBarsEffect(enabled = true)"))
         assertFalse(shared.contains("ONLINE"))
         assertFalse(shared.contains("OFFLINE"))
         assertFalse(shared.contains("Local file"))
@@ -32,6 +33,7 @@ class OnDemandPlaybackPresentationContractTest {
     fun `live and on-demand share one fullscreen visual language`() {
         val live = sourceText("src/main/java/app/ownplay/player/ui/PlaybackScreen.kt")
         val onDemand = sourceText("src/main/java/app/ownplay/player/ui/OnDemandPlaybackSurface.kt")
+        val systemBars = sourceText("src/main/java/app/ownplay/player/ui/PlayerFullscreenSystemBarsEffect.kt")
 
         listOf(live, onDemand).forEach { player ->
             assertTrue(player.contains("RESIZE_MODE_FIT"))
@@ -41,6 +43,12 @@ class OnDemandPlaybackPresentationContractTest {
             assertTrue(player.contains("fadeIn()"))
             assertTrue(player.contains("fadeOut()"))
         }
+
+        assertTrue(live.contains("FullscreenSystemBarsEffect(enabled = true)"))
+        assertTrue(onDemand.contains("PlayerFullscreenSystemBarsEffect(enabled = true)"))
+        assertTrue(systemBars.contains("BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE"))
+        assertTrue(systemBars.contains("hide(WindowInsetsCompat.Type.systemBars())"))
+        assertTrue(systemBars.contains("show(WindowInsetsCompat.Type.systemBars())"))
     }
 
     @Test
