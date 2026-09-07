@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 
 @Composable
 internal fun OwnPlayScreenSurface(
@@ -24,7 +25,7 @@ internal fun OwnPlayScreenSurface(
     Surface(
         modifier = modifier,
         color = MaterialTheme.colorScheme.background,
-        tonalElevation = androidx.compose.ui.unit.Dp.Unspecified,
+        tonalElevation = 0.dp,
     ) {
         content()
     }
@@ -65,7 +66,7 @@ internal fun OwnPlayPosterFrame(
         modifier = modifier.aspectRatio(OwnPlayMediaLayout.PosterAspectRatio),
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceVariant,
-        tonalElevation = androidx.compose.ui.unit.Dp.Unspecified,
+        tonalElevation = 0.dp,
     ) {
         Box(contentAlignment = Alignment.Center, content = content)
     }
