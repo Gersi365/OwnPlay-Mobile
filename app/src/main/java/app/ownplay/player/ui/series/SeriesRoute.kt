@@ -170,14 +170,6 @@ internal fun SeriesRoute(
                     episodeId = null,
                 )
             }
-            selectedSeasonNumber != null -> {
-                selectedSeasonNumber = null
-                selectedEpisodeId = null
-                runtime.onDemandPresentationSession.updateSeriesSelection(
-                    seasonNumber = null,
-                    episodeId = null,
-                )
-            }
             selectedSeries != null -> {
                 if (returnToLibraryOnDetailBack) {
                     runtime.onDemandPresentationSession.clear()
@@ -476,9 +468,10 @@ internal fun SeriesRoute(
                 selectedEpisodeId = null
                 runtime.onDemandPresentationSession.updateSeriesSelection(it, null)
             },
-            onEpisodeSelected = {
-                selectedEpisodeId = it
-                runtime.onDemandPresentationSession.updateSeriesSelection(selectedSeasonNumber, it)
+            onEpisodeSelected = { seasonNumber, episodeId ->
+                selectedSeasonNumber = seasonNumber
+                selectedEpisodeId = episodeId
+                runtime.onDemandPresentationSession.updateSeriesSelection(seasonNumber, episodeId)
             },
             onFavoriteChanged = { favorite ->
                 selectedSeries = portraitSelection.copy(isFavorite = favorite)
@@ -550,9 +543,10 @@ internal fun SeriesRoute(
                     selectedEpisodeId = null
                     runtime.onDemandPresentationSession.updateSeriesSelection(it, null)
                 },
-                onEpisodeSelected = {
-                    selectedEpisodeId = it
-                    runtime.onDemandPresentationSession.updateSeriesSelection(selectedSeasonNumber, it)
+                onEpisodeSelected = { seasonNumber, episodeId ->
+                    selectedSeasonNumber = seasonNumber
+                    selectedEpisodeId = episodeId
+                    runtime.onDemandPresentationSession.updateSeriesSelection(seasonNumber, episodeId)
                 },
                 onFavoriteChanged = { favorite ->
                     selectedSeries = selected.copy(isFavorite = favorite)

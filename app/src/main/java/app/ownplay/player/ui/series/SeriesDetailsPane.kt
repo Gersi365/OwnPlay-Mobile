@@ -11,13 +11,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -26,7 +27,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,7 +55,7 @@ internal fun SeriesDetailsPane(
     selectedEpisodeId: String?,
     downloads: List<OfflineDownload>,
     onSeasonSelected: (Int) -> Unit,
-    onEpisodeSelected: (String) -> Unit,
+    onEpisodeSelected: (seasonNumber: Int, episodeId: String) -> Unit,
     onFavoriteChanged: (Boolean) -> Unit,
     onPlay: (SeriesEpisode) -> Unit,
     onDownload: (SeriesEpisode) -> Unit,
@@ -68,9 +68,13 @@ internal fun SeriesDetailsPane(
     modifier: Modifier,
 ) {
     val primaryActionFocusRequester = remember(selected.seriesId) { FocusRequester() }
-    val selectedSeason = details?.seasons?.firstOrNull { it.seasonNumber == selectedSeasonNumber }
-    val selectedEpisode = selectedSeason?.episodes?.firstOrNull { it.episodeId == selectedEpisodeId }
-
+    val selectedEpisode = details
+        ?.seasons
+        ?.asSequence()
+        ?.flatMap { it.episodes.asSequence() }
+        ?.firstOrNull { it.episodeId == selectedEpisodeId }
+    val activeSeason = details?.seasons?.firstOrNull { it.seasonNumber == selectedSeasonNumber }
+        ?: details?.seasons?.firstOrNull()
 
     Surface(
         modifier = modifier,
@@ -86,22 +90,16 @@ internal fun SeriesDetailsPane(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = when {
-                            selectedEpisode != null -> selectedEpisode.title
-                            selectedSeason != null -> selectedSeason.name ?: "Season ${selectedSeason.seasonNumber}"
-                            else -> selected.name
-                        },
+                        text = selectedEpisode?.title ?: selected.name,
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        text = when {
-                            selectedEpisode != null -> "Season ${selectedEpisode.seasonNumber} · Episode ${selectedEpisode.episodeNumber}"
-                            selectedSeason != null -> "${selectedSeason.episodes.size} episode${if (selectedSeason.episodes.size == 1) "" else "s"}"
-                            else -> "Series"
-                        },
+                        text = selectedEpisode?.let {
+                            "Season ${it.seasonNumber} · Episode ${it.episodeNumber}"
+                        } ?: "Series",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary,
                     )
@@ -109,60 +107,70 @@ internal fun SeriesDetailsPane(
                 TextButton(onClick = onClose) { Text("Back") }
             }
 
-            if (selectedSeason == null && selectedEpisode == null) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
-                        onClick = { onFavoriteChanged(!selected.isFavorite) },
-                        modifier = if (details?.seasons?.isEmpty() == true) {
-                            Modifier.focusRequester(primaryActionFocusRequester)
-                        } else {
-                            Modifier
-                        },
-                        shape = RoundedCornerShape(10.dp),
-                    ) {
-                        Text(if (selected.isFavorite) "Unfavorite" else "Favorite")
-                    }
-                }
-            }
-
             if (loading) {
                 CircularProgressIndicator(modifier = Modifier.padding(12.dp))
             }
-            error?.let {
+            if (error != null) {
                 Text("Series details failed to load.", color = MaterialTheme.colorScheme.error)
             }
 
             details?.let { loaded ->
-                when {
-                    selectedEpisode != null -> {
-                        SeriesEpisodeDetailsPane(
-                            episode = selectedEpisode,
-                            download = downloads.firstOrNull { item ->
-                                item.mediaKind == DownloadMediaKinds.SERIES_EPISODE &&
-                                    item.contentId == selectedEpisode.episodeId
-                            },
-                            playFocusRequester = primaryActionFocusRequester,
-                            onPlay = { onPlay(selectedEpisode) },
-                            onDownload = { onDownload(selectedEpisode) },
-                            onPauseDownload = onPauseDownload,
-                            onResumeDownload = onResumeDownload,
-                            onRetryDownload = onRetryDownload,
-                            onRemoveDownload = onRemoveDownload,
-                            onPlayFromBeginning = { onPlayFromBeginning(selectedEpisode) },
-                        )
+                if (selectedEpisode != null) {
+                    val download = downloads.firstOrNull { item ->
+                        item.mediaKind == DownloadMediaKinds.SERIES_EPISODE &&
+                            item.contentId == selectedEpisode.episodeId
+                    }
+                    SeriesEpisodeDetailsPane(
+                        episode = selectedEpisode,
+                        download = download,
+                        playFocusRequester = primaryActionFocusRequester,
+                        onPlay = { onPlay(selectedEpisode) },
+                        onDownload = { onDownload(selectedEpisode) },
+                        onPauseDownload = onPauseDownload,
+                        onResumeDownload = onResumeDownload,
+                        onRetryDownload = onRetryDownload,
+                        onRemoveDownload = onRemoveDownload,
+                        onPlayFromBeginning = { onPlayFromBeginning(selectedEpisode) },
+                    )
+                } else {
+                    SeriesInfoSummary(
+                        selected = selected,
+                        details = loaded,
+                    )
+                    Button(
+                        onClick = { onFavoriteChanged(!selected.isFavorite) },
+                        shape = RoundedCornerShape(10.dp),
+                    ) {
+                        Text(if (selected.isFavorite) "Unfavorite" else "Favorite")
                     }
 
-                    selectedSeason != null -> {
-                        SeriesSeasonHeader(
-                            series = selected,
-                            season = selectedSeason,
+                    if (loaded.seasons.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                "No seasons available.",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    } else {
+                        SeriesSeasonSelector(
+                            seasons = loaded.seasons,
+                            selectedSeasonNumber = activeSeason?.seasonNumber,
+                            onSeasonSelected = onSeasonSelected,
                         )
                         Text(
-                            "Episodes",
+                            text = activeSeason?.let { season ->
+                                "Episodes · Season ${season.seasonNumber}"
+                            } ?: "Episodes",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Medium,
                         )
-                        if (selectedSeason.episodes.isEmpty()) {
+                        val episodes = activeSeason?.episodes.orEmpty()
+                        if (episodes.isEmpty()) {
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -175,14 +183,13 @@ internal fun SeriesDetailsPane(
                                 )
                             }
                         } else {
-                            val firstEpisodeId = selectedSeason.episodes.first().episodeId
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .weight(1f),
                                 verticalArrangement = Arrangement.spacedBy(6.dp),
                             ) {
-                                items(selectedSeason.episodes, key = { it.episodeId }) { episode ->
+                                items(episodes, key = { it.episodeId }) { episode ->
                                     val download = downloads.firstOrNull { item ->
                                         item.mediaKind == DownloadMediaKinds.SERIES_EPISODE &&
                                             item.contentId == episode.episodeId
@@ -190,11 +197,8 @@ internal fun SeriesDetailsPane(
                                     EpisodeRow(
                                         episode = episode,
                                         download = download,
-                                        onOpen = { onEpisodeSelected(episode.episodeId) },
-                                        playFocusRequester = if (episode.episodeId == firstEpisodeId) {
-                                            primaryActionFocusRequester
-                                        } else {
-                                            null
+                                        onOpen = {
+                                            onEpisodeSelected(episode.seasonNumber, episode.episodeId)
                                         },
                                         onPlay = { onPlay(episode) },
                                         onDownload = { onDownload(episode) },
@@ -208,52 +212,6 @@ internal fun SeriesDetailsPane(
                             }
                         }
                     }
-
-                    else -> {
-                        SeriesInfoSummary(
-                            selected = selected,
-                            details = loaded,
-                        )
-                        Text(
-                            "Seasons",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Medium,
-                        )
-                        if (loaded.seasons.isEmpty()) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(
-                                    "No seasons available.",
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        } else {
-                            val firstSeasonId = loaded.seasons.first().seasonId
-                            LazyColumn(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f),
-                                verticalArrangement = Arrangement.spacedBy(6.dp),
-                            ) {
-                                items(loaded.seasons, key = { it.seasonId }) { season ->
-                                    SeriesSeasonRow(
-                                        series = selected,
-                                        season = season,
-                                        onClick = { onSeasonSelected(season.seasonNumber) },
-                                        modifier = if (season.seasonId == firstSeasonId) {
-                                            Modifier.focusRequester(primaryActionFocusRequester)
-                                        } else {
-                                            Modifier
-                                        },
-                                    )
-                                }
-                            }
-                        }
-                    }
                 }
             }
         }
@@ -261,102 +219,27 @@ internal fun SeriesDetailsPane(
 }
 
 @Composable
-private fun SeriesSeasonRow(
-    series: SeriesSummary,
-    season: SeriesSeason,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
+private fun SeriesSeasonSelector(
+    seasons: List<SeriesSeason>,
+    selectedSeasonNumber: Int?,
+    onSeasonSelected: (Int) -> Unit,
 ) {
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(10.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.24f),
-        tonalElevation = 0.dp,
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            RemotePoster(
-                url = season.posterUrl ?: series.posterUrl,
-                title = season.name ?: "Season ${season.seasonNumber}",
-                modifier = Modifier
-                    .width(64.dp)
-                    .aspectRatio(2f / 3f),
-            )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    season.name ?: "Season ${season.seasonNumber}",
-                    fontWeight = FontWeight.Medium,
-                )
-                Text(
-                    "${season.episodes.size} episode${if (season.episodes.size == 1) "" else "s"}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                season.airDate?.takeIf(String::isNotBlank)?.let { airDate ->
-                    Text(
-                        airDate,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            Text(
-                "Open",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Medium,
-            )
-        }
-    }
-}
-
-@Composable
-private fun SeriesSeasonHeader(
-    series: SeriesSummary,
-    season: SeriesSeason,
-) {
-    Surface(
+    LazyRow(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(10.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.20f),
-        tonalElevation = 0.dp,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            RemotePoster(
-                url = season.posterUrl ?: series.posterUrl,
-                title = season.name ?: "Season ${season.seasonNumber}",
-                modifier = Modifier
-                    .width(88.dp)
-                    .aspectRatio(2f / 3f),
-            )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    season.name ?: "Season ${season.seasonNumber}",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium,
-                )
-                Text(
-                    "${season.episodes.size} episode${if (season.episodes.size == 1) "" else "s"}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                season.airDate?.takeIf(String::isNotBlank)?.let { airDate ->
+        items(seasons, key = { it.seasonId }) { season ->
+            FilterChip(
+                selected = season.seasonNumber == selectedSeasonNumber,
+                onClick = { onSeasonSelected(season.seasonNumber) },
+                label = {
                     Text(
-                        airDate,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        text = season.name?.takeIf(String::isNotBlank)
+                            ?: "Season ${season.seasonNumber}",
+                        maxLines = 1,
                     )
-                }
-            }
+                },
+            )
         }
     }
 }
@@ -374,58 +257,48 @@ private fun SeriesEpisodeDetailsPane(
     onRemoveDownload: (OfflineDownload) -> Unit,
     onPlayFromBeginning: () -> Unit,
 ) {
-    Surface(
+    Row(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(10.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.20f),
-        tonalElevation = 0.dp,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.Top,
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.Top,
+        RemotePoster(
+            url = episode.posterUrl,
+            title = episode.title,
+            modifier = Modifier
+                .width(104.dp)
+                .aspectRatio(2f / 3f),
+        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
-            RemotePoster(
-                url = episode.posterUrl,
-                title = episode.title,
-                modifier = Modifier
-                    .width(116.dp)
-                    .aspectRatio(2f / 3f),
+            Text(
+                episode.title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Medium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(5.dp),
-            ) {
+            episode.durationSeconds?.takeIf { it > 0L }?.let { seconds ->
                 Text(
-                    episode.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium,
-                )
-                Text(
-                    "Season ${episode.seasonNumber} · Episode ${episode.episodeNumber}",
+                    "${(seconds + 59L) / 60L} min",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                episode.durationSeconds?.takeIf { it > 0L }?.let { seconds ->
-                    Text(
-                        "${(seconds + 59L) / 60L} min",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                if (episode.resumeAvailable) {
-                    Text(
-                        "Resume available",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                } else if (episode.progressCompleted) {
-                    Text(
-                        "Watched",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+            }
+            if (episode.resumeAvailable) {
+                Text(
+                    "Resume available",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            } else if (episode.progressCompleted) {
+                Text(
+                    "Watched",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
@@ -579,11 +452,11 @@ private fun EpisodeRow(
                 )
             }
             if (
-                (download?.state == DownloadStates.DOWNLOADING ||
-                    download?.state == DownloadStates.QUEUED ||
-                    download?.state == DownloadStates.PAUSED)
+                download?.state == DownloadStates.DOWNLOADING ||
+                download?.state == DownloadStates.QUEUED ||
+                download?.state == DownloadStates.PAUSED
             ) {
-                val fraction = download?.progressFraction
+                val fraction = download.progressFraction
                 if (fraction == null) {
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 } else {
@@ -592,18 +465,15 @@ private fun EpisodeRow(
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
-                download?.let { managedDownload ->
-                    Text(
-                        seriesDownloadProgressLabel(managedDownload),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                Text(
+                    seriesDownloadProgressLabel(download),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
-                download?.failureReason?.takeIf { download.state == DownloadStates.FAILED }?.let {
-                    Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
-                }
-
+            download?.failureReason?.takeIf { download.state == DownloadStates.FAILED }?.let {
+                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
+            }
         }
     }
 }

@@ -18,7 +18,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Pause
@@ -65,6 +64,7 @@ internal fun MovieDetailsPane(
     modifier: Modifier,
 ) {
     val offlineCopyAvailable = download?.state == DownloadStates.COMPLETED
+    val target = details?.movie ?: movie
 
     Surface(
         modifier = modifier,
@@ -75,25 +75,25 @@ internal fun MovieDetailsPane(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 18.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+                .padding(horizontal = 18.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onDismiss) {
                     Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
                 }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = details?.movie?.name ?: movie.name,
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text = "Movie",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
+                Text(
+                    text = details?.movie?.name ?: movie.name,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                IconButton(onClick = { onFavoriteChanged(!movie.isFavorite) }) {
+                    Icon(
+                        if (movie.isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                        contentDescription = if (movie.isFavorite) "Remove favorite" else "Favorite",
                     )
                 }
             }
@@ -102,7 +102,7 @@ internal fun MovieDetailsPane(
                 url = details?.posterUrl ?: movie.posterUrl,
                 title = movie.name,
                 modifier = Modifier
-                    .width(184.dp)
+                    .width(168.dp)
                     .aspectRatio(2f / 3f)
                     .align(Alignment.CenterHorizontally),
             )
@@ -110,14 +110,14 @@ internal fun MovieDetailsPane(
             if (loading) {
                 CircularProgressIndicator(
                     modifier = Modifier
-                        .size(24.dp)
+                        .size(22.dp)
                         .align(Alignment.CenterHorizontally),
                     strokeWidth = 2.dp,
                 )
             }
             if (error != null) {
                 Text(
-                    text = "Detailed metadata unavailable. Catalog playback remains available.",
+                    text = "Detailed metadata unavailable. Playback remains available.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )
@@ -128,7 +128,6 @@ internal fun MovieDetailsPane(
                     info.releaseDate,
                     info.durationLabel,
                     info.genre,
-                    info.country,
                     info.rating?.let { "★ %.1f".format(it) },
                 ).joinToString("  ·  ")
                 if (meta.isNotBlank()) {
@@ -136,39 +135,36 @@ internal fun MovieDetailsPane(
                         text = meta,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                info.description?.takeIf(String::isNotBlank)?.let { description ->
+                    Text(
+                        text = description,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 5,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
 
-            Row(
+            Button(
+                onClick = { onPlay(movie) },
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                shape = RoundedCornerShape(10.dp),
             ) {
-                Button(
-                    onClick = { onPlay(movie) },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(10.dp),
-                ) {
-                    Icon(Icons.Filled.PlayArrow, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        when {
-                            offlineCopyAvailable && movie.resumeAvailable -> "Resume Offline"
-                            offlineCopyAvailable -> "Play Offline"
-                            movie.resumeAvailable -> "Resume"
-                            else -> "Play"
-                        },
-                    )
-                }
-                FilledTonalButton(
-                    onClick = { onFavoriteChanged(!movie.isFavorite) },
-                    shape = RoundedCornerShape(10.dp),
-                ) {
-                    Icon(
-                        if (movie.isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                        contentDescription = null,
-                    )
-                }
+                Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    when {
+                        offlineCopyAvailable && movie.resumeAvailable -> "Resume Offline"
+                        offlineCopyAvailable -> "Play Offline"
+                        movie.resumeAvailable -> "Resume"
+                        else -> "Play"
+                    },
+                )
             }
 
             if (movie.resumeAvailable) {
@@ -177,43 +173,30 @@ internal fun MovieDetailsPane(
                 }
             }
 
-            val target = details?.movie ?: movie
             if (offlineCopyAvailable) {
-                Surface(
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.48f),
-                    tonalElevation = 0.dp,
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        Icon(Icons.Filled.DownloadDone, contentDescription = null)
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = if (download?.savedToDownloads == true) {
-                                    "Downloaded · OwnPlay Downloads"
-                                } else {
-                                    "Downloaded · OwnPlay private storage"
-                                },
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Medium,
-                            )
-                            Text(
-                                text = "Play uses the local download first.",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        IconButton(onClick = { onRemoveDownload(requireNotNull(download)) }) {
-                            Icon(Icons.Filled.Delete, contentDescription = "Remove download")
-                        }
+                    Text(
+                        text = if (download?.savedToDownloads == true) {
+                            "Downloaded · OwnPlay Downloads"
+                        } else {
+                            "Downloaded · OwnPlay private storage"
+                        },
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    val managedDownload = requireNotNull(download)
+                    IconButton(onClick = { onRemoveDownload(managedDownload) }) {
+                        Icon(Icons.Filled.Delete, contentDescription = "Remove download")
                     }
                 }
             } else {
                 Row(
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
@@ -296,53 +279,6 @@ internal fun MovieDetailsPane(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.error,
                 )
-            }
-
-            details?.let { info ->
-                val hasAbout =
-                    !info.description.isNullOrBlank() ||
-                        !info.director.isNullOrBlank() ||
-                        !info.cast.isNullOrBlank()
-                if (hasAbout) {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
-                        tonalElevation = 0.dp,
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            Text(
-                                text = "About",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Medium,
-                            )
-                            info.description?.takeIf(String::isNotBlank)?.let { description ->
-                                Text(
-                                    text = description,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            info.director?.takeIf(String::isNotBlank)?.let { director ->
-                                Text(
-                                    "Director · $director",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            info.cast?.takeIf(String::isNotBlank)?.let { cast ->
-                                Text(
-                                    "Cast · $cast",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                    }
-                }
             }
         }
     }
