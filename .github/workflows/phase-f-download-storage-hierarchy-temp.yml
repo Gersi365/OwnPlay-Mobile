@@ -1,0 +1,62 @@
+name: Phase F Download Storage Hierarchy Temp
+
+on:
+  push:
+    branches:
+      - agent/phase-f-download-storage-hierarchy-no-apk
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Guard Phase F branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "agent/phase-f-download-storage-hierarchy-no-apk"
+
+      - name: Apply guarded storage hierarchy change
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .github/scripts/phase_f_download_storage_hierarchy.py
+
+      - name: Remove temporary mutation helpers
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/scripts/phase_f_download_storage_hierarchy.py
+          rm .github/workflows/phase-f-download-storage-hierarchy-temp.yml
+
+      - name: Verify focused source-only diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -A
+          git diff --cached --check
+          actual="$(git diff --cached --name-only | sort)"
+          expected="$(printf '%s\n' \
+            '.github/scripts/phase_f_download_storage_hierarchy.py' \
+            '.github/workflows/phase-f-download-storage-hierarchy-temp.yml' \
+            'app/src/main/java/app/ownplay/player/download/OfflineDownloadStorage.kt' \
+            'app/src/test/java/app/ownplay/player/download/OfflineDownloadStorageTest.kt' | sort)"
+          test "$actual" = "$expected"
+          test ! -e .github/scripts/phase_f_download_storage_hierarchy.py
+          test ! -e .github/workflows/phase-f-download-storage-hierarchy-temp.yml
+
+      - name: Commit focused Phase F source change
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Add OwnPlay download storage hierarchy -no-apk"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
