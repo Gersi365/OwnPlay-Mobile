@@ -2,7 +2,9 @@ package app.ownplay.player.ui
 
 import android.graphics.Color as AndroidColor
 import androidx.annotation.OptIn
-import androidx.compose.foundation.background
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,10 +13,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
@@ -73,6 +77,8 @@ internal fun OnDemandPlaybackSurface(
     var scrubPositionMs by remember(contentKey) { mutableStateOf(currentPositionMs.coerceAtLeast(0L)) }
     var scrubbing by remember(contentKey) { mutableStateOf(false) }
 
+    PlayerFullscreenSystemBarsEffect(enabled = true)
+
     fun revealControls() {
         controlsVisible = true
         controlsInteractionToken += 1
@@ -99,7 +105,6 @@ internal fun OnDemandPlaybackSurface(
             PlaybackState.Idle -> Unit
         }
     }
-
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -156,115 +161,155 @@ internal fun OnDemandPlaybackSurface(
                     },
             )
 
-            if (controlsVisible) {
-                Row(
+            if (playbackControls.showLoading) {
+                CircularProgressIndicator(
                     modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .fillMaxWidth()
-                        .background(Color.Black.copy(alpha = 0.65f))
-                        .padding(horizontal = 8.dp, vertical = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                        .align(Alignment.Center)
+                        .size(34.dp),
+                    strokeWidth = 2.dp,
+                )
+            }
+
+            if (playbackState is PlaybackState.Failed) {
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .padding(24.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                    tonalElevation = 0.dp,
                 ) {
-                    IconButton(
-                        modifier = Modifier,
-                        enabled = !exitRequested,
-                        onClick = onExit,
-                    ) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
-                    }
                     Text(
-                        text = title,
-                        modifier = Modifier.weight(1f),
-                        color = Color.White,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                        text = "Playback failed",
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
                 }
+            }
 
-                Column(
+            AnimatedVisibility(
+                visible = controlsVisible,
+                modifier = Modifier.align(Alignment.TopStart),
+                enter = fadeIn(),
+                exit = fadeOut(),
+            ) {
+                Surface(
                     modifier = Modifier
-                        .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .background(Color.Black.copy(alpha = 0.70f))
-                        .padding(horizontal = 14.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color.Black.copy(alpha = 0.82f),
+                    tonalElevation = 0.dp,
                 ) {
-                    val maxDuration = max(durationMs, 1L)
-                    Slider(
-                        value = scrubPositionMs.coerceIn(0L, maxDuration).toFloat(),
-                        onValueChange = { value ->
-                            scrubbing = true
-                            scrubPositionMs = value.toLong()
-                            revealControls()
-                        },
-                        onValueChangeFinished = {
-                            val target = scrubPositionMs.coerceIn(0L, maxDuration)
-                            playerView?.player?.seekTo(target)
-                            onSeekPositionChanged(target)
-                            scrubbing = false
-                            revealControls()
-                        },
-                        valueRange = 0f..maxDuration.toFloat(),
-                    )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        val playbackActionEnabled =
-                            playbackState is PlaybackState.Playing ||
-                                playbackState is PlaybackState.Paused ||
-                                (playbackState is PlaybackState.Failed && playbackControls.canRetry)
+                    Row(
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         IconButton(
-                            modifier = Modifier,
-                            enabled = playbackActionEnabled,
-                            onClick = {
-                                when (playbackState) {
-                                    is PlaybackState.Playing -> runtime.playbackController.pause()
-                                    is PlaybackState.Paused -> runtime.playbackController.play()
-                                    is PlaybackState.Failed -> if (playbackControls.canRetry) {
-                                        runtime.playbackController.retry()
-                                    }
-                                    else -> Unit
-                                }
-                                revealControls()
-                            },
+                            enabled = !exitRequested,
+                            onClick = onExit,
                         ) {
-                            val playing = playbackState is PlaybackState.Playing
-                            val failed = playbackState is PlaybackState.Failed
                             Icon(
-                                imageVector = when {
-                                    failed -> Icons.Filled.Refresh
-                                    playing -> Icons.Filled.Pause
-                                    else -> Icons.Filled.PlayArrow
-                                },
-                                contentDescription = when {
-                                    failed -> "Retry"
-                                    playing -> "Pause"
-                                    else -> "Play"
-                                },
-                                tint = if (playbackActionEnabled) {
-                                    Color.White
-                                } else {
-                                    Color.White.copy(alpha = 0.38f)
-                                },
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                tint = Color.White,
                             )
                         }
                         Text(
-                            text = "${formatOnDemandDuration(scrubPositionMs)} / ${formatOnDemandDuration(durationMs)}",
-                            color = Color.White.copy(alpha = 0.82f),
-                            style = MaterialTheme.typography.labelMedium,
+                            text = title,
+                            modifier = Modifier.weight(1f),
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
-                        Spacer(Modifier.weight(1f))
-                        when (playbackState) {
-                            is PlaybackState.Loading -> CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                strokeWidth = 2.dp,
-                            )
-                            is PlaybackState.Failed -> Text(
-                                text = "Playback failed",
-                                color = MaterialTheme.colorScheme.error,
+                    }
+                }
+            }
+
+            AnimatedVisibility(
+                visible = controlsVisible,
+                modifier = Modifier.align(Alignment.BottomCenter),
+                enter = fadeIn(),
+                exit = fadeOut(),
+            ) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color.Black.copy(alpha = 0.82f),
+                    tonalElevation = 0.dp,
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        val maxDuration = max(durationMs, 1L)
+                        Slider(
+                            value = scrubPositionMs.coerceIn(0L, maxDuration).toFloat(),
+                            onValueChange = { value ->
+                                scrubbing = true
+                                scrubPositionMs = value.toLong()
+                                revealControls()
+                            },
+                            onValueChangeFinished = {
+                                val target = scrubPositionMs.coerceIn(0L, maxDuration)
+                                playerView?.player?.seekTo(target)
+                                onSeekPositionChanged(target)
+                                scrubbing = false
+                                revealControls()
+                            },
+                            valueRange = 0f..maxDuration.toFloat(),
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            val playbackActionEnabled =
+                                playbackState is PlaybackState.Playing ||
+                                    playbackState is PlaybackState.Paused ||
+                                    (playbackState is PlaybackState.Failed && playbackControls.canRetry)
+                            IconButton(
+                                enabled = playbackActionEnabled,
+                                onClick = {
+                                    when (playbackState) {
+                                        is PlaybackState.Playing -> runtime.playbackController.pause()
+                                        is PlaybackState.Paused -> runtime.playbackController.play()
+                                        is PlaybackState.Failed -> if (playbackControls.canRetry) {
+                                            runtime.playbackController.retry()
+                                        }
+                                        else -> Unit
+                                    }
+                                    revealControls()
+                                },
+                            ) {
+                                val playing = playbackState is PlaybackState.Playing
+                                val failed = playbackState is PlaybackState.Failed
+                                Icon(
+                                    imageVector = when {
+                                        failed -> Icons.Filled.Refresh
+                                        playing -> Icons.Filled.Pause
+                                        else -> Icons.Filled.PlayArrow
+                                    },
+                                    contentDescription = when {
+                                        failed -> "Retry"
+                                        playing -> "Pause"
+                                        else -> "Play"
+                                    },
+                                    tint = if (playbackActionEnabled) {
+                                        Color.White
+                                    } else {
+                                        Color.White.copy(alpha = 0.38f)
+                                    },
+                                )
+                            }
+                            Text(
+                                text = "${formatOnDemandDuration(scrubPositionMs)} / ${formatOnDemandDuration(durationMs)}",
+                                color = Color.White.copy(alpha = 0.82f),
                                 style = MaterialTheme.typography.labelMedium,
                             )
-                            else -> Unit
+                            Spacer(Modifier.weight(1f))
                         }
                     }
                 }
@@ -272,7 +317,6 @@ internal fun OnDemandPlaybackSurface(
         }
     }
 }
-
 
 private fun formatOnDemandDuration(milliseconds: Long): String {
     if (milliseconds <= 0L) return "00:00"
