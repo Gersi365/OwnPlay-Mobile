@@ -51,12 +51,14 @@ class MobilePlaybackRotationAndEpgContractTest {
     @Test
     fun `fullscreen chrome is reasserted after pip without overriding pip window ownership`() {
         val controller = sourceText("src/main/java/app/ownplay/player/ui/PlaybackWindowController.kt")
+        val activity = sourceText("src/main/java/app/ownplay/player/MainActivity.kt")
         val fullscreen = sourceBlockAfter(controller, "fun updateFullscreenState(")
         val pip = sourceBlockAfter(controller, "fun onPictureInPictureModeChanged(")
         val refresh = sourceBlockAfter(controller, "fun refreshWindowState()")
         val pipOwnership = sourceBlockAfter(controller, "private fun isPictureInPictureOwned()")
         val orientation = sourceBlockAfter(controller, "private fun applyOrientationPolicy()")
         val systemBars = sourceBlockAfter(controller, "private fun applySystemBarPolicy()")
+        val shellStatusBar = sourceBlockAfter(activity, "private fun hideStatusBar()")
 
         assertTrue(fullscreen.contains("applySystemBarPolicy()"))
         assertTrue(fullscreen.contains("scheduleSystemBarPolicyRefresh()"))
@@ -72,6 +74,7 @@ class MobilePlaybackRotationAndEpgContractTest {
                 "if (isPictureInPictureOwned() || activity.isFinishing) return",
             ),
         )
+        assertTrue(shellStatusBar.contains("if (isInPictureInPictureMode) return"))
         assertTrue(systemBars.contains("hide(WindowInsetsCompat.Type.systemBars())"))
         assertTrue(systemBars.contains("hide(WindowInsetsCompat.Type.statusBars())"))
         assertTrue(systemBars.contains("show(WindowInsetsCompat.Type.navigationBars())"))
