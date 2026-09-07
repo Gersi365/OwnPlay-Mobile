@@ -567,7 +567,11 @@ private fun EpisodeRow(
             }
             if (offlineCopyAvailable) {
                 Text(
-                    text = "Downloaded · Offline copy",
+                    text = if (download?.savedToDownloads == true) {
+                        "Downloaded · OwnPlay Downloads"
+                    } else {
+                        "Downloaded · OwnPlay private storage"
+                    },
                     modifier = Modifier.padding(top = 5.dp),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,

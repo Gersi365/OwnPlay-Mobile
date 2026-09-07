@@ -323,7 +323,7 @@ private fun downloadSecondaryLabel(download: OfflineDownload): String {
 }
 
 private fun downloadStorageLabel(download: OfflineDownload): String =
-    if (download.savedToDownloads) "Phone Downloads" else "OwnPlay private storage"
+    if (download.savedToDownloads) "OwnPlay Downloads" else "OwnPlay private storage"
 
 private fun humanBytes(bytes: Long): String {
     val safe = bytes.coerceAtLeast(0L)
