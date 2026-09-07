@@ -12,7 +12,7 @@ android {
     defaultConfig {
         minSdk = 26
         targetSdk = 36
-        versionCode = 15
+        versionCode = 16
         versionName = "1.0.13-product-polish-update"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
