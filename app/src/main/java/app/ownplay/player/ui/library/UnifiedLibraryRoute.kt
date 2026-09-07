@@ -493,18 +493,19 @@ internal fun UnifiedLibraryRoute(
     } else {
         visibleSeries.size + orphanedOfflineSeries.size
     }
-    val showMovieContinueWatching =
+    val continueWatching = remember(vodCatalog.continueWatching, seriesCatalog.continueWatching) {
+        unifiedContinueWatching(
+            movies = vodCatalog.continueWatching,
+            episodes = seriesCatalog.continueWatching,
+        )
+    }
+    val showContinueWatching =
         filter == UnifiedLibraryFilter.MOVIES &&
             !offlineOnly &&
             normalizedQuery.isBlank() &&
-            vodCatalog.continueWatching.isNotEmpty()
-    val showSeriesContinueWatching =
-        filter == UnifiedLibraryFilter.SERIES &&
-            !offlineOnly &&
-            normalizedQuery.isBlank() &&
-            seriesCatalog.continueWatching.isNotEmpty()
+            continueWatching.isNotEmpty()
     val hasItems =
-        movieCount + seriesCount > 0 || showMovieContinueWatching || showSeriesContinueWatching
+        movieCount + seriesCount > 0 || showContinueWatching
     val showInitialMobileLoading = shouldShowMobileLibraryInitialLoading(
         offlineOnly = offlineOnly,
         hasItems = hasItems,
@@ -539,69 +540,66 @@ internal fun UnifiedLibraryRoute(
             ),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-            LazyRow(
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(end = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                item(key = "library-search") {
-                    IconButton(
-                        onClick = {
-                            searchExpanded = !searchExpanded
-                            if (!searchExpanded) query = ""
-                        },
-                    ) {
-                        Icon(
-                            imageVector = if (searchExpanded) Icons.Filled.Close else Icons.Filled.Search,
-                            contentDescription = if (searchExpanded) {
-                                "Close Library search"
-                            } else {
-                                "Search Library"
+        if (showContinueWatching && sourceId != null) {
+            LibraryUnifiedContinueWatchingStrip(
+                items = continueWatching,
+                onOpenMovie = { movie -> onOpenMovieDetails(sourceId, movie.movieId) },
+                onOpenSeries = { episode -> onOpenSeriesDetails(sourceId, episode.seriesId) },
+            )
+        }
+
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(end = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            listItems(
+                items = UnifiedLibraryFilter.entries,
+                key = { it.name },
+            ) { option ->
+                FilterChip(
+                    selected = filter == option,
+                    onClick = {
+                        filter = option
+                        offlineOnly = option == UnifiedLibraryFilter.OFFLINE
+                        query = ""
+                        searchExpanded = false
+                    },
+                    label = {
+                        Text(
+                            when (option) {
+                                UnifiedLibraryFilter.OFFLINE -> "Downloads"
+                                UnifiedLibraryFilter.MOVIES -> "Movies"
+                                UnifiedLibraryFilter.SERIES -> "Series"
                             },
                         )
-                    }
-                }
-                listItems(
-                    items = UnifiedLibraryFilter.entries,
-                    key = { it.name },
-                ) { option ->
-                    FilterChip(
-                        selected = filter == option,
-                        onClick = {
-                            filter = option
-                            offlineOnly = option == UnifiedLibraryFilter.OFFLINE
-                            query = ""
-                            searchExpanded = false
-                        },
-                        label = {
-                            Text(
-                                when (option) {
-                                    UnifiedLibraryFilter.OFFLINE -> "Offline"
-                                    UnifiedLibraryFilter.MOVIES -> "Movies"
-                                    UnifiedLibraryFilter.SERIES -> "Series"
-                                },
-                            )
-                        },
-                        leadingIcon = if (option == UnifiedLibraryFilter.OFFLINE) {
-                            {
-                                Icon(
-                                    Icons.Filled.DownloadDone,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                )
-                            }
+                    },
+                )
+            }
+            item(key = "library-search") {
+                IconButton(
+                    onClick = {
+                        searchExpanded = !searchExpanded
+                        if (!searchExpanded) query = ""
+                    },
+                ) {
+                    Icon(
+                        imageVector = if (searchExpanded) Icons.Filled.Close else Icons.Filled.Search,
+                        contentDescription = if (searchExpanded) {
+                            "Close Library search"
                         } else {
-                            null
+                            "Search Library"
                         },
                     )
                 }
-                if (refreshing && !showInitialMobileLoading) {
-                    item(key = "library-refreshing") {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                    }
+            }
+            if (refreshing && !showInitialMobileLoading) {
+                item(key = "library-refreshing") {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                 }
             }
+        }
 
         when (filter) {
             UnifiedLibraryFilter.MOVIES -> LibraryCategoryStrip(
@@ -637,7 +635,7 @@ internal fun UnifiedLibraryRoute(
                 placeholder = {
                     Text(
                         when (filter) {
-                            UnifiedLibraryFilter.OFFLINE -> "Search Offline"
+                            UnifiedLibraryFilter.OFFLINE -> "Search Downloads"
                             UnifiedLibraryFilter.MOVIES -> "Search Movies"
                             UnifiedLibraryFilter.SERIES -> "Search Series"
                         },
@@ -672,20 +670,6 @@ internal fun UnifiedLibraryRoute(
                 text = message,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
-            )
-        }
-
-        if (showMovieContinueWatching && sourceId != null) {
-            LibraryMovieContinueWatchingStrip(
-                movies = vodCatalog.continueWatching,
-                onOpenMovie = { movie -> onOpenMovieDetails(sourceId, movie.movieId) },
-            )
-        }
-
-        if (showSeriesContinueWatching && sourceId != null) {
-            LibrarySeriesContinueWatchingStrip(
-                episodes = seriesCatalog.continueWatching,
-                onOpenSeries = { episode -> onOpenSeriesDetails(sourceId, episode.seriesId) },
             )
         }
 
@@ -840,7 +824,7 @@ private fun LibraryEmptyState(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                text = if (offlineOnly) "Nothing available offline" else "No matching media",
+                text = if (offlineOnly) "No completed downloads" else "No matching media",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
             )
@@ -850,7 +834,7 @@ private fun LibraryEmptyState(
                 } else if (sourceKind != SourceKinds.XTREAM) {
                     "Movies and Series require an Xtream-compatible source."
                 } else {
-                    "Try another category, Library filter or search term."
+                    "Try another category, section or search term."
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
