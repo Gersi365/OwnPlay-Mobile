@@ -7,6 +7,9 @@ import android.content.pm.PackageManager
 import android.graphics.Rect
 import android.os.Build
 import android.view.View
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -87,6 +90,8 @@ class PlaybackWindowController(
         if (fullscreenRequested == fullscreen) return
         fullscreenRequested = fullscreen
         applyOrientationPolicy()
+        applySystemBarPolicy()
+        scheduleSystemBarPolicyRefresh()
     }
 
     fun updateLivePreviewState(active: Boolean) {
@@ -117,6 +122,7 @@ class PlaybackWindowController(
             updateSourceRectHint()
         }
         applyOrientationPolicy()
+        applySystemBarPolicy()
         updatePictureInPictureParams()
     }
 
@@ -140,6 +146,10 @@ class PlaybackWindowController(
     fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean) {
         _isInPictureInPictureMode.value = isInPictureInPictureMode
         applyOrientationPolicy()
+        applySystemBarPolicy()
+        if (!isInPictureInPictureMode) {
+            scheduleSystemBarPolicyRefresh()
+        }
         updatePictureInPictureParams()
     }
 
@@ -223,6 +233,29 @@ class PlaybackWindowController(
         }
         if (activity.requestedOrientation != target) {
             activity.requestedOrientation = target
+        }
+    }
+
+    private fun applySystemBarPolicy() {
+        if (_isInPictureInPictureMode.value || activity.isFinishing) return
+        WindowCompat.getInsetsController(activity.window, activity.window.decorView).apply {
+            systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            if (fullscreenRequested) {
+                hide(WindowInsetsCompat.Type.systemBars())
+            } else {
+                hide(WindowInsetsCompat.Type.statusBars())
+                show(WindowInsetsCompat.Type.navigationBars())
+            }
+        }
+    }
+
+    private fun scheduleSystemBarPolicyRefresh() {
+        val view = windowRoot ?: activity.window.decorView
+        view.post {
+            if (!activity.isFinishing) {
+                applySystemBarPolicy()
+            }
         }
     }
 }
