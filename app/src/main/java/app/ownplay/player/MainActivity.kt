@@ -360,8 +360,8 @@ class MainActivity : ComponentActivity() {
                 },
                 switchPresentation = {
                     playbackFullscreen = true
-                    playbackWindowController.updateLivePreviewState(false)
                     playbackWindowController.updateFullscreenState(true)
+                    playbackWindowController.updateLivePreviewState(false)
                     presentationSession.showFullscreen(
                         selection = selection,
                         entryReason = LiveFullscreenEntryReason.ROTATION,
