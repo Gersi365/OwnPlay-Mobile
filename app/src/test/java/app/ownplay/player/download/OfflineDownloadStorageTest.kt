@@ -1,5 +1,6 @@
 package app.ownplay.player.download
 
+import app.ownplay.player.persistence.download.DownloadMediaKinds
 import java.util.Locale
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -97,6 +98,59 @@ class OfflineDownloadStorageTest {
                 expectedPackageName = "app.ownplay.mobile",
                 downloadUri = "ownplay://offline-download/other",
                 expectedDownloadId = downloadId,
+            ),
+        )
+    }
+
+
+    @Test
+    fun moviePublicDownloadsPathUsesOwnPlayMoviesHierarchy() {
+        assertEquals(
+            "Download/OwnPlay Downloads/Movies",
+            OfflineDownloadStorage.publicRelativePath(
+                mediaKind = DownloadMediaKinds.MOVIE,
+                seriesTitle = null,
+                seasonNumber = null,
+                downloadsDirectory = "Download",
+            ),
+        )
+    }
+
+    @Test
+    fun seriesPublicDownloadsPathUsesSanitizedSeriesAndSeasonHierarchy() {
+        assertEquals(
+            "Download/OwnPlay Downloads/Series/My Series/Season 02",
+            OfflineDownloadStorage.publicRelativePath(
+                mediaKind = DownloadMediaKinds.SERIES_EPISODE,
+                seriesTitle = "My/Series:*?",
+                seasonNumber = 2,
+                downloadsDirectory = "Download",
+            ),
+        )
+    }
+
+    @Test
+    fun seriesSpecialsUseSeasonZeroHierarchy() {
+        assertEquals(
+            "Download/OwnPlay Downloads/Series/Show Name/Season 00",
+            OfflineDownloadStorage.publicRelativePath(
+                mediaKind = DownloadMediaKinds.SERIES_EPISODE,
+                seriesTitle = "Show Name",
+                seasonNumber = 0,
+                downloadsDirectory = "Download",
+            ),
+        )
+    }
+
+    @Test
+    fun missingSeriesMetadataFallsBackDeterministically() {
+        assertEquals(
+            "Download/OwnPlay Downloads/Series/Series/Season 00",
+            OfflineDownloadStorage.publicRelativePath(
+                mediaKind = DownloadMediaKinds.SERIES_EPISODE,
+                seriesTitle = null,
+                seasonNumber = null,
+                downloadsDirectory = "Download",
             ),
         )
     }
