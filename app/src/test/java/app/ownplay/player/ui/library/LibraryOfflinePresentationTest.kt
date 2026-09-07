@@ -18,7 +18,7 @@ class LibraryOfflinePresentationTest {
         assertTrue(presentation.verifiedOffline)
         assertEquals("OFFLINE", presentation.badgeLabel)
         assertEquals("Play Offline", presentation.actionLabel)
-        assertEquals("Local file · Phone Downloads", presentation.storageLabel)
+        assertEquals("Local file · OwnPlay Downloads", presentation.storageLabel)
     }
 
     @Test

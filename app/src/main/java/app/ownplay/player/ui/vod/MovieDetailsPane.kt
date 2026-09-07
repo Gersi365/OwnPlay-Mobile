@@ -194,9 +194,9 @@ internal fun MovieDetailsPane(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = if (download?.savedToDownloads == true) {
-                                    "Downloaded · Phone Downloads"
+                                    "Downloaded · OwnPlay Downloads"
                                 } else {
-                                    "Downloaded · Offline copy"
+                                    "Downloaded · OwnPlay private storage"
                                 },
                                 style = MaterialTheme.typography.labelLarge,
                                 fontWeight = FontWeight.Medium,
@@ -283,7 +283,7 @@ internal fun MovieDetailsPane(
                 )
                 if (download.savedToDownloads) {
                     Text(
-                        text = "Saving to phone Downloads",
+                        text = "Saving to OwnPlay Downloads",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

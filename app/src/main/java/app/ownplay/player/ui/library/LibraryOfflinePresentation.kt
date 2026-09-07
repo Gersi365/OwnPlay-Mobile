@@ -28,7 +28,7 @@ internal fun libraryOfflinePresentation(
         badgeLabel = "OFFLINE",
         actionLabel = "Play Offline",
         storageLabel = if (savedToDownloads) {
-            "Local file · Phone Downloads"
+            "Local file · OwnPlay Downloads"
         } else {
             "Local file · OwnPlay private storage"
         },
