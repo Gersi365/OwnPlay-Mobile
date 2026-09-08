@@ -182,6 +182,14 @@ internal fun VodRoute(
         }
     }
 
+    fun retryDownload(download: OfflineDownload) {
+        scope.launch { downloadRuntime.retry(download.downloadId) }
+    }
+
+    fun removeDownload(download: OfflineDownload) {
+        scope.launch { downloadRuntime.remove(download.downloadId) }
+    }
+
     val movieToPlay = sessionMoviePlayback
     if (movieToPlay != null) {
         VodPlaybackScreen(
@@ -240,8 +248,8 @@ internal fun VodRoute(
         },
         onPauseDownload = { scope.launch { downloadRuntime.pause(it.downloadId) } },
         onResumeDownload = { scope.launch { downloadRuntime.resume(it.downloadId) } },
-        onRetryDownload = { scope.launch { downloadRuntime.retry(it.downloadId) } },
-        onRemoveDownload = { scope.launch { downloadRuntime.remove(it.downloadId) } },
+        onRetryDownload = ::retryDownload,
+        onRemoveDownload = ::removeDownload,
         onClearProgress = {
             scope.launch { featureRuntime.clearProgress(sourceId, movie.movieId) }
         },

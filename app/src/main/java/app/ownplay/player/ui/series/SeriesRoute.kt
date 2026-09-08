@@ -27,6 +27,7 @@ import androidx.media3.common.C
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
 import app.ownplay.player.OwnPlayAppRuntime
+import app.ownplay.player.download.OfflineDownload
 import app.ownplay.player.download.OfflineDownloadFeatureRuntime
 import app.ownplay.player.download.OfflineDownloadSpec
 import app.ownplay.player.onDemandPresentationSession
@@ -278,6 +279,14 @@ internal fun SeriesRoute(
         )
     }
 
+    fun retryDownload(download: OfflineDownload) {
+        scope.launch { downloadRuntime.retry(download.downloadId) }
+    }
+
+    fun removeDownload(download: OfflineDownload) {
+        scope.launch { downloadRuntime.remove(download.downloadId) }
+    }
+
     SeriesDetailsPane(
         selected = selected,
         details = details,
@@ -327,8 +336,8 @@ internal fun SeriesRoute(
         },
         onPauseDownload = { scope.launch { downloadRuntime.pause(it.downloadId) } },
         onResumeDownload = { scope.launch { downloadRuntime.resume(it.downloadId) } },
-        onRetryDownload = { scope.launch { downloadRuntime.retry(it.downloadId) } },
-        onRemoveDownload = { scope.launch { downloadRuntime.remove(it.downloadId) } },
+        onRetryDownload = ::retryDownload,
+        onRemoveDownload = ::removeDownload,
         onClearProgress = { episode ->
             scope.launch {
                 featureRuntime.clearEpisodeProgress(sourceId, episode.episodeId)
