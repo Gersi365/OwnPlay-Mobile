@@ -15,7 +15,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -30,9 +29,6 @@ import app.ownplay.player.personalization.AppOrientationMode
 
 @Composable
 internal fun PortraitSettingsMenu(
-    deviceProfile: AppDeviceProfile?,
-    orientationMode: AppOrientationMode,
-    onSetOrientation: (AppOrientationMode) -> Unit,
     summaries: List<PlaylistSourceSummary>,
     onOpenLiveManagement: () -> Unit,
     onOpenPlaylists: () -> Unit,
@@ -71,18 +67,6 @@ internal fun PortraitSettingsMenu(
                     text = "Personalize the player, organize your sources and manage offline media.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            CompactSettingsSection(
-                icon = Icons.Filled.Tune,
-                title = "Interface",
-                subtitle = "Device behavior and orientation",
-            ) {
-                InterfaceSettingsContent(
-                    deviceProfile = deviceProfile,
-                    orientationMode = orientationMode,
-                    onSetOrientation = onSetOrientation,
                 )
             }
 

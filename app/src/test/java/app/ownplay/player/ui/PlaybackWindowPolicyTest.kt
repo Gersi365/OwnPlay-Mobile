@@ -48,36 +48,29 @@ class PlaybackWindowPolicyTest {
     }
 
     @Test
-    fun portraitSettingLocksNormalAppShellToPortrait() {
+    fun normalAppShellIsAlwaysPortrait() {
+        listOf(
+            AppOrientationMode.PORTRAIT,
+            AppOrientationMode.LANDSCAPE,
+        ).forEach { storedMode ->
+            assertEquals(
+                PlaybackOrientationIntent.PORTRAIT,
+                PlaybackWindowPolicy.orientationIntent(
+                    fullscreen = false,
+                    appOrientation = storedMode,
+                    inPictureInPicture = false,
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun livePreviewRotationRequestCannotRotateBrowsingShell() {
         assertEquals(
             PlaybackOrientationIntent.PORTRAIT,
             PlaybackWindowPolicy.orientationIntent(
                 fullscreen = false,
-                appOrientation = AppOrientationMode.PORTRAIT,
-                inPictureInPicture = false,
-            ),
-        )
-    }
-
-    @Test
-    fun landscapeSettingLocksNormalAppShellToLandscape() {
-        assertEquals(
-            PlaybackOrientationIntent.LANDSCAPE,
-            PlaybackWindowPolicy.orientationIntent(
-                fullscreen = false,
                 appOrientation = AppOrientationMode.LANDSCAPE,
-                inPictureInPicture = false,
-            ),
-        )
-    }
-
-    @Test
-    fun livePreviewCanTemporarilyFollowPhysicalSensor() {
-        assertEquals(
-            PlaybackOrientationIntent.SENSOR,
-            PlaybackWindowPolicy.orientationIntent(
-                fullscreen = false,
-                appOrientation = AppOrientationMode.PORTRAIT,
                 inPictureInPicture = false,
                 livePreviewRotationEnabled = true,
             ),
@@ -85,29 +78,26 @@ class PlaybackWindowPolicyTest {
     }
 
     @Test
-    fun fullscreenAlwaysFollowsPhysicalSensorByDefault() {
-        assertEquals(
-            PlaybackOrientationIntent.SENSOR,
-            PlaybackWindowPolicy.orientationIntent(
-                fullscreen = true,
-                appOrientation = AppOrientationMode.PORTRAIT,
-                inPictureInPicture = false,
-            ),
-        )
-        assertEquals(
-            PlaybackOrientationIntent.SENSOR,
-            PlaybackWindowPolicy.orientationIntent(
-                fullscreen = true,
-                appOrientation = AppOrientationMode.LANDSCAPE,
-                inPictureInPicture = false,
-            ),
-        )
+    fun fullscreenFollowsPhysicalSensorByDefault() {
+        listOf(
+            AppOrientationMode.PORTRAIT,
+            AppOrientationMode.LANDSCAPE,
+        ).forEach { storedMode ->
+            assertEquals(
+                PlaybackOrientationIntent.SENSOR,
+                PlaybackWindowPolicy.orientationIntent(
+                    fullscreen = true,
+                    appOrientation = storedMode,
+                    inPictureInPicture = false,
+                ),
+            )
+        }
     }
 
     @Test
-    fun fullscreenKeepsLandscapeWhenSensorRotationIsDisabled() {
+    fun fullscreenFallsBackToPortraitWhenSensorRotationIsDisabled() {
         assertEquals(
-            PlaybackOrientationIntent.LANDSCAPE,
+            PlaybackOrientationIntent.PORTRAIT,
             PlaybackWindowPolicy.orientationIntent(
                 fullscreen = true,
                 appOrientation = AppOrientationMode.LANDSCAPE,
