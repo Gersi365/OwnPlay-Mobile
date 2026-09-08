@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import app.ownplay.player.BuildConfig
 import app.ownplay.player.playback.ResolvedPlaybackOrigin
 
 @Composable
@@ -22,6 +23,8 @@ internal fun PlaybackOriginBadge(
     origin: ResolvedPlaybackOrigin,
     modifier: Modifier = Modifier,
 ) {
+    if (!BuildConfig.IS_TV_BUILD) return
+
     val offline = origin == ResolvedPlaybackOrigin.LOCAL_DOWNLOAD
     Surface(
         modifier = modifier,
