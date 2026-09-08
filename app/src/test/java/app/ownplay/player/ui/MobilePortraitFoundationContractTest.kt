@@ -44,7 +44,7 @@ class MobilePortraitFoundationContractTest {
     }
 
     @Test
-    fun `Library uses one canonical portrait presentation path`() {
+    fun `Library uses one canonical dense poster presentation path`() {
         val library = sourceText("src/main/java/app/ownplay/player/ui/library/UnifiedLibraryRoute.kt")
         assertFalse(library.contains("ContentViewMode"))
         assertFalse(library.contains("viewMode ="))
@@ -59,13 +59,20 @@ class MobilePortraitFoundationContractTest {
         assertFalse(library.contains("OfflineSeriesListRow("))
         assertFalse(library.contains("compact ="))
         assertTrue(library.contains("LazyVerticalGrid("))
-        assertTrue(library.contains("GridCells.Adaptive(minSize = 150.dp)"))
+        assertTrue(
+            library.contains(
+                "GridCells.Adaptive(minSize = OwnPlayMediaLayout.MinimumPosterWidthDp.dp)",
+            ),
+        )
+        assertTrue(library.contains("OwnPlayMediaLayout.GridGapDp.dp"))
     }
 
     @Test
-    fun `Library retains Offline without rendering a global All filter`() {
+    fun `Library keeps Movies and Series without a global All or Downloads filter`() {
         val library = sourceText("src/main/java/app/ownplay/player/ui/library/UnifiedLibraryRoute.kt")
-        assertTrue(library.contains("UnifiedLibraryFilter.OFFLINE -> \"Downloads\""))
+        assertTrue(library.contains("UnifiedLibraryFilter.MOVIES"))
+        assertTrue(library.contains("UnifiedLibraryFilter.SERIES"))
+        assertFalse(library.contains("UnifiedLibraryFilter.OFFLINE"))
         assertFalse(library.contains("Text(\"All\")"))
     }
 }
