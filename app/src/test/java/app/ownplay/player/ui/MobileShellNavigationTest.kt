@@ -36,13 +36,21 @@ class MobileShellNavigationTest {
     }
 
     @Test
-    fun `settings round trip returns to last primary destination`() {
-        val fromDownloads = MobileShellNavigationState
-            .initial(MobileShellDestination.HOME)
-            .open(MobileShellDestination.DOWNLOADS)
-            .open(MobileShellDestination.SETTINGS)
+    fun `settings round trip returns to exact calling destination`() {
+        listOf(
+            MobileShellDestination.HOME,
+            MobileShellDestination.LIVE,
+            MobileShellDestination.LIBRARY,
+            MobileShellDestination.DOWNLOADS,
+            MobileShellDestination.MOVIES,
+            MobileShellDestination.SERIES,
+        ).forEach { origin ->
+            val settingsState = MobileShellNavigationState
+                .initial(origin)
+                .open(MobileShellDestination.SETTINGS)
 
-        assertEquals(MobileShellDestination.DOWNLOADS, fromDownloads.backTarget())
+            assertEquals(origin, settingsState.backTarget())
+        }
     }
 
     @Test
