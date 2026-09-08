@@ -45,12 +45,25 @@ private fun MobilePrimaryDestination.asShellDestination(): MobileShellDestinatio
 internal data class MobileShellNavigationState(
     val destination: MobileShellDestination,
     val lastPrimary: MobilePrimaryDestination,
+    val settingsReturnDestination: MobileShellDestination? = null,
 ) {
     fun open(target: MobileShellDestination): MobileShellNavigationState {
+        if (target == MobileShellDestination.SETTINGS) {
+            return copy(
+                destination = target,
+                settingsReturnDestination = if (destination == MobileShellDestination.SETTINGS) {
+                    settingsReturnDestination
+                } else {
+                    destination
+                },
+            )
+        }
+
         val targetPrimary = target.primaryDestination()
         return copy(
             destination = target,
             lastPrimary = targetPrimary ?: lastPrimary,
+            settingsReturnDestination = null,
         )
     }
 
@@ -63,7 +76,8 @@ internal data class MobileShellNavigationState(
         MobileShellDestination.MOVIES,
         MobileShellDestination.SERIES,
         -> MobileShellDestination.LIBRARY
-        MobileShellDestination.SETTINGS -> lastPrimary.asShellDestination()
+        MobileShellDestination.SETTINGS ->
+            settingsReturnDestination ?: lastPrimary.asShellDestination()
     }
 
     companion object {
