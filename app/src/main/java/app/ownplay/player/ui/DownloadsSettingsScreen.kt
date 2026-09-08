@@ -30,6 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -63,6 +64,20 @@ internal fun DownloadsSettingsScreen(
     val downloads by runtime.observeAll().collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     var pendingRemoval by remember { mutableStateOf<OfflineDownload?>(null) }
+    var resumeDownloadIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+
+    LaunchedEffect(downloads) {
+        resumeDownloadIds = downloads
+            .asSequence()
+            .filter { it.state == DownloadStates.COMPLETED }
+            .mapNotNull { download ->
+                val progress = runtime.playbackProgress(download.downloadId)
+                download.downloadId.takeIf {
+                    progress != null && !progress.completed && progress.positionMs > 0L
+                }
+            }
+            .toSet()
+    }
 
     pendingRemoval?.let { download ->
         DownloadRemovalConfirmationDialog(
@@ -162,7 +177,13 @@ internal fun DownloadsSettingsScreen(
             items(downloads, key = { it.downloadId }) { download ->
                 DownloadRow(
                     download = download,
-                    onPlayOffline = { DownloadPlaybackBridge.request(download) },
+                    resumeAvailable = download.downloadId in resumeDownloadIds,
+                    onPlayOffline = { startFromBeginning ->
+                        DownloadPlaybackBridge.request(
+                            download = download,
+                            startFromBeginning = startFromBeginning,
+                        )
+                    },
                     onPause = {
                         scope.launch { runtime.pause(download.downloadId) }
                     },
@@ -184,7 +205,8 @@ internal fun DownloadsSettingsScreen(
 @Composable
 private fun DownloadRow(
     download: OfflineDownload,
-    onPlayOffline: () -> Unit,
+    resumeAvailable: Boolean,
+    onPlayOffline: (startFromBeginning: Boolean) -> Unit,
     onPause: () -> Unit,
     onResume: () -> Unit,
     onRetry: () -> Unit,
@@ -238,13 +260,13 @@ private fun DownloadRow(
                     DownloadStates.PAUSED -> IconButton(onClick = onResume) {
                         Icon(Icons.Filled.PlayArrow, contentDescription = "Resume download")
                     }
-                    DownloadStates.COMPLETED -> TextButton(onClick = onPlayOffline) {
+                    DownloadStates.COMPLETED -> TextButton(onClick = { onPlayOffline(false) }) {
                         Icon(
                             Icons.Filled.PlayArrow,
                             contentDescription = null,
                             modifier = Modifier.padding(end = 4.dp),
                         )
-                        Text("Play Offline")
+                        Text(if (resumeAvailable) "Resume Offline" else "Play Offline")
                     }
                     DownloadStates.FAILED -> IconButton(onClick = onRetry) {
                         Icon(Icons.Filled.Refresh, contentDescription = "Retry download")
@@ -285,11 +307,18 @@ private fun DownloadRow(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                DownloadStates.COMPLETED -> Text(
-                    text = "Available offline · Local file · ${downloadStorageLabel(download)} · ${humanBytes(download.bytesDownloaded)}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
+                DownloadStates.COMPLETED -> {
+                    Text(
+                        text = "Available offline · Local file · ${downloadStorageLabel(download)} · ${humanBytes(download.bytesDownloaded)}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    if (resumeAvailable) {
+                        TextButton(onClick = { onPlayOffline(true) }) {
+                            Text("Play from beginning")
+                        }
+                    }
+                }
                 DownloadStates.FAILED -> Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(5.dp),
