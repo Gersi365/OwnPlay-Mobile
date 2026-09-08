@@ -30,22 +30,22 @@ class DownloadPlaybackBridgeTest {
     }
 
     @Test
-    fun playbackCloseReturnsFocusOnlyWhileOwnerIsRegistered() {
+    fun playbackCloseNotifiesOnlyWhileOwnerIsRegistered() {
         val owner = Any()
-        var restoredDownloadId: String? = null
+        var closedDownloadId: String? = null
         try {
-            DownloadPlaybackBridge.registerFocusReturn(owner) { downloadId ->
-                restoredDownloadId = downloadId
+            DownloadPlaybackBridge.registerPlaybackClosed(owner) { downloadId ->
+                closedDownloadId = downloadId
             }
 
             DownloadPlaybackBridge.notifyPlaybackClosed("download-1")
-            assertEquals("download-1", restoredDownloadId)
+            assertEquals("download-1", closedDownloadId)
 
-            DownloadPlaybackBridge.clearFocusReturn(owner)
+            DownloadPlaybackBridge.clearPlaybackClosed(owner)
             DownloadPlaybackBridge.notifyPlaybackClosed("download-2")
-            assertEquals("download-1", restoredDownloadId)
+            assertEquals("download-1", closedDownloadId)
         } finally {
-            DownloadPlaybackBridge.clearFocusReturn(owner)
+            DownloadPlaybackBridge.clearPlaybackClosed(owner)
         }
     }
 
