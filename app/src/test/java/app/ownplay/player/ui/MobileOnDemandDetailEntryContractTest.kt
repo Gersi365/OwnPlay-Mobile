@@ -8,13 +8,20 @@ import org.junit.Test
 class MobileOnDemandDetailEntryContractTest {
     @Test
     fun `Live cannot open legacy bare Movie or Series catalogs`() {
+        val shell = sourceText("src/mobile/java/app/ownplay/player/ui/MobileOwnPlayApp.kt")
         val liveEntry = sourceText("src/mobile/java/app/ownplay/player/ui/LiveRoute.kt")
         val liveSurface = sourceText("src/mobile/java/app/ownplay/player/ui/TargetLiveRoute.kt")
+        val liveSection = shell
+            .substringAfter("MobileSection.LIVE -> {")
+            .substringBefore("MobileSection.LIBRARY ->")
 
-        assertTrue(liveEntry.contains("onOpenMovies = {},"))
-        assertTrue(liveEntry.contains("onOpenSeries = {},"))
-        assertFalse(liveSurface.contains("onOpenMovies()"))
-        assertFalse(liveSurface.contains("onOpenSeries()"))
+        listOf(liveEntry, liveSurface).forEach { source ->
+            assertFalse(source.contains("onOpenMovies"))
+            assertFalse(source.contains("onOpenSeries"))
+        }
+        assertFalse(liveSection.contains("onOpenMovies ="))
+        assertFalse(liveSection.contains("onOpenSeries ="))
+        assertTrue(liveSection.contains("onOpenSettings = ::openSettings"))
     }
 
     @Test
