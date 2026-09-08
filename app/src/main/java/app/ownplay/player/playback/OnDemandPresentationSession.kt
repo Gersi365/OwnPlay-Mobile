@@ -20,7 +20,6 @@ data class OnDemandPresentationState(
     val seriesEpisodeId: String? = null,
     val moviePlayback: VodMovie? = null,
     val seriesPlayback: SeriesEpisode? = null,
-    val seriesPlaybackReturnsToCatalog: Boolean = false,
 ) {
     init {
         if (kind == null) {
@@ -31,7 +30,6 @@ data class OnDemandPresentationState(
             require(seriesEpisodeId == null)
             require(moviePlayback == null)
             require(seriesPlayback == null)
-            require(!seriesPlaybackReturnsToCatalog)
         } else {
             require(!sourceId.isNullOrBlank())
         }
@@ -41,14 +39,12 @@ data class OnDemandPresentationState(
                 require(seriesSeasonNumber == null)
                 require(seriesEpisodeId == null)
                 require(seriesPlayback == null)
-                require(!seriesPlaybackReturnsToCatalog)
                 moviePlayback?.let { movie -> require(itemId == movie.movieId) }
             }
             OnDemandContentKind.SERIES -> {
                 require(moviePlayback == null)
                 require(seriesEpisodeId == null || seriesSeasonNumber != null)
                 seriesPlayback?.let { episode -> require(itemId == episode.seriesId) }
-                require(seriesPlayback != null || !seriesPlaybackReturnsToCatalog)
             }
             null -> Unit
         }
@@ -64,7 +60,7 @@ data class OnDemandPresentationState(
 /**
  * Transient process-scoped presentation state for online Movies and Series.
  *
- * This state is intentionally not persisted. Activity recreation can rebuild catalog/detail/playback
+ * This state is intentionally not persisted. Activity recreation can rebuild detail/playback
  * presentation around the already process-scoped playback runtime, while process death still starts
  * with an empty session and cannot trigger cold-start autoplay.
  */
@@ -74,13 +70,6 @@ class OnDemandPresentationSession {
 
     val current: OnDemandPresentationState
         get() = _state.value
-
-    fun showMovieCatalog(sourceId: String) {
-        _state.value = OnDemandPresentationState(
-            kind = OnDemandContentKind.MOVIE,
-            sourceId = sourceId,
-        )
-    }
 
     fun showMovieDetail(
         sourceId: String,
@@ -123,13 +112,6 @@ class OnDemandPresentationSession {
         _state.value = current.copy(moviePlayback = null)
     }
 
-    fun showSeriesCatalog(sourceId: String) {
-        _state.value = OnDemandPresentationState(
-            kind = OnDemandContentKind.SERIES,
-            sourceId = sourceId,
-        )
-    }
-
     fun showSeriesDetail(
         sourceId: String,
         seriesId: String,
@@ -163,7 +145,6 @@ class OnDemandPresentationSession {
         sourceId: String,
         episode: SeriesEpisode,
         returnToLibraryOnDetailBack: Boolean,
-        returnToCatalog: Boolean,
         selectedSeasonNumber: Int? = null,
         selectedEpisodeId: String? = null,
     ) {
@@ -175,21 +156,13 @@ class OnDemandPresentationSession {
             seriesSeasonNumber = selectedSeasonNumber,
             seriesEpisodeId = selectedEpisodeId,
             seriesPlayback = episode,
-            seriesPlaybackReturnsToCatalog = returnToCatalog,
         )
     }
 
     fun returnFromSeriesPlayback() {
         val current = _state.value
         if (!current.isSeriesPlayback) return
-        if (current.seriesPlaybackReturnsToCatalog) {
-            showSeriesCatalog(requireNotNull(current.sourceId))
-        } else {
-            _state.value = current.copy(
-                seriesPlayback = null,
-                seriesPlaybackReturnsToCatalog = false,
-            )
-        }
+        _state.value = current.copy(seriesPlayback = null)
     }
 
     fun clear() {

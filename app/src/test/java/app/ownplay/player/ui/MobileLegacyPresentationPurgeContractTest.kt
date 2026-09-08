@@ -76,6 +76,20 @@ class MobileLegacyPresentationPurgeContractTest {
     }
 
     @Test
+    fun onDemandSessionRetainsOnlyDetailAndPlaybackPresentation() {
+        val session = sourceFile(
+            "src/main/java/app/ownplay/player/playback/OnDemandPresentationSession.kt",
+        ).readText()
+        val series = sourceFile("src/main/java/app/ownplay/player/ui/series/SeriesRoute.kt").readText()
+
+        assertFalse(session.contains("showMovieCatalog"))
+        assertFalse(session.contains("showSeriesCatalog"))
+        assertFalse(session.contains("seriesPlaybackReturnsToCatalog"))
+        assertFalse(session.contains("returnToCatalog"))
+        assertFalse(series.contains("returnToCatalog"))
+    }
+
+    @Test
     fun mobileFullscreenDoesNotRetainPlaybackOriginChrome() {
         val activity = sourceFile("src/main/java/app/ownplay/player/MainActivity.kt").readText()
         val shell = sourceFile("src/mobile/java/app/ownplay/player/ui/MobileOwnPlayApp.kt").readText()

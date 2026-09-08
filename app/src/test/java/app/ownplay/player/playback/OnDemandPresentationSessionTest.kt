@@ -14,7 +14,6 @@ class OnDemandPresentationSessionTest {
         val session = OnDemandPresentationSession()
         val movie = movie("movie-1")
 
-        session.showMovieCatalog("source-1")
         session.showMovieDetail("source-1", movie.movieId, returnToLibraryOnDetailBack = true)
         session.showMoviePlayback("source-1", movie, returnToLibraryOnDetailBack = true)
 
@@ -95,7 +94,6 @@ class OnDemandPresentationSessionTest {
             sourceId = "source-1",
             episode = episode,
             returnToLibraryOnDetailBack = true,
-            returnToCatalog = false,
             selectedSeasonNumber = 3,
             selectedEpisodeId = episode.episodeId,
         )
@@ -112,16 +110,16 @@ class OnDemandPresentationSessionTest {
     }
 
     @Test
-    fun seriesContinueWatchingPlaybackReturnsToCatalogSession() {
+    fun seriesPlaybackAlwaysReturnsToExplicitDetailState() {
         val session = OnDemandPresentationSession()
         val episode = episode("episode-9", "series-5", season = 1)
 
-        session.showSeriesCatalog("source-1")
         session.showSeriesPlayback(
             sourceId = "source-1",
             episode = episode,
-            returnToLibraryOnDetailBack = false,
-            returnToCatalog = true,
+            returnToLibraryOnDetailBack = true,
+            selectedSeasonNumber = 1,
+            selectedEpisodeId = episode.episodeId,
         )
         assertTrue(session.current.isSeriesPlayback)
 
@@ -129,7 +127,10 @@ class OnDemandPresentationSessionTest {
 
         assertEquals(OnDemandContentKind.SERIES, session.current.kind)
         assertEquals("source-1", session.current.sourceId)
-        assertNull(session.current.itemId)
+        assertEquals(episode.seriesId, session.current.itemId)
+        assertEquals(1, session.current.seriesSeasonNumber)
+        assertEquals(episode.episodeId, session.current.seriesEpisodeId)
+        assertTrue(session.current.returnToLibraryOnDetailBack)
         assertFalse(session.current.isSeriesPlayback)
     }
 

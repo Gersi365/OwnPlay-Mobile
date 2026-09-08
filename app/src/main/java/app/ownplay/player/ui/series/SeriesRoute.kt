@@ -273,7 +273,6 @@ internal fun SeriesRoute(
             sourceId = sourceId,
             episode = episode,
             returnToLibraryOnDetailBack = returnToLibraryOnDetailBack,
-            returnToCatalog = false,
             selectedSeasonNumber = selectedSeasonNumber,
             selectedEpisodeId = selectedEpisodeId,
         )
