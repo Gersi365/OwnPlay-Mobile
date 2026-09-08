@@ -41,6 +41,29 @@ class LiveOrganizationPresentationTest {
     }
 
     @Test
+    fun `category visibility does not masquerade as direct channel hiding`() {
+        val channels = listOf(
+            channel(
+                id = "inherited",
+                categoryKey = "hidden-category",
+                hidden = true,
+                channelHidden = false,
+            ),
+            channel(
+                id = "direct",
+                categoryKey = "hidden-category",
+                hidden = true,
+                channelHidden = true,
+            ),
+        )
+
+        val sections = liveOrganizationChannelSections(channels, "hidden-category")
+
+        assertEquals(listOf("inherited"), sections.visible.map { it.channelId })
+        assertEquals(listOf("direct"), sections.hidden.map { it.channelId })
+    }
+
+    @Test
     fun `custom group member count uses channel membership`() {
         val channels = listOf(
             channel("one", "news", groups = setOf("favorites")),
@@ -101,6 +124,7 @@ class LiveOrganizationPresentationTest {
         id: String,
         categoryKey: String,
         hidden: Boolean = false,
+        channelHidden: Boolean = hidden,
         groups: Set<String> = emptySet(),
     ) = LiveChannelItem(
         channelId = id,
@@ -120,5 +144,6 @@ class LiveOrganizationPresentationTest {
         availability = "ACTIVE",
         recentAtEpochMillis = null,
         customGroupIds = groups,
+        isChannelHidden = channelHidden,
     )
 }
