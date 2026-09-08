@@ -50,7 +50,6 @@ import app.ownplay.player.OwnPlayAppRuntime
 import app.ownplay.player.livePlaybackPresentationSession
 import app.ownplay.player.onDemandPresentationSession
 import app.ownplay.player.playback.LiveFullscreenEntryReason
-import app.ownplay.player.playback.LivePlaybackPresentationPolicy
 import app.ownplay.player.playback.LivePlaybackSelection
 import app.ownplay.player.playback.LivePlaybackSurfaceTeardown
 import app.ownplay.player.playback.LivePlaybackTransitionGate
@@ -83,18 +82,14 @@ private enum class MobileSection {
 @Composable
 internal fun MobileOwnPlayApp(
     runtime: OwnPlayAppRuntime,
-    rotationFullscreenEnabled: Boolean,
     onPlaybackFullscreenChanged: (Boolean) -> Unit,
     onPlaybackSurfaceActiveChanged: (Boolean) -> Unit,
-    onLivePreviewActiveChanged: (Boolean) -> Unit,
 ) {
     MobileConfigurationBoundary {
         MobileOwnPlayAppContent(
             runtime = runtime,
-            rotationFullscreenEnabled = rotationFullscreenEnabled,
             onPlaybackFullscreenChanged = onPlaybackFullscreenChanged,
             onPlaybackSurfaceActiveChanged = onPlaybackSurfaceActiveChanged,
-            onLivePreviewActiveChanged = onLivePreviewActiveChanged,
         )
     }
 }
@@ -102,12 +97,9 @@ internal fun MobileOwnPlayApp(
 @Composable
 private fun MobileOwnPlayAppContent(
     runtime: OwnPlayAppRuntime,
-    rotationFullscreenEnabled: Boolean,
     onPlaybackFullscreenChanged: (Boolean) -> Unit,
     onPlaybackSurfaceActiveChanged: (Boolean) -> Unit,
-    onLivePreviewActiveChanged: (Boolean) -> Unit,
 ) {
-    val configuration = LocalConfiguration.current
     val context = LocalContext.current
     val activePlaylistStore = remember(context) {
         ActivePlaylistStore(context.applicationContext)
@@ -165,7 +157,6 @@ private fun MobileOwnPlayAppContent(
     val seriesFullscreen = onDemandPresentation.isSeriesPlayback
     val activeSelection = livePresentation.selection
     val fullscreenSelection = livePresentation.fullscreenSelection
-    val fullscreenEntryReason = livePresentation.fullscreenEntryReason
     val liveTransitionGate = remember { LivePlaybackTransitionGate() }
 
     fun rememberActiveSource(sourceId: String?) {
@@ -335,8 +326,6 @@ private fun MobileOwnPlayAppContent(
             vodFullscreen ||
             seriesFullscreen ||
             libraryFullscreen
-    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-    val isPortrait = configuration.orientation == Configuration.ORIENTATION_PORTRAIT
     val observedLiveTransitionTarget =
         fullscreenSelection?.let(LivePlaybackTransitionTarget::fullscreen)
             ?: if (previewActive) {
@@ -352,45 +341,8 @@ private fun MobileOwnPlayAppContent(
     LaunchedEffect(playbackSurfaceActive) {
         onPlaybackSurfaceActiveChanged(playbackSurfaceActive)
     }
-    LaunchedEffect(previewActive, rotationFullscreenEnabled) {
-        onLivePreviewActiveChanged(previewActive && rotationFullscreenEnabled)
-    }
     LaunchedEffect(fullscreenSelection != null) {
         onPlaybackFullscreenChanged(fullscreenSelection != null)
-    }
-
-    LaunchedEffect(
-        rotationFullscreenEnabled,
-        isLandscape,
-        isPortrait,
-        activeSelection?.request?.channelId,
-        fullscreenSelection?.request?.channelId,
-        fullscreenEntryReason,
-    ) {
-        val selected = activeSelection
-        if (
-            LivePlaybackPresentationPolicy.shouldEnterFullscreenFromRotation(
-                rotationFullscreenEnabled = rotationFullscreenEnabled,
-                isLandscape = isLandscape,
-                hasSelection = selected != null,
-                alreadyFullscreen = fullscreenSelection != null,
-            )
-        ) {
-            selected?.let { openLiveFullscreen(it, LiveFullscreenEntryReason.ROTATION) }
-            return@LaunchedEffect
-        }
-
-        val opened = fullscreenSelection
-        if (
-            LivePlaybackPresentationPolicy.shouldReturnToPreviewFromRotation(
-                rotationFullscreenEnabled = rotationFullscreenEnabled,
-                isPortrait = isPortrait,
-                entryReason = fullscreenEntryReason,
-                isFullscreen = opened != null,
-            )
-        ) {
-            opened?.let(::returnLiveToPreview)
-        }
     }
 
     val openedFullscreen = fullscreenSelection

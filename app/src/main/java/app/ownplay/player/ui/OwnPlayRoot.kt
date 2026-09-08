@@ -19,10 +19,8 @@ import app.ownplay.player.OwnPlayAppRuntime
 @Composable
 fun OwnPlayRoot(
     runtime: OwnPlayAppRuntime,
-    rotationFullscreenEnabled: Boolean = false,
     onPlaybackFullscreenChanged: (Boolean) -> Unit = {},
     onPlaybackSurfaceActiveChanged: (Boolean) -> Unit = {},
-    onLivePreviewActiveChanged: (Boolean) -> Unit = {},
 ) {
     var contentVisible by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
@@ -51,10 +49,8 @@ fun OwnPlayRoot(
     ) {
         TargetOwnPlayApp(
             runtime = runtime,
-            rotationFullscreenEnabled = rotationFullscreenEnabled,
             onPlaybackFullscreenChanged = onPlaybackFullscreenChanged,
             onPlaybackSurfaceActiveChanged = onPlaybackSurfaceActiveChanged,
-            onLivePreviewActiveChanged = onLivePreviewActiveChanged,
         )
     }
 }

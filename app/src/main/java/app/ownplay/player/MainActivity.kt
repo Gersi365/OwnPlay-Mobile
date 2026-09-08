@@ -30,7 +30,6 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import app.ownplay.player.download.OfflineDownloadFeatureRuntime
-import app.ownplay.player.personalization.AppDeviceProfile
 import app.ownplay.player.personalization.AppDeviceProfileSelection
 import app.ownplay.player.personalization.AppDeviceProfileStore
 import app.ownplay.player.playback.LiveActivityBackgroundAction
@@ -188,11 +187,6 @@ class MainActivity : ComponentActivity() {
                         Box(modifier = Modifier.fillMaxSize()) {
                             OwnPlayRoot(
                                 runtime = runtime,
-                                rotationFullscreenEnabled = liveRotationFullscreenEnabled(
-                                    isSmartphone =
-                                        configuredProfile == AppDeviceProfile.SMARTPHONE,
-                                    inPictureInPicture = isInPictureInPictureMode,
-                                ),
                                 onPlaybackFullscreenChanged = { isFullscreen ->
                                     holdTvRemoteTransitionLock()
                                     playbackFullscreen = isFullscreen
@@ -201,7 +195,6 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onPlaybackSurfaceActiveChanged =
                                     playbackWindowController::updatePlaybackSurfaceState,
-                                onLivePreviewActiveChanged = { },
                             )
 
                             when {
@@ -459,12 +452,3 @@ private fun KeyEvent.isRemoteActivationKey(): Boolean =
         keyCode == KeyEvent.KEYCODE_MEDIA_PLAY ||
         keyCode == KeyEvent.KEYCODE_MEDIA_PAUSE ||
         keyCode == KeyEvent.KEYCODE_BACK
-
-/**
- * PiP owns the active playback surface. Rotation-triggered Live presentation changes must stay
- * inert until PiP exits so the hidden Preview/Fullscreen tree cannot steal the video surface.
- */
-internal fun liveRotationFullscreenEnabled(
-    isSmartphone: Boolean,
-    inPictureInPicture: Boolean,
-): Boolean = isSmartphone && !inPictureInPicture
