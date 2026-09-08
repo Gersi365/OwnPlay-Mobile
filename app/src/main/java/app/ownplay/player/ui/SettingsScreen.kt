@@ -11,10 +11,8 @@ import app.ownplay.player.persistence.PlaylistSourceSummary
 import app.ownplay.player.source.SourceSyncState
 
 internal enum class SettingsDestination {
-    INTERFACE,
     CONTENT,
     DOWNLOADS,
-    ABOUT,
     LIVE_MANAGEMENT,
     PLAYLISTS,
 }
@@ -69,7 +67,7 @@ internal fun SettingsScreen(
             )
             return
         }
-        else -> Unit
+        SettingsDestination.CONTENT -> Unit
     }
 
     PortraitSettingsMenu(
