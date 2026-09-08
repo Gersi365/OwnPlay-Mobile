@@ -38,13 +38,14 @@ class OnDemandPlaybackPresentationContractTest {
     }
 
     @Test
-    fun `movie remains the canonical custom-control baseline`() {
+    fun `movie also uses shared on-demand presentation`() {
         val vod = sourceText("src/main/java/app/ownplay/player/ui/vod/VodRoute.kt")
         val moviePlayback = sourceBlockAfter(vod, "private fun VodPlaybackScreen(")
 
-        assertTrue(moviePlayback.contains("useController = false"))
-        assertTrue(moviePlayback.contains("VOD_CONTROLS_AUTO_HIDE_MILLIS"))
-        assertTrue(moviePlayback.contains("Slider("))
+        assertTrue(moviePlayback.contains("OnDemandPlaybackSurface("))
+        assertFalse(moviePlayback.contains("AndroidView("))
+        assertFalse(moviePlayback.contains("Slider("))
+        assertFalse(moviePlayback.contains("VOD_CONTROLS_AUTO_HIDE_MILLIS"))
         assertFalse(moviePlayback.contains("PlaybackOriginBadge"))
     }
 }
