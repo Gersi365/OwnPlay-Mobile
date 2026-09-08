@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -135,11 +136,12 @@ private fun <T> LibraryContinueWatchingStrip(
     onOpen: (T) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val cardWidth = 138.dp
+    val cardWidth = 220.dp
+    val posterWidth = 58.dp
 
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(5.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Text(
             text = "Continue Watching",
@@ -163,47 +165,57 @@ private fun <T> LibraryContinueWatchingStrip(
                     color = if (focused) {
                         MaterialTheme.colorScheme.secondaryContainer
                     } else {
-                        MaterialTheme.colorScheme.surface
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f)
                     },
                     tonalElevation = 0.dp,
                 ) {
-                    Column(
+                    Row(
                         modifier = Modifier.padding(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        RemotePoster(
-                            url = posterUrl(item),
-                            title = title(item),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .aspectRatio(2f / 3f),
-                        )
-                        ContinueWatchingProgressSlot(progress = progress)
-                        Text(
-                            text = title(item),
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        subtitle(item)?.let { secondaryText ->
+                        Column(
+                            modifier = Modifier.width(posterWidth),
+                            verticalArrangement = Arrangement.spacedBy(3.dp),
+                        ) {
+                            RemotePoster(
+                                url = posterUrl(item),
+                                title = title(item),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .aspectRatio(2f / 3f),
+                            )
+                            ContinueWatchingProgressSlot(progress = progress)
+                        }
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
                             Text(
-                                text = secondaryText,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
+                                text = title(item),
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
                             )
+                            subtitle(item)?.let { secondaryText ->
+                                Text(
+                                    text = secondaryText,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                            Text(
+                                text = continueWatchingResumeLabel(
+                                    positionMs = positionMs(item),
+                                    durationMs = durationMs(item),
+                                ),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                maxLines = 1,
+                            )
                         }
-                        Text(
-                            text = continueWatchingResumeLabel(
-                                positionMs = positionMs(item),
-                                durationMs = durationMs(item),
-                            ),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            maxLines = 1,
-                        )
                     }
                 }
             }
