@@ -1,6 +1,5 @@
 package app.ownplay.player.ui.series
 
-import android.content.res.Configuration
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,14 +26,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -58,7 +51,6 @@ internal fun SeriesDetailsPane(
     selectedSeasonNumber: Int?,
     selectedEpisodeId: String?,
     downloads: List<OfflineDownload>,
-    focusBackOnEntry: Boolean,
     onSeasonSelected: (Int) -> Unit,
     onEpisodeSelected: (String) -> Unit,
     onFavoriteChanged: (Boolean) -> Unit,
@@ -72,33 +64,8 @@ internal fun SeriesDetailsPane(
     onClose: () -> Unit,
     modifier: Modifier,
 ) {
-    val configuration = LocalConfiguration.current
-    val isTelevision =
-        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
-    val primaryActionFocusRequester = remember(selected.seriesId) { FocusRequester() }
     val selectedSeason = details?.seasons?.firstOrNull { it.seasonNumber == selectedSeasonNumber }
     val selectedEpisode = selectedSeason?.episodes?.firstOrNull { it.episodeId == selectedEpisodeId }
-
-    LaunchedEffect(
-        isTelevision,
-        focusBackOnEntry,
-        selected.seriesId,
-        selectedSeasonNumber,
-        selectedEpisodeId,
-        details?.seasons?.size,
-        selectedSeason?.episodes?.size,
-    ) {
-        if (!isTelevision) return@LaunchedEffect
-        val primaryTargetAvailable = when {
-            selectedEpisode != null -> true
-            selectedSeason != null -> selectedSeason.episodes.isNotEmpty()
-            details != null -> true
-            else -> false
-        }
-        if (!primaryTargetAvailable) return@LaunchedEffect
-        withFrameNanos { }
-        primaryActionFocusRequester.requestFocus()
-    }
 
     Surface(
         modifier = modifier,
@@ -141,11 +108,6 @@ internal fun SeriesDetailsPane(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
                         onClick = { onFavoriteChanged(!selected.isFavorite) },
-                        modifier = if (details?.seasons?.isEmpty() == true) {
-                            Modifier.focusRequester(primaryActionFocusRequester)
-                        } else {
-                            Modifier
-                        },
                         shape = RoundedCornerShape(10.dp),
                     ) {
                         Text(if (selected.isFavorite) "Unfavorite" else "Favorite")
@@ -169,7 +131,6 @@ internal fun SeriesDetailsPane(
                                 item.mediaKind == DownloadMediaKinds.SERIES_EPISODE &&
                                     item.contentId == selectedEpisode.episodeId
                             },
-                            playFocusRequester = primaryActionFocusRequester,
                             onPlay = { mode -> onPlay(selectedEpisode.forPlaybackStart(mode)) },
                             onDownload = { onDownload(selectedEpisode) },
                             onPauseDownload = onPauseDownload,
@@ -203,7 +164,6 @@ internal fun SeriesDetailsPane(
                                 )
                             }
                         } else {
-                            val firstEpisodeId = selectedSeason.episodes.first().episodeId
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -219,11 +179,6 @@ internal fun SeriesDetailsPane(
                                         episode = episode,
                                         download = download,
                                         onOpen = { onEpisodeSelected(episode.episodeId) },
-                                        playFocusRequester = if (episode.episodeId == firstEpisodeId) {
-                                            primaryActionFocusRequester
-                                        } else {
-                                            null
-                                        },
                                         onPlay = { mode -> onPlay(episode.forPlaybackStart(mode)) },
                                         onDownload = { onDownload(episode) },
                                         onPauseDownload = onPauseDownload,
@@ -275,7 +230,6 @@ internal fun SeriesDetailsPane(
                                 )
                             }
                         } else {
-                            val firstSeasonId = loaded.seasons.first().seasonId
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -287,11 +241,6 @@ internal fun SeriesDetailsPane(
                                         series = selected,
                                         season = season,
                                         onClick = { onSeasonSelected(season.seasonNumber) },
-                                        modifier = if (season.seasonId == firstSeasonId) {
-                                            Modifier.focusRequester(primaryActionFocusRequester)
-                                        } else {
-                                            Modifier
-                                        },
                                     )
                                 }
                             }
@@ -408,7 +357,6 @@ private fun SeriesSeasonHeader(
 private fun SeriesEpisodeDetailsPane(
     episode: SeriesEpisode,
     download: OfflineDownload?,
-    playFocusRequester: FocusRequester,
     onPlay: (OnDemandPlaybackStartMode) -> Unit,
     onDownload: () -> Unit,
     onPauseDownload: (OfflineDownload) -> Unit,
@@ -477,7 +425,6 @@ private fun SeriesEpisodeDetailsPane(
         download = download,
         onOpen = null,
         showHeader = false,
-        playFocusRequester = playFocusRequester,
         onPlay = onPlay,
         onDownload = onDownload,
         onPauseDownload = onPauseDownload,
@@ -494,7 +441,6 @@ private fun EpisodeRow(
     download: OfflineDownload?,
     onOpen: (() -> Unit)? = null,
     showHeader: Boolean = true,
-    playFocusRequester: FocusRequester? = null,
     onPlay: (OnDemandPlaybackStartMode) -> Unit,
     onDownload: () -> Unit,
     onPauseDownload: (OfflineDownload) -> Unit,
@@ -503,10 +449,7 @@ private fun EpisodeRow(
     onRemoveDownload: (OfflineDownload) -> Unit,
     onClearProgress: () -> Unit,
 ) {
-    val configuration = LocalConfiguration.current
-    val isTelevision =
-        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
-    val offlineCopyAvailable = !isTelevision && download?.state == DownloadStates.COMPLETED
+    val offlineCopyAvailable = download?.state == DownloadStates.COMPLETED
     val rowModifier = if (onOpen == null) {
         Modifier.fillMaxWidth()
     } else {
@@ -568,7 +511,6 @@ private fun EpisodeRow(
                 }
                 Button(
                     onClick = { onPlay(primaryStartMode) },
-                    modifier = playFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier,
                     shape = RoundedCornerShape(10.dp),
                 ) {
                     Text(
@@ -587,7 +529,7 @@ private fun EpisodeRow(
                         Text("Play from beginning")
                     }
                 }
-                if (!isTelevision && !offlineCopyAvailable) {
+                if (!offlineCopyAvailable) {
                     Button(
                         onClick = {
                             when (download?.state) {
@@ -614,13 +556,13 @@ private fun EpisodeRow(
                         )
                     }
                 }
-                if (!isTelevision && download != null) {
+                if (download != null) {
                     IconButton(onClick = { onRemoveDownload(download) }) {
                         Icon(Icons.Filled.Delete, contentDescription = "Remove episode download")
                     }
                 }
             }
-            if (!isTelevision && offlineCopyAvailable) {
+            if (offlineCopyAvailable) {
                 Text(
                     text = "Downloaded · Offline copy",
                     modifier = Modifier.padding(top = 5.dp),
@@ -630,12 +572,11 @@ private fun EpisodeRow(
                 )
             }
             if (
-                !isTelevision &&
-                (download?.state == DownloadStates.DOWNLOADING ||
-                    download?.state == DownloadStates.QUEUED ||
-                    download?.state == DownloadStates.PAUSED)
+                download?.state == DownloadStates.DOWNLOADING ||
+                download?.state == DownloadStates.QUEUED ||
+                download?.state == DownloadStates.PAUSED
             ) {
-                val fraction = download?.progressFraction
+                val fraction = download.progressFraction
                 if (fraction == null) {
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 } else {
@@ -644,18 +585,14 @@ private fun EpisodeRow(
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
-                download?.let { managedDownload ->
-                    Text(
-                        seriesDownloadProgressLabel(managedDownload),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                Text(
+                    seriesDownloadProgressLabel(download),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
-            if (!isTelevision) {
-                download?.failureReason?.takeIf { download.state == DownloadStates.FAILED }?.let {
-                    Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
-                }
+            download?.failureReason?.takeIf { download.state == DownloadStates.FAILED }?.let {
+                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
             }
         }
     }

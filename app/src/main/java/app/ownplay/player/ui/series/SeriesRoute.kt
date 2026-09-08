@@ -294,7 +294,6 @@ internal fun SeriesRoute(
         selectedSeasonNumber = selectedSeasonNumber,
         selectedEpisodeId = selectedEpisodeId,
         downloads = downloads,
-        focusBackOnEntry = true,
         onSeasonSelected = {
             selectedSeasonNumber = it
             selectedEpisodeId = null

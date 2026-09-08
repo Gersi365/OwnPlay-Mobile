@@ -225,7 +225,6 @@ internal fun VodRoute(
         loading = detailsLoading,
         error = detailsError,
         download = downloadFor(movie),
-        focusBackOnEntry = true,
         onDismiss = ::returnToLibrary,
         onFavoriteChanged = { setFavorite(movie, it) },
         onDownload = { target ->
