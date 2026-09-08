@@ -67,16 +67,15 @@ internal fun DownloadsSettingsScreen(
     var resumeDownloadIds by remember { mutableStateOf<Set<String>>(emptySet()) }
 
     LaunchedEffect(downloads) {
-        resumeDownloadIds = downloads
-            .asSequence()
-            .filter { it.state == DownloadStates.COMPLETED }
-            .mapNotNull { download ->
-                val progress = runtime.playbackProgress(download.downloadId)
-                download.downloadId.takeIf {
-                    progress != null && !progress.completed && progress.positionMs > 0L
-                }
+        val resolvedResumeIds = mutableSetOf<String>()
+        for (download in downloads) {
+            if (download.state != DownloadStates.COMPLETED) continue
+            val progress = runtime.playbackProgress(download.downloadId)
+            if (progress != null && !progress.completed && progress.positionMs > 0L) {
+                resolvedResumeIds += download.downloadId
             }
-            .toSet()
+        }
+        resumeDownloadIds = resolvedResumeIds
     }
 
     pendingRemoval?.let { download ->
