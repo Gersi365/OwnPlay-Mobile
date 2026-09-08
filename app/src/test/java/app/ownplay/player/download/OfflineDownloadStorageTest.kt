@@ -1,5 +1,8 @@
 package app.ownplay.player.download
 
+import android.os.Environment
+import app.ownplay.player.persistence.download.DownloadMediaKinds
+import app.ownplay.player.persistence.download.MediaDownloadEntity
 import java.util.Locale
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -36,6 +39,40 @@ class OfflineDownloadStorageTest {
         assertEquals(
             "Movie Name Final",
             OfflineDownloadStorage.safeFileStem("Movie\u0000Name\u0007 Final"),
+        )
+    }
+
+    @Test
+    fun moviePublicPathUsesCanonicalOwnPlayHierarchy() {
+        assertEquals(
+            "${Environment.DIRECTORY_DOWNLOADS}/OwnPlay Downloads/Movies",
+            OfflineDownloadStorage.publicRelativePath(
+                downloadRow(mediaKind = DownloadMediaKinds.MOVIE),
+            ),
+        )
+    }
+
+    @Test
+    fun seriesPublicPathUsesSafeSeriesAndPaddedSeasonHierarchy() {
+        assertEquals(
+            "${Environment.DIRECTORY_DOWNLOADS}/OwnPlay Downloads/Series/My Series/Season 02",
+            OfflineDownloadStorage.publicRelativePath(
+                downloadRow(
+                    mediaKind = DownloadMediaKinds.SERIES_EPISODE,
+                    seriesTitle = "My/Series:*?",
+                    seasonNumber = 2,
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun seriesPublicPathHasDeterministicFallbackForMissingMetadata() {
+        assertEquals(
+            "${Environment.DIRECTORY_DOWNLOADS}/OwnPlay Downloads/Series/Unknown Series/Season 00",
+            OfflineDownloadStorage.publicRelativePath(
+                downloadRow(mediaKind = DownloadMediaKinds.SERIES_EPISODE),
+            ),
         )
     }
 
@@ -100,4 +137,29 @@ class OfflineDownloadStorageTest {
             ),
         )
     }
+
+    private fun downloadRow(
+        mediaKind: String,
+        seriesTitle: String? = null,
+        seasonNumber: Int? = null,
+    ): MediaDownloadEntity = MediaDownloadEntity(
+        downloadId = "download-id",
+        sourceId = "source-id",
+        mediaKind = mediaKind,
+        contentId = "content-id",
+        providerStreamId = 1,
+        title = "Episode Title",
+        seriesTitle = seriesTitle,
+        seasonNumber = seasonNumber,
+        episodeNumber = 1,
+        posterUrl = null,
+        containerExtension = "mp4",
+        state = "QUEUED",
+        bytesDownloaded = 0L,
+        totalBytes = null,
+        localRelativePath = null,
+        failureReason = null,
+        createdAtEpochMillis = 1L,
+        updatedAtEpochMillis = 1L,
+    )
 }

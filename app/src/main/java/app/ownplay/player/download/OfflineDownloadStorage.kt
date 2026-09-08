@@ -11,6 +11,7 @@ import android.os.ParcelFileDescriptor
 import android.provider.MediaStore
 import android.system.Os
 import android.webkit.MimeTypeMap
+import app.ownplay.player.persistence.download.DownloadMediaKinds
 import app.ownplay.player.persistence.download.MediaDownloadEntity
 import java.io.BufferedOutputStream
 import java.io.File
@@ -21,6 +22,9 @@ internal object OfflineDownloadStorage {
     private const val PRIVATE_DIRECTORY = "offline"
     private const val MEDIASTORE_URI_PREFIX = "content://media/"
     private const val PENDING_DOWNLOAD_MARKER_PREFIX = "ownplay://offline-download/"
+    private const val PUBLIC_DIRECTORY = "OwnPlay Downloads"
+    private const val MOVIES_DIRECTORY = "Movies"
+    private const val SERIES_DIRECTORY = "Series"
 
     fun supportsPublicDownloads(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
 
@@ -68,7 +72,7 @@ internal object OfflineDownloadStorage {
         val values = ContentValues().apply {
             put(MediaStore.Downloads.DISPLAY_NAME, publicDisplayName(row, extension))
             put(MediaStore.Downloads.MIME_TYPE, mimeType(extension))
-            put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+            put(MediaStore.Downloads.RELATIVE_PATH, publicRelativePath(row))
             put(MediaStore.Downloads.DOWNLOAD_URI, pendingDownloadMarker(row.downloadId))
             put(MediaStore.Downloads.IS_PENDING, 1)
         }
@@ -196,6 +200,24 @@ internal object OfflineDownloadStorage {
             .trim()
             .trim('.')
         return cleaned.take(120).ifBlank { "OwnPlay" }
+    }
+
+    internal fun publicRelativePath(row: MediaDownloadEntity): String {
+        val root = "${Environment.DIRECTORY_DOWNLOADS}/$PUBLIC_DIRECTORY"
+        return when (row.mediaKind) {
+            DownloadMediaKinds.MOVIE -> "$root/$MOVIES_DIRECTORY"
+            DownloadMediaKinds.SERIES_EPISODE -> {
+                val seriesName = safeFileStem(
+                    row.seriesTitle?.takeIf(String::isNotBlank) ?: "Unknown Series",
+                )
+                val seasonNumber = (row.seasonNumber ?: 0)
+                    .coerceAtLeast(0)
+                    .toString()
+                    .padStart(2, '0')
+                "$root/$SERIES_DIRECTORY/$seriesName/Season $seasonNumber"
+            }
+            else -> root
+        }
     }
 
     internal fun pendingDownloadMarker(downloadId: String): String =
