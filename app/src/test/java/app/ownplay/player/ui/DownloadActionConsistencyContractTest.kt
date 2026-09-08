@@ -11,8 +11,9 @@ class DownloadActionConsistencyContractTest {
         val details = sourceText("src/main/java/app/ownplay/player/ui/vod/MovieDetailsPane.kt")
 
         assertTrue(details.contains("offlineCopyAvailable = download?.state == DownloadStates.COMPLETED"))
-        assertTrue(details.contains("DownloadStates.QUEUED -> \"Pause\""))
-        assertTrue(details.contains("DownloadStates.DOWNLOADING -> \"Pause\""))
+        assertTrue(details.contains("DownloadStates.QUEUED,"))
+        assertTrue(details.contains("DownloadStates.DOWNLOADING,"))
+        assertTrue(details.contains("-> \"Pause\""))
         assertTrue(details.contains("DownloadStates.PAUSED -> \"Resume\""))
         assertTrue(details.contains("DownloadStates.FAILED -> \"Retry\""))
         assertTrue(details.contains("offlineCopyAvailable -> \"Play Offline\""))
@@ -28,13 +29,15 @@ class DownloadActionConsistencyContractTest {
         val details = sourceText("src/main/java/app/ownplay/player/ui/series/SeriesDetailsPane.kt")
 
         assertTrue(details.contains("offlineCopyAvailable = download?.state == DownloadStates.COMPLETED"))
+        assertTrue(details.contains("DownloadStates.QUEUED,"))
+        assertTrue(details.contains("DownloadStates.DOWNLOADING,"))
         assertTrue(details.contains("-> \"Pause\""))
         assertTrue(details.contains("DownloadStates.PAUSED -> \"Resume\""))
         assertTrue(details.contains("DownloadStates.FAILED -> \"Retry\""))
         assertTrue(details.contains("offlineCopyAvailable -> \"Play Offline\""))
         assertTrue(details.contains("DownloadStates.FAILED -> onRetryDownload(download)"))
         assertTrue(details.contains("null -> onDownload()"))
-        assertTrue(details.contains("onRemoveDownload(download)"))
+        assertTrue(details.contains("onRemoveDownload(managedDownload)"))
         assertTrue(details.contains("contentDescription = \"Remove episode download\""))
         assertFalse(details.contains("Resume DL"))
     }
@@ -53,17 +56,20 @@ class DownloadActionConsistencyContractTest {
     }
 
     @Test
-    fun `downloaded media remains the canonical action reference`() {
+    fun `primary Downloads destination remains the canonical full management surface`() {
+        val downloads = sourceText("src/main/java/app/ownplay/player/ui/DownloadsSettingsScreen.kt")
         val library = sourceText("src/main/java/app/ownplay/player/ui/library/UnifiedLibraryRoute.kt")
-        val seriesLibrary = sourceText("src/main/java/app/ownplay/player/ui/library/LibrarySeriesComponents.kt")
 
-        assertTrue(library.contains("downloadRuntime.retry(download.downloadId)"))
-        assertTrue(library.contains("downloadRuntime.remove(download.downloadId)"))
-        assertTrue(library.contains("Text(\"Play Offline\")"))
-        assertTrue(seriesLibrary.contains("Text(\"Play Offline\")"))
-        assertTrue(seriesLibrary.contains("Text(\"Pause\")"))
-        assertTrue(seriesLibrary.contains("Text(\"Resume\")"))
-        assertTrue(seriesLibrary.contains("Text(\"Retry\")"))
-        assertTrue(seriesLibrary.contains("contentDescription = \"Remove episode download\""))
+        assertTrue(downloads.contains("scope.launch { runtime.pause(download.downloadId) }"))
+        assertTrue(downloads.contains("scope.launch { runtime.resume(download.downloadId) }"))
+        assertTrue(downloads.contains("scope.launch { runtime.retry(download.downloadId) }"))
+        assertTrue(downloads.contains("scope.launch { runtime.remove(download.downloadId) }"))
+        assertTrue(downloads.contains("Text(\"Play Offline\")"))
+        assertTrue(downloads.contains("contentDescription = \"Remove download\""))
+
+        assertFalse(library.contains("downloadRuntime.pause("))
+        assertFalse(library.contains("downloadRuntime.resume("))
+        assertFalse(library.contains("downloadRuntime.retry("))
+        assertFalse(library.contains("downloadRuntime.remove("))
     }
 }
