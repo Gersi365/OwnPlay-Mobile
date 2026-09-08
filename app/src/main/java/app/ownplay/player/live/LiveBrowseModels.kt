@@ -30,6 +30,7 @@ data class LiveChannelItem(
     val availability: String,
     val recentAtEpochMillis: Long?,
     val customGroupIds: Set<String> = emptySet(),
+    val isChannelHidden: Boolean = isHidden,
 )
 
 enum class LiveBrowseOrder {
@@ -187,5 +188,6 @@ object LiveBrowseProjector {
         availability = record.availability,
         recentAtEpochMillis = record.recentAtEpochMillis,
         customGroupIds = customGroupIds,
+        isChannelHidden = record.hiddenAtEpochMillis != null,
     )
 }

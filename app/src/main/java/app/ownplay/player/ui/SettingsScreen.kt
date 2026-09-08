@@ -36,7 +36,7 @@ internal fun SettingsScreen(
 
     when (destination) {
         SettingsDestination.LIVE_MANAGEMENT -> {
-            LiveManagementScreen(
+            LiveOrganizationScreen(
                 runtime = runtime,
                 summaries = readySummaries,
                 onBack = { destination = SettingsDestination.HOME },
