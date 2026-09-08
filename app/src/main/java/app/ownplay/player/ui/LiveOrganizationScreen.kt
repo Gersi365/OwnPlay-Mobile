@@ -82,8 +82,8 @@ internal fun liveOrganizationChannelSections(
 ): LiveOrganizationChannelSections {
     val categoryChannels = channels.filter { channel -> channel.categoryKey == categoryKey }
     return LiveOrganizationChannelSections(
-        visible = categoryChannels.filterNot(LiveChannelItem::isHidden),
-        hidden = categoryChannels.filter(LiveChannelItem::isHidden),
+        visible = categoryChannels.filterNot(LiveChannelItem::isChannelHidden),
+        hidden = categoryChannels.filter(LiveChannelItem::isChannelHidden),
     )
 }
 
