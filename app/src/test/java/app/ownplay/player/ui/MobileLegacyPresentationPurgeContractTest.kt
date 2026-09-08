@@ -56,6 +56,21 @@ class MobileLegacyPresentationPurgeContractTest {
         assertFalse(management.contains("UI_MODE_TYPE_TELEVISION"))
     }
 
+    @Test
+    fun onDemandRoutesDoNotReintroduceAlternateCatalogPresentation() {
+        val vod = sourceFile("src/main/java/app/ownplay/player/ui/vod/VodRoute.kt").readText()
+        val series = sourceFile("src/main/java/app/ownplay/player/ui/series/SeriesRoute.kt").readText()
+
+        listOf(vod, series).forEach { source ->
+            assertFalse(source.contains("ORIENTATION_LANDSCAPE"))
+            assertFalse(source.contains("isLandscape"))
+            assertFalse(source.contains("LocalConfiguration"))
+        }
+        assertFalse(vod.contains("MoviesCatalogContent"))
+        assertFalse(vod.contains("MovieCategoryRail"))
+        assertFalse(series.contains("SeriesCatalogPane"))
+    }
+
     private fun sourceFile(relativePath: String): File {
         val direct = File(relativePath)
         if (direct.exists()) return direct

@@ -28,4 +28,26 @@ class MobileOnDemandDetailEntryContractTest {
         assertTrue(shell.contains("requestedSeriesId = seriesId"))
         assertTrue(shell.contains("openSection(MobileSection.SERIES)"))
     }
+
+    @Test
+    fun `on-demand routes are detail and playback hosts only`() {
+        val vod = sourceText("src/main/java/app/ownplay/player/ui/vod/VodRoute.kt")
+        val series = sourceText("src/main/java/app/ownplay/player/ui/series/SeriesRoute.kt")
+
+        assertFalse(vod.contains("isLandscape"))
+        assertFalse(vod.contains("ORIENTATION_LANDSCAPE"))
+        assertFalse(vod.contains("VodSortOrder"))
+        assertFalse(vod.contains("MoviesCatalogContent"))
+        assertFalse(vod.contains("MovieCategoryRail"))
+        assertFalse(vod.contains("showMovieCatalog"))
+        assertTrue(vod.contains("MovieDetailsPane("))
+        assertTrue(vod.contains("VodPlaybackScreen("))
+
+        assertFalse(series.contains("isLandscape"))
+        assertFalse(series.contains("ORIENTATION_LANDSCAPE"))
+        assertFalse(series.contains("SeriesCatalogPane"))
+        assertFalse(series.contains("showSeriesCatalog"))
+        assertTrue(series.contains("SeriesDetailsPane("))
+        assertTrue(series.contains("SeriesPlaybackScreen("))
+    }
 }
