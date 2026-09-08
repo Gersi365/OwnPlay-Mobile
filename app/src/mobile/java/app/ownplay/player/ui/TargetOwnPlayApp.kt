@@ -23,7 +23,7 @@ internal fun TargetOwnPlayApp(
         orientation = Configuration.ORIENTATION_PORTRAIT
     }
     CompositionLocalProvider(LocalConfiguration provides portraitConfiguration) {
-        MobileOwnPlayApp(
+        MobileVNextOwnPlayApp(
             runtime = runtime,
             onPlaybackFullscreenChanged = onPlaybackFullscreenChanged,
             onPlaybackSurfaceActiveChanged = onPlaybackSurfaceActiveChanged,
