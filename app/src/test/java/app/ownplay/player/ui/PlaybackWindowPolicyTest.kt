@@ -1,6 +1,5 @@
 package app.ownplay.player.ui
 
-import app.ownplay.player.personalization.AppOrientationMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -49,49 +48,24 @@ class PlaybackWindowPolicyTest {
 
     @Test
     fun normalAppShellIsAlwaysPortrait() {
-        listOf(
-            AppOrientationMode.PORTRAIT,
-            AppOrientationMode.LANDSCAPE,
-        ).forEach { storedMode ->
-            assertEquals(
-                PlaybackOrientationIntent.PORTRAIT,
-                PlaybackWindowPolicy.orientationIntent(
-                    fullscreen = false,
-                    appOrientation = storedMode,
-                    inPictureInPicture = false,
-                ),
-            )
-        }
-    }
-
-    @Test
-    fun livePreviewRotationRequestCannotRotateBrowsingShell() {
         assertEquals(
             PlaybackOrientationIntent.PORTRAIT,
             PlaybackWindowPolicy.orientationIntent(
                 fullscreen = false,
-                appOrientation = AppOrientationMode.LANDSCAPE,
                 inPictureInPicture = false,
-                livePreviewRotationEnabled = true,
             ),
         )
     }
 
     @Test
     fun fullscreenFollowsPhysicalSensorByDefault() {
-        listOf(
-            AppOrientationMode.PORTRAIT,
-            AppOrientationMode.LANDSCAPE,
-        ).forEach { storedMode ->
-            assertEquals(
-                PlaybackOrientationIntent.SENSOR,
-                PlaybackWindowPolicy.orientationIntent(
-                    fullscreen = true,
-                    appOrientation = storedMode,
-                    inPictureInPicture = false,
-                ),
-            )
-        }
+        assertEquals(
+            PlaybackOrientationIntent.SENSOR,
+            PlaybackWindowPolicy.orientationIntent(
+                fullscreen = true,
+                inPictureInPicture = false,
+            ),
+        )
     }
 
     @Test
@@ -100,7 +74,6 @@ class PlaybackWindowPolicyTest {
             PlaybackOrientationIntent.PORTRAIT,
             PlaybackWindowPolicy.orientationIntent(
                 fullscreen = true,
-                appOrientation = AppOrientationMode.LANDSCAPE,
                 inPictureInPicture = false,
                 fullscreenSensorRotationEnabled = false,
             ),
@@ -113,10 +86,8 @@ class PlaybackWindowPolicyTest {
             PlaybackOrientationIntent.FOLLOW_SYSTEM,
             PlaybackWindowPolicy.orientationIntent(
                 fullscreen = true,
-                appOrientation = AppOrientationMode.LANDSCAPE,
                 inPictureInPicture = true,
                 fullscreenSensorRotationEnabled = false,
-                livePreviewRotationEnabled = true,
             ),
         )
     }

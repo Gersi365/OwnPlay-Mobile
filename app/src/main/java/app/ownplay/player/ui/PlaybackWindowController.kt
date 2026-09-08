@@ -7,7 +7,6 @@ import android.content.pm.PackageManager
 import android.graphics.Rect
 import android.os.Build
 import android.view.View
-import app.ownplay.player.personalization.AppOrientationMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,13 +25,10 @@ internal object PlaybackWindowPolicy {
         pipEnabled: Boolean = true,
     ): Boolean = pipEnabled && pipSupported && isPlaying && playbackSurfaceActive
 
-    @Suppress("UNUSED_PARAMETER")
     fun orientationIntent(
         fullscreen: Boolean,
-        appOrientation: AppOrientationMode,
         inPictureInPicture: Boolean,
         fullscreenSensorRotationEnabled: Boolean = true,
-        livePreviewRotationEnabled: Boolean = false,
     ): PlaybackOrientationIntent = when {
         inPictureInPicture -> PlaybackOrientationIntent.FOLLOW_SYSTEM
         fullscreen && fullscreenSensorRotationEnabled -> PlaybackOrientationIntent.SENSOR
@@ -54,10 +50,8 @@ class PlaybackWindowController(
     private var isPlaying = false
     private var fullscreenRequested = false
     private var fullscreenSensorRotationEnabled = true
-    private var livePreviewRotationEnabled = false
     private var pictureInPictureEnabled = true
     private var playbackSurfaceActive = false
-    private var appOrientation = AppOrientationMode.PORTRAIT
     private var sourceRectHint: Rect? = null
     private var windowRoot: View? = null
     private var layoutListener: View.OnLayoutChangeListener? = null
@@ -101,12 +95,6 @@ class PlaybackWindowController(
         applyOrientationPolicy()
     }
 
-    fun updateLivePreviewRotationEnabled(enabled: Boolean) {
-        if (livePreviewRotationEnabled == enabled) return
-        livePreviewRotationEnabled = enabled
-        applyOrientationPolicy()
-    }
-
     fun updatePictureInPictureEnabled(enabled: Boolean) {
         if (pictureInPictureEnabled == enabled) return
         pictureInPictureEnabled = enabled
@@ -122,12 +110,6 @@ class PlaybackWindowController(
         if (playbackSurfaceActive == active) return
         playbackSurfaceActive = active
         updatePictureInPictureParams()
-    }
-
-    fun updateAppOrientation(mode: AppOrientationMode) {
-        if (appOrientation == mode) return
-        appOrientation = mode
-        applyOrientationPolicy()
     }
 
     fun refreshWindowState() {
@@ -165,7 +147,6 @@ class PlaybackWindowController(
         isPlaying = false
         fullscreenRequested = false
         fullscreenSensorRotationEnabled = true
-        livePreviewRotationEnabled = false
         pictureInPictureEnabled = true
         playbackSurfaceActive = false
         detachWindowRoot()
@@ -232,10 +213,8 @@ class PlaybackWindowController(
         val target = when (
             PlaybackWindowPolicy.orientationIntent(
                 fullscreen = fullscreenRequested,
-                appOrientation = appOrientation,
                 inPictureInPicture = _isInPictureInPictureMode.value,
                 fullscreenSensorRotationEnabled = fullscreenSensorRotationEnabled,
-                livePreviewRotationEnabled = livePreviewRotationEnabled,
             )
         ) {
             PlaybackOrientationIntent.PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT

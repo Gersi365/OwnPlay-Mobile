@@ -141,9 +141,6 @@ class MainActivity : ComponentActivity() {
                 PlaybackInteractionBridge.setDpadMode(usesDpad)
                 playbackWindowController.updateFullscreenSensorRotationEnabled(!usesDpad)
                 playbackWindowController.updatePictureInPictureEnabled(!usesDpad)
-                if (configuredProfile != AppDeviceProfile.SMARTPHONE) {
-                    playbackWindowController.updateLivePreviewRotationEnabled(false)
-                }
                 tvRemoteGuardEnabled = usesDpad
                 if (!usesDpad) tvRemoteKeySuppression.clear()
             }
@@ -204,12 +201,7 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onPlaybackSurfaceActiveChanged =
                                     playbackWindowController::updatePlaybackSurfaceState,
-                                onLivePreviewActiveChanged = { previewActive ->
-                                    playbackWindowController.updateLivePreviewRotationEnabled(
-                                        previewActive &&
-                                            configuredProfile == AppDeviceProfile.SMARTPHONE,
-                                    )
-                                },
+                                onLivePreviewActiveChanged = { },
                             )
 
                             when {
@@ -284,15 +276,6 @@ class MainActivity : ComponentActivity() {
             }
         }
         playbackWindowController.attachWindowRoot(findViewById(android.R.id.content))
-        activityScope.launch {
-            appDeviceProfileStore.observeSelection().collectLatest { selection ->
-                if (selection is AppDeviceProfileSelection.Configured) {
-                    playbackWindowController.updateAppOrientation(
-                        selection.settings.effectiveOrientation,
-                    )
-                }
-            }
-        }
         activityScope.launch {
             runtime.playbackController.state.collectLatest { state ->
                 playbackWindowController.updatePlaybackState(state is PlaybackState.Playing)
