@@ -31,7 +31,7 @@ class MobileLegacyPresentationPurgeContractTest {
         val shell = sourceFile("src/mobile/java/app/ownplay/player/ui/MobileOwnPlayApp.kt").readText()
 
         assertTrue(target.contains("MobileOwnPlayApp("))
-        assertFalse(target.contains("OwnPlayApp("))
+        assertFalse(Regex("(?m)^\\s*OwnPlayApp\\(").containsMatchIn(target))
         assertTrue(shell.contains("MobileLibraryRoute("))
         assertFalse(shell.contains("UnifiedLibraryRoute"))
         assertFalse(shell.contains("ContentViewMode"))

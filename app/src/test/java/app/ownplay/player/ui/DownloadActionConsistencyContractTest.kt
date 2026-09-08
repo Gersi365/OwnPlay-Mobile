@@ -53,17 +53,18 @@ class DownloadActionConsistencyContractTest {
     }
 
     @Test
-    fun `downloaded media remains the canonical action reference`() {
-        val library = sourceText("src/main/java/app/ownplay/player/ui/library/UnifiedLibraryRoute.kt")
-        val seriesLibrary = sourceText("src/main/java/app/ownplay/player/ui/library/LibrarySeriesComponents.kt")
+    fun `primary downloads screen remains the canonical managed action reference`() {
+        val downloads = sourceText("src/main/java/app/ownplay/player/ui/DownloadsSettingsScreen.kt")
 
-        assertTrue(library.contains("downloadRuntime.retry(download.downloadId)"))
-        assertTrue(library.contains("downloadRuntime.remove(download.downloadId)"))
-        assertTrue(library.contains("Text(\"Play Offline\")"))
-        assertTrue(seriesLibrary.contains("Text(\"Play Offline\")"))
-        assertTrue(seriesLibrary.contains("Text(\"Pause\")"))
-        assertTrue(seriesLibrary.contains("Text(\"Resume\")"))
-        assertTrue(seriesLibrary.contains("Text(\"Retry\")"))
-        assertTrue(seriesLibrary.contains("contentDescription = \"Remove episode download\""))
+        assertTrue(downloads.contains("DownloadStates.QUEUED,"))
+        assertTrue(downloads.contains("DownloadStates.DOWNLOADING,"))
+        assertTrue(downloads.contains("-> IconButton(onClick = onPause"))
+        assertTrue(downloads.contains("DownloadStates.PAUSED -> IconButton(onClick = onResume"))
+        assertTrue(downloads.contains("DownloadStates.COMPLETED -> TextButton(onClick = onPlayOffline"))
+        assertTrue(downloads.contains("DownloadStates.FAILED -> IconButton(onClick = onRetry"))
+        assertTrue(downloads.contains("IconButton(onClick = onRemove)"))
+        assertTrue(downloads.contains("runtime.retry(download.downloadId)"))
+        assertTrue(downloads.contains("runtime.remove(download.downloadId)"))
+        assertTrue(downloads.contains("if (resumeAvailable) \"Resume Offline\" else \"Play Offline\""))
     }
 }
