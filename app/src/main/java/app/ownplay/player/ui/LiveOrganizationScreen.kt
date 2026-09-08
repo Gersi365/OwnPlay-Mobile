@@ -12,7 +12,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.MoreVert
@@ -469,7 +468,7 @@ internal fun LiveOrganizationScreen(
             channel = target.channel,
             busy = mutationKey != null,
             onDismiss = { channelEditorTarget = null },
-            onSave = { localName, logoOverride ->
+            onSave = { localName, replacementLogo, clearExistingLogo ->
                 runMutation(
                     key = "edit-channel:${target.channel.channelId}",
                     errorMessage = "Could not save channel personalization.",
@@ -484,14 +483,22 @@ internal fun LiveOrganizationScreen(
                         return@runMutation false
                     }
 
-                    val logoResult = if (logoOverride.isBlank()) {
-                        runtime.clearLogoOverride(resolvedSourceId, channel.channelId)
-                    } else {
-                        runtime.setLogoOverride(resolvedSourceId, channel.channelId, logoOverride)
+                    val logoSucceeded = when {
+                        replacementLogo != null ->
+                            runtime.setLogoOverride(
+                                resolvedSourceId,
+                                channel.channelId,
+                                replacementLogo,
+                            ) is ChannelCustomizationMutationResult.Success
+                        clearExistingLogo ->
+                            runtime.clearLogoOverride(
+                                resolvedSourceId,
+                                channel.channelId,
+                            ) is ChannelCustomizationMutationResult.Success
+                        else -> true
                     }
-                    val success = logoResult is ChannelCustomizationMutationResult.Success
-                    if (success) channelEditorTarget = null
-                    success
+                    if (logoSucceeded) channelEditorTarget = null
+                    logoSucceeded
                 }
             },
         )
@@ -1049,14 +1056,18 @@ private fun LiveOrganizationChannelEditorDialog(
     channel: LiveChannelItem,
     busy: Boolean,
     onDismiss: () -> Unit,
-    onSave: (localName: String, logoOverride: String) -> Unit,
+    onSave: (
+        localName: String,
+        replacementLogo: String?,
+        clearExistingLogo: Boolean,
+    ) -> Unit,
 ) {
     var localName by remember(channel.channelId) {
         mutableStateOf(channel.localDisplayName.orEmpty())
     }
-    var logoOverride by remember(channel.channelId) {
-        mutableStateOf(if (channel.hasLogoOverride) channel.logoRef.orEmpty() else "")
-    }
+    var replacementLogo by remember(channel.channelId) { mutableStateOf("") }
+    var clearExistingLogo by remember(channel.channelId) { mutableStateOf(false) }
+
     AlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
         title = { Text("Channel personalization") },
@@ -1070,18 +1081,52 @@ private fun LiveOrganizationChannelEditorDialog(
                     singleLine = true,
                 )
                 OutlinedTextField(
-                    value = logoOverride,
-                    onValueChange = { logoOverride = it },
-                    label = { Text("Logo override") },
-                    supportingText = { Text("Leave blank to use the provider logo.") },
+                    value = replacementLogo,
+                    onValueChange = { next ->
+                        replacementLogo = next
+                        if (next.isNotBlank()) clearExistingLogo = false
+                    },
+                    label = { Text("Replace logo") },
+                    supportingText = {
+                        Text(
+                            if (channel.hasLogoOverride) {
+                                "Leave blank to keep the current custom logo."
+                            } else {
+                                "Leave blank to keep the provider logo."
+                            },
+                        )
+                    },
                     singleLine = true,
                 )
+                if (channel.hasLogoOverride) {
+                    TextButton(
+                        enabled = !busy,
+                        onClick = {
+                            clearExistingLogo = !clearExistingLogo
+                            if (clearExistingLogo) replacementLogo = ""
+                        },
+                    ) {
+                        Text(
+                            if (clearExistingLogo) {
+                                "Keep current custom logo"
+                            } else {
+                                "Clear custom logo"
+                            },
+                        )
+                    }
+                }
             }
         },
         confirmButton = {
             TextButton(
                 enabled = !busy,
-                onClick = { onSave(localName.trim(), logoOverride.trim()) },
+                onClick = {
+                    onSave(
+                        localName.trim(),
+                        replacementLogo.trim().takeIf(String::isNotBlank),
+                        clearExistingLogo,
+                    )
+                },
             ) { Text("Save") }
         },
         dismissButton = {
