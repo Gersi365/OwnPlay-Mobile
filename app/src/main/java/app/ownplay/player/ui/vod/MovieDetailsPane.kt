@@ -37,11 +37,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.ownplay.player.download.OfflineDownload
 import app.ownplay.player.persistence.download.DownloadStates
 import app.ownplay.player.source.SourceError
+import app.ownplay.player.ui.theme.OwnPlayMediaLayout
+import app.ownplay.player.ui.theme.OwnPlaySpacing
 import app.ownplay.player.vod.VodMovie
 import app.ownplay.player.vod.VodMovieDetails
 
@@ -65,6 +68,7 @@ internal fun MovieDetailsPane(
 ) {
     val offlineCopyAvailable = download?.state == DownloadStates.COMPLETED
     val target = details?.movie ?: movie
+    val title = details?.movie?.name ?: movie.name
 
     Surface(
         modifier = modifier,
@@ -75,21 +79,20 @@ internal fun MovieDetailsPane(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 18.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+                .padding(
+                    horizontal = OwnPlaySpacing.Lg,
+                    vertical = OwnPlaySpacing.Sm,
+                ),
+            verticalArrangement = Arrangement.spacedBy(OwnPlaySpacing.Md),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 IconButton(onClick = onDismiss) {
                     Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
                 }
-                Text(
-                    text = details?.movie?.name ?: movie.name,
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Spacer(Modifier.weight(1f))
                 IconButton(onClick = { onFavoriteChanged(!movie.isFavorite) }) {
                     Icon(
                         if (movie.isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
@@ -100,12 +103,46 @@ internal fun MovieDetailsPane(
 
             RemotePoster(
                 url = details?.posterUrl ?: movie.posterUrl,
-                title = movie.name,
+                title = title,
                 modifier = Modifier
-                    .width(168.dp)
-                    .aspectRatio(2f / 3f)
+                    .width(188.dp)
+                    .aspectRatio(OwnPlayMediaLayout.PosterAspectRatio)
                     .align(Alignment.CenterHorizontally),
             )
+
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(OwnPlaySpacing.Xs),
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+
+                val meta = details?.let { info ->
+                    listOfNotNull(
+                        info.releaseDate,
+                        info.durationLabel,
+                        info.genre,
+                        info.rating?.let { "★ %.1f".format(it) },
+                    ).joinToString("  ·  ")
+                }.orEmpty()
+                if (meta.isNotBlank()) {
+                    Text(
+                        text = meta,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
 
             if (loading) {
                 CircularProgressIndicator(
@@ -118,42 +155,27 @@ internal fun MovieDetailsPane(
             if (error != null) {
                 Text(
                     text = "Detailed metadata unavailable. Playback remains available.",
+                    modifier = Modifier.fillMaxWidth(),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
+                    textAlign = TextAlign.Center,
                 )
             }
 
-            details?.let { info ->
-                val meta = listOfNotNull(
-                    info.releaseDate,
-                    info.durationLabel,
-                    info.genre,
-                    info.rating?.let { "★ %.1f".format(it) },
-                ).joinToString("  ·  ")
-                if (meta.isNotBlank()) {
-                    Text(
-                        text = meta,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                info.description?.takeIf(String::isNotBlank)?.let { description ->
-                    Text(
-                        text = description,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 5,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
+            details?.description?.takeIf(String::isNotBlank)?.let { description ->
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 7,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
 
             Button(
                 onClick = { onPlay(movie) },
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(10.dp),
+                shape = RoundedCornerShape(OwnPlayMediaLayout.ContentCornerRadius),
             ) {
                 Icon(Icons.Filled.PlayArrow, contentDescription = null)
                 Spacer(Modifier.width(6.dp))
@@ -168,119 +190,147 @@ internal fun MovieDetailsPane(
             }
 
             if (movie.resumeAvailable) {
-                TextButton(onClick = { onPlayFromBeginning(movie) }) {
+                TextButton(
+                    onClick = { onPlayFromBeginning(movie) },
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                ) {
                     Text("Play from beginning")
                 }
             }
 
-            if (offlineCopyAvailable) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    Text(
-                        text = if (download?.savedToDownloads == true) {
-                            "Downloaded · OwnPlay Downloads"
-                        } else {
-                            "Downloaded · OwnPlay private storage"
-                        },
-                        modifier = Modifier.weight(1f),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    val managedDownload = requireNotNull(download)
-                    IconButton(onClick = { onRemoveDownload(managedDownload) }) {
-                        Icon(Icons.Filled.Delete, contentDescription = "Remove download")
-                    }
-                }
-            } else {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    val downloadLabel = when (download?.state) {
-                        DownloadStates.QUEUED -> "Pause"
-                        DownloadStates.DOWNLOADING -> "Pause"
-                        DownloadStates.PAUSED -> "Resume"
-                        DownloadStates.FAILED -> "Retry"
-                        else -> "Download"
-                    }
-                    FilledTonalButton(
-                        onClick = {
-                            when (download?.state) {
-                                DownloadStates.QUEUED,
-                                DownloadStates.DOWNLOADING,
-                                -> onPauseDownload(download)
-                                DownloadStates.PAUSED -> onResumeDownload(download)
-                                DownloadStates.FAILED -> onRetryDownload(download)
-                                null -> onDownload(target)
-                                DownloadStates.COMPLETED -> Unit
-                            }
-                        },
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
-                        shape = RoundedCornerShape(10.dp),
-                    ) {
-                        Icon(
-                            imageVector = when (download?.state) {
-                                DownloadStates.QUEUED,
-                                DownloadStates.DOWNLOADING,
-                                -> Icons.Filled.Pause
-                                DownloadStates.PAUSED -> Icons.Filled.PlayArrow
-                                DownloadStates.FAILED -> Icons.Filled.Refresh
-                                else -> Icons.Filled.Download
-                            },
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(downloadLabel)
-                    }
-                    download?.let { managedDownload ->
-                        IconButton(onClick = { onRemoveDownload(managedDownload) }) {
-                            Icon(Icons.Filled.Delete, contentDescription = "Remove download")
-                        }
-                    }
-                }
-            }
+            MovieDownloadContext(
+                target = target,
+                download = download,
+                offlineCopyAvailable = offlineCopyAvailable,
+                onDownload = onDownload,
+                onPauseDownload = onPauseDownload,
+                onResumeDownload = onResumeDownload,
+                onRetryDownload = onRetryDownload,
+                onRemoveDownload = onRemoveDownload,
+            )
+        }
+    }
+}
 
-            if (
-                download?.state == DownloadStates.DOWNLOADING ||
-                download?.state == DownloadStates.QUEUED ||
-                download?.state == DownloadStates.PAUSED
-            ) {
-                val progress = download.progressFraction
-                if (progress == null) {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+@Composable
+private fun MovieDownloadContext(
+    target: VodMovie,
+    download: OfflineDownload?,
+    offlineCopyAvailable: Boolean,
+    onDownload: (VodMovie) -> Unit,
+    onPauseDownload: (OfflineDownload) -> Unit,
+    onResumeDownload: (OfflineDownload) -> Unit,
+    onRetryDownload: (OfflineDownload) -> Unit,
+    onRemoveDownload: (OfflineDownload) -> Unit,
+) {
+    if (offlineCopyAvailable) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(OwnPlaySpacing.Sm),
+        ) {
+            Text(
+                text = if (download?.savedToDownloads == true) {
+                    "Downloaded · OwnPlay Downloads"
                 } else {
-                    LinearProgressIndicator(
-                        progress = { progress },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-                Text(
-                    text = movieDownloadProgressLabel(download),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                if (download.savedToDownloads) {
-                    Text(
-                        text = "Saving to OwnPlay Downloads",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-
-            if (download?.state == DownloadStates.FAILED) {
-                Text(
-                    text = download.failureReason ?: "Download failed. Retry when the source is available.",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
+                    "Downloaded · OwnPlay private storage"
+                },
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            val managedDownload = requireNotNull(download)
+            IconButton(onClick = { onRemoveDownload(managedDownload) }) {
+                Icon(Icons.Filled.Delete, contentDescription = "Remove download")
             }
         }
+        return
+    }
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(OwnPlaySpacing.Xs),
+    ) {
+        val downloadLabel = when (download?.state) {
+            DownloadStates.QUEUED,
+            DownloadStates.DOWNLOADING,
+            -> "Pause"
+            DownloadStates.PAUSED -> "Resume"
+            DownloadStates.FAILED -> "Retry"
+            else -> "Download"
+        }
+        FilledTonalButton(
+            onClick = {
+                when (download?.state) {
+                    DownloadStates.QUEUED,
+                    DownloadStates.DOWNLOADING,
+                    -> onPauseDownload(download)
+                    DownloadStates.PAUSED -> onResumeDownload(download)
+                    DownloadStates.FAILED -> onRetryDownload(download)
+                    null -> onDownload(target)
+                    DownloadStates.COMPLETED -> Unit
+                }
+            },
+            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
+            shape = RoundedCornerShape(OwnPlayMediaLayout.PosterCornerRadius),
+        ) {
+            Icon(
+                imageVector = when (download?.state) {
+                    DownloadStates.QUEUED,
+                    DownloadStates.DOWNLOADING,
+                    -> Icons.Filled.Pause
+                    DownloadStates.PAUSED -> Icons.Filled.PlayArrow
+                    DownloadStates.FAILED -> Icons.Filled.Refresh
+                    else -> Icons.Filled.Download
+                },
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(downloadLabel)
+        }
+        download?.let { managedDownload ->
+            IconButton(onClick = { onRemoveDownload(managedDownload) }) {
+                Icon(Icons.Filled.Delete, contentDescription = "Remove download")
+            }
+        }
+    }
+
+    if (
+        download?.state == DownloadStates.DOWNLOADING ||
+        download?.state == DownloadStates.QUEUED ||
+        download?.state == DownloadStates.PAUSED
+    ) {
+        val progress = download.progressFraction
+        if (progress == null) {
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        } else {
+            LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        Text(
+            text = movieDownloadProgressLabel(download),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (download.savedToDownloads) {
+            Text(
+                text = "Saving to OwnPlay Downloads",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+
+    if (download?.state == DownloadStates.FAILED) {
+        Text(
+            text = download.failureReason ?: "Download failed. Retry when the source is available.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.error,
+        )
     }
 }
 

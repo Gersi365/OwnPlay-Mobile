@@ -60,21 +60,21 @@ class OfflineDownloadResilienceContractTest {
     }
 
     @Test
-    fun offlinePlaybackPresentationIsProcessScopedAndDisposeDoesNotStopPlayback() {
-        val route = sourceText("src/main/java/app/ownplay/player/ui/library/UnifiedLibraryRoute.kt")
+    fun offlinePlaybackHostVerifiesFilesAndPresentationDisposalDoesNotStopPlayback() {
+        val activity = sourceText("src/main/java/app/ownplay/player/MainActivity.kt")
         val screen = sourceText("src/main/java/app/ownplay/player/ui/library/LibraryPlaybackScreen.kt")
-        val session = sourceText("src/main/java/app/ownplay/player/ui/library/LibraryPlaybackPresentationSession.kt")
 
-        assertTrue(route.contains("LibraryPlaybackPresentationSession.state.collectAsState()"))
-        assertTrue(route.contains("LibraryPlaybackPresentationSession.show("))
-        assertTrue(route.contains("LibraryPlaybackPresentationSession.clear()"))
-        assertFalse(route.contains("var playbackSession by remember"))
+        assertTrue(activity.contains("DownloadPlaybackBridge.register(downloadPlaybackOwner)"))
+        assertTrue(activity.contains("downloadRuntime.playbackRequest(download.downloadId)"))
+        assertTrue(activity.contains("downloadRuntime.reconcileCompletedFiles()"))
+        assertTrue(activity.contains("downloadRuntime.playbackProgress(download.downloadId)"))
+        assertTrue(activity.contains("runtime.playbackController.start(request)"))
+        assertTrue(activity.contains("downloadPlaybackSession = LibraryPlaybackSession("))
+        assertTrue(activity.contains("LibraryPlaybackScreen("))
 
         val disposal = sourceBlockAfter(screen, "onDispose")
         assertFalse(disposal.contains("stopIfCurrent"))
-        assertTrue(route.contains("runtime.playbackController.stop()"))
-
-        assertTrue(session.contains("MutableStateFlow<LibraryPlaybackSession?>(null)"))
-        assertFalse(session.contains("DataStore"))
+        assertTrue(activity.contains("if (isFinishing && ::runtime.isInitialized)"))
+        assertTrue(activity.contains("runtime.playbackController.stop()"))
     }
 }

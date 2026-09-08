@@ -6,36 +6,27 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items as listItems
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -45,49 +36,41 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.ownplay.player.OwnPlayAppRuntime
 import app.ownplay.player.download.OfflineDownload
 import app.ownplay.player.download.OfflineDownloadFeatureRuntime
-import app.ownplay.player.download.OfflineDownloadSpec
 import app.ownplay.player.persistence.SourceKinds
 import app.ownplay.player.persistence.download.DownloadMediaKinds
-import app.ownplay.player.persistence.download.DownloadStates
-import app.ownplay.player.playback.PlaybackInteractionBridge
 import app.ownplay.player.series.SeriesCatalog
-import app.ownplay.player.series.SeriesEpisode
 import app.ownplay.player.series.SeriesFeatureRuntime
 import app.ownplay.player.series.SeriesSummary
 import app.ownplay.player.source.SourceResult
+import app.ownplay.player.ui.theme.OwnPlayMediaLayout
 import app.ownplay.player.ui.vod.RemotePoster
 import app.ownplay.player.vod.VodCatalog
 import app.ownplay.player.vod.VodFeatureRuntime
 import app.ownplay.player.vod.VodMovie
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.launch
 
-private const val MISSING_FILE_REASON = "Downloaded file is missing"
-
-private enum class UnifiedLibraryFilter {
+internal enum class UnifiedLibraryFilter {
     MOVIES,
     SERIES,
-    OFFLINE,
 }
 
+internal val libraryCatalogSections = listOf(
+    UnifiedLibraryFilter.MOVIES,
+    UnifiedLibraryFilter.SERIES,
+)
+
+@Suppress("UNUSED_PARAMETER")
 @Composable
 internal fun UnifiedLibraryRoute(
     runtime: OwnPlayAppRuntime,
@@ -97,15 +80,12 @@ internal fun UnifiedLibraryRoute(
     onOpenSeriesDetails: (sourceId: String, seriesId: String) -> Unit,
     onFullscreenStateChanged: (Boolean) -> Unit,
 ) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
     val downloadRuntime = remember(context) {
         OfflineDownloadFeatureRuntime(context.applicationContext)
     }
     val vodRuntime = remember(context) { VodFeatureRuntime(context.applicationContext) }
     val seriesRuntime = remember(context) { SeriesFeatureRuntime(context.applicationContext) }
-    val libraryGridState = rememberLazyGridState()
-    val libraryItemFocusRequester = remember { FocusRequester() }
 
     DisposableEffect(downloadRuntime, vodRuntime, seriesRuntime) {
         onDispose {
@@ -116,7 +96,6 @@ internal fun UnifiedLibraryRoute(
     }
 
     val downloads by downloadRuntime.observeAll().collectAsState(initial = emptyList())
-    val presentationDownloads = downloads
     val vodFlow = remember(sourceId, vodRuntime) {
         sourceId?.let(vodRuntime::observeCatalog) ?: flowOf(VodCatalog())
     }
@@ -126,12 +105,9 @@ internal fun UnifiedLibraryRoute(
     val vodCatalog by vodFlow.collectAsState(initial = VodCatalog())
     val seriesCatalog by seriesFlow.collectAsState(initial = SeriesCatalog())
 
-    var filter by remember {
-        mutableStateOf(UnifiedLibraryFilter.MOVIES)
-    }
+    var filter by remember { mutableStateOf(UnifiedLibraryFilter.MOVIES) }
     var movieCategoryKey by remember(sourceId) { mutableStateOf<String?>(null) }
     var seriesCategoryKey by remember(sourceId) { mutableStateOf<String?>(null) }
-    var offlineOnly by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
     var searchExpanded by remember { mutableStateOf(false) }
     val refreshDemand = remember(sourceId, sourceKind) { LibraryCatalogRefreshDemand() }
@@ -144,32 +120,23 @@ internal fun UnifiedLibraryRoute(
     var initialCatalogRefreshPending by remember(sourceId, sourceKind) {
         mutableStateOf(sourceId != null && sourceKind == SourceKinds.XTREAM)
     }
+
     val refreshing = when (filter) {
         UnifiedLibraryFilter.MOVIES -> vodRefreshing
         UnifiedLibraryFilter.SERIES -> seriesRefreshing
-        UnifiedLibraryFilter.OFFLINE -> false
     }
     val refreshWarning = when (filter) {
         UnifiedLibraryFilter.MOVIES -> vodRefreshWarning
         UnifiedLibraryFilter.SERIES -> seriesRefreshWarning
-        UnifiedLibraryFilter.OFFLINE -> false
     }
-    val playbackSession by LibraryPlaybackPresentationSession.state.collectAsState()
-    var playbackError by remember { mutableStateOf<String?>(null) }
-    var selectedSeriesKey by remember { mutableStateOf<LibrarySeriesKey?>(null) }
-    var focusItemKey by remember(sourceId) { mutableStateOf<String?>(null) }
-    var focusRequestGeneration by remember(sourceId) { mutableIntStateOf(0) }
-    var rememberedFocusItemKey by remember(sourceId) { mutableStateOf<String?>(null) }
-    var initialLibraryItemFocusRequested by remember(sourceId) { mutableStateOf(false) }
-    var pendingMovieReturnFocusKey by remember(sourceId) { mutableStateOf<String?>(null) }
-    var seriesReturnEpisodeId by remember(sourceId) { mutableStateOf<String?>(null) }
-    var seriesReturnFocusGeneration by remember(sourceId) { mutableIntStateOf(0) }
 
     LaunchedEffect(vodCatalog.categories, movieCategoryKey) {
         val categories = vodCatalog.categories
         movieCategoryKey = when {
             categories.isEmpty() -> null
-            movieCategoryKey != null && categories.any { it.providerCategoryKey == movieCategoryKey } -> movieCategoryKey
+            movieCategoryKey != null && categories.any {
+                it.providerCategoryKey == movieCategoryKey
+            } -> movieCategoryKey
             else -> categories.first().providerCategoryKey
         }
     }
@@ -178,7 +145,9 @@ internal fun UnifiedLibraryRoute(
         val categories = seriesCatalog.categories
         seriesCategoryKey = when {
             categories.isEmpty() -> null
-            seriesCategoryKey != null && categories.any { it.providerCategoryKey == seriesCategoryKey } -> seriesCategoryKey
+            seriesCategoryKey != null && categories.any {
+                it.providerCategoryKey == seriesCategoryKey
+            } -> seriesCategoryKey
             else -> categories.first().providerCategoryKey
         }
     }
@@ -199,7 +168,6 @@ internal fun UnifiedLibraryRoute(
                     seriesRefreshDemanded = true
                 }
             }
-            UnifiedLibraryFilter.OFFLINE -> initialCatalogRefreshPending = false
         }
     }
 
@@ -241,129 +209,13 @@ internal fun UnifiedLibraryRoute(
         }
     }
 
-    val seriesGroups = remember(presentationDownloads) { groupLibrarySeries(presentationDownloads) }
-    val selectedSeriesGroup = selectedSeriesKey?.let { key ->
-        seriesGroups.firstOrNull { it.key == key }
-    }
-
-    LaunchedEffect(selectedSeriesKey, seriesGroups) {
-        if (selectedSeriesKey != null && selectedSeriesGroup == null) {
-            selectedSeriesKey = null
-        }
-    }
-
-    val seriesBackOwner = remember { Any() }
-    DisposableEffect(selectedSeriesKey, seriesBackOwner) {
-        if (selectedSeriesKey != null) {
-            PlaybackInteractionBridge.registerBackAction(seriesBackOwner) {
-                selectedSeriesKey = null
-            }
-        }
-        onDispose { PlaybackInteractionBridge.clearBackAction(seriesBackOwner) }
-    }
-
-    fun playDownload(download: OfflineDownload) {
-        scope.launch {
-            val request = downloadRuntime.playbackRequest(download.downloadId)
-            if (request == null) {
-                playbackError = "The offline file is unavailable. Download it again to restore offline playback."
-                return@launch
-            }
-            val progress = downloadRuntime.playbackProgress(download.downloadId)
-            playbackError = null
-            runtime.playbackController.start(request)
-            LibraryPlaybackPresentationSession.show(
-                LibraryPlaybackSession(
-                    download = download,
-                    initialPositionMs = progress
-                        ?.takeIf { !it.completed }
-                        ?.positionMs
-                        ?.coerceAtLeast(0L)
-                        ?: 0L,
-                ),
-            )
-        }
-    }
-
-    playbackSession?.let { session ->
-        LibraryPlaybackScreen(
-            runtime = runtime,
-            session = session,
-            onExit = {
-                runtime.playbackController.stop()
-                LibraryPlaybackPresentationSession.clear()
-                val movieReturnKey = pendingMovieReturnFocusKey
-                pendingMovieReturnFocusKey = null
-                if (selectedSeriesKey != null && seriesReturnEpisodeId != null) {
-                    seriesReturnFocusGeneration += 1
-                } else if (movieReturnKey != null) {
-                    focusItemKey = movieReturnKey
-                    rememberedFocusItemKey = movieReturnKey
-                    focusRequestGeneration += 1
-                }
-            },
-            onProgress = { positionMs, durationMs ->
-                scope.launch {
-                    downloadRuntime.savePlaybackProgress(
-                        downloadId = session.download.downloadId,
-                        positionMs = positionMs,
-                        durationMs = durationMs,
-                    )
-                }
-            },
-            onFullscreenStateChanged = onFullscreenStateChanged,
-        )
-        return
-    }
-
-    if (selectedSeriesGroup != null) {
-        LibrarySeriesDetailScreen(
-            group = selectedSeriesGroup,
-            playbackError = playbackError,
-            returnFocusEpisodeId = seriesReturnEpisodeId,
-            returnFocusGeneration = seriesReturnFocusGeneration,
-            onBack = {
-                selectedSeriesKey = null
-                seriesReturnEpisodeId = null
-                rememberedFocusItemKey?.let { target ->
-                    focusItemKey = target
-                    focusRequestGeneration += 1
-                }
-            },
-            onOpenFullSeries = selectedSeriesGroup.seriesId?.let { seriesId ->
-                {
-                    playbackError = null
-                    onOpenSeriesDetails(selectedSeriesGroup.key.sourceId, seriesId)
-                }
-            },
-            onDownloadEpisode = { episode ->
-                scope.launch {
-                    enqueueSeriesEpisode(
-                        downloadRuntime = downloadRuntime,
-                        sourceId = selectedSeriesGroup.key.sourceId,
-                        episode = episode,
-                    )
-                }
-            },
-            onPlay = { download ->
-                pendingMovieReturnFocusKey = null
-                seriesReturnEpisodeId = download.contentId
-                playDownload(download)
-            },
-            onPause = { download -> scope.launch { downloadRuntime.pause(download.downloadId) } },
-            onResume = { download -> scope.launch { downloadRuntime.resume(download.downloadId) } },
-            onRetry = { download -> scope.launch { downloadRuntime.retry(download.downloadId) } },
-            onRemove = { download -> scope.launch { downloadRuntime.remove(download.downloadId) } },
-        )
-        return
-    }
-
     val normalizedQuery = query.trim().lowercase()
-    val movieDownloadsByKey = remember(presentationDownloads) {
-        presentationDownloads
+    val movieDownloadsByKey = remember(downloads) {
+        downloads
             .filter { it.mediaKind == DownloadMediaKinds.MOVIE }
             .associateBy { "${it.sourceId}:${it.contentId}" }
     }
+    val seriesGroups = remember(downloads) { groupLibrarySeries(downloads) }
     val seriesGroupByIdentity = remember(seriesGroups) {
         seriesGroups.mapNotNull { group ->
             group.seriesId?.let { seriesId -> "${group.key.sourceId}:$seriesId" to group }
@@ -373,119 +225,40 @@ internal fun UnifiedLibraryRoute(
     val visibleMovies = remember(
         vodCatalog.movies,
         sourceId,
-        filter,
         movieCategoryKey,
-        offlineOnly,
         normalizedQuery,
-        movieDownloadsByKey,
     ) {
         if (sourceId == null) {
             emptyList()
         } else {
             vodCatalog.movies.filter { movie ->
-                val download = movieDownloadsByKey["$sourceId:${movie.movieId}"]
-                val offlineMatch = !offlineOnly || download?.countsForOfflineFilter() == true
                 val categoryMatch =
-                    filter != UnifiedLibraryFilter.MOVIES ||
-                        movieCategoryKey == null ||
-                        movie.categoryKey == movieCategoryKey
-                val queryMatch = normalizedQuery.isBlank() || movie.name.lowercase().contains(normalizedQuery)
-                offlineMatch && categoryMatch && queryMatch
+                    movieCategoryKey == null || movie.categoryKey == movieCategoryKey
+                val queryMatch =
+                    normalizedQuery.isBlank() || movie.name.lowercase().contains(normalizedQuery)
+                categoryMatch && queryMatch
             }
         }
     }
     val visibleSeries = remember(
         seriesCatalog.series,
         sourceId,
-        filter,
         seriesCategoryKey,
-        offlineOnly,
         normalizedQuery,
-        seriesGroupByIdentity,
     ) {
         if (sourceId == null) {
             emptyList()
         } else {
             seriesCatalog.series.filter { series ->
-                val group = seriesGroupByIdentity["$sourceId:${series.seriesId}"]
-                val offlineMatch = !offlineOnly || group?.episodes?.any(OfflineDownload::countsForOfflineFilter) == true
                 val categoryMatch =
-                    filter != UnifiedLibraryFilter.SERIES ||
-                        seriesCategoryKey == null ||
-                        series.categoryKey == seriesCategoryKey
-                val queryMatch = normalizedQuery.isBlank() || series.name.lowercase().contains(normalizedQuery)
-                offlineMatch && categoryMatch && queryMatch
+                    seriesCategoryKey == null || series.categoryKey == seriesCategoryKey
+                val queryMatch =
+                    normalizedQuery.isBlank() || series.name.lowercase().contains(normalizedQuery)
+                categoryMatch && queryMatch
             }
         }
     }
 
-    val catalogMovieKeys = remember(vodCatalog.movies, sourceId) {
-        if (sourceId == null) emptySet() else vodCatalog.movies.map { "$sourceId:${it.movieId}" }.toSet()
-    }
-    val orphanedOfflineMovies = remember(
-        presentationDownloads,
-        catalogMovieKeys,
-        sourceId,
-        filter,
-        movieCategoryKey,
-        offlineOnly,
-        normalizedQuery,
-    ) {
-        if (
-            !offlineOnly ||
-            sourceId == null ||
-            (filter == UnifiedLibraryFilter.MOVIES && movieCategoryKey != null)
-        ) {
-            emptyList()
-        } else {
-            presentationDownloads.filter { download ->
-                download.sourceId == sourceId &&
-                    download.mediaKind == DownloadMediaKinds.MOVIE &&
-                    download.countsForOfflineFilter() &&
-                    "${download.sourceId}:${download.contentId}" !in catalogMovieKeys &&
-                    (normalizedQuery.isBlank() || download.title.lowercase().contains(normalizedQuery))
-            }
-        }
-    }
-    val catalogSeriesKeys = remember(seriesCatalog.series, sourceId) {
-        if (sourceId == null) emptySet() else seriesCatalog.series.map { "$sourceId:${it.seriesId}" }.toSet()
-    }
-    val orphanedOfflineSeries = remember(
-        seriesGroups,
-        catalogSeriesKeys,
-        sourceId,
-        filter,
-        seriesCategoryKey,
-        offlineOnly,
-        normalizedQuery,
-    ) {
-        if (
-            !offlineOnly ||
-            sourceId == null ||
-            (filter == UnifiedLibraryFilter.SERIES && seriesCategoryKey != null)
-        ) {
-            emptyList()
-        } else {
-            seriesGroups.filter { group ->
-                val identity = group.seriesId?.let { "${group.key.sourceId}:$it" }
-                group.key.sourceId == sourceId &&
-                    group.episodes.any(OfflineDownload::countsForOfflineFilter) &&
-                    (identity == null || identity !in catalogSeriesKeys) &&
-                    (normalizedQuery.isBlank() || group.title.lowercase().contains(normalizedQuery))
-            }
-        }
-    }
-
-    val movieCount = if (filter == UnifiedLibraryFilter.SERIES) {
-        0
-    } else {
-        visibleMovies.size + orphanedOfflineMovies.size
-    }
-    val seriesCount = if (filter == UnifiedLibraryFilter.MOVIES) {
-        0
-    } else {
-        visibleSeries.size + orphanedOfflineSeries.size
-    }
     val continueWatching = remember(vodCatalog.continueWatching, seriesCatalog.continueWatching) {
         unifiedContinueWatching(
             movies = vodCatalog.continueWatching,
@@ -494,50 +267,57 @@ internal fun UnifiedLibraryRoute(
     }
     val showContinueWatching =
         filter == UnifiedLibraryFilter.MOVIES &&
-            !offlineOnly &&
             normalizedQuery.isBlank() &&
             continueWatching.isNotEmpty()
-    val hasItems =
-        movieCount + seriesCount > 0 || showContinueWatching
+    val mediaCount = when (filter) {
+        UnifiedLibraryFilter.MOVIES -> visibleMovies.size
+        UnifiedLibraryFilter.SERIES -> visibleSeries.size
+    }
+    val hasItems = mediaCount > 0 || showContinueWatching
     val showInitialMobileLoading = shouldShowMobileLibraryInitialLoading(
-        offlineOnly = offlineOnly,
+        offlineOnly = false,
         hasItems = hasItems,
         refreshing = refreshing,
         initialRefreshPending = initialCatalogRefreshPending,
     )
-    val visibleFocusKeys = remember(
-        filter,
-        sourceId,
-        visibleMovies,
-        orphanedOfflineMovies,
-        visibleSeries,
-        orphanedOfflineSeries,
-    ) {
-        libraryVisibleFocusKeys(
-            filter = filter,
-            sourceId = sourceId,
-            visibleMovies = visibleMovies,
-            orphanedOfflineMovies = orphanedOfflineMovies,
-            visibleSeries = visibleSeries,
-            orphanedOfflineSeries = orphanedOfflineSeries,
-        )
-    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(
-                horizontal = 10.dp,
-                vertical = 4.dp,
-            ),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        if (showContinueWatching && sourceId != null) {
-            LibraryUnifiedContinueWatchingStrip(
-                items = continueWatching,
-                onOpenMovie = { movie -> onOpenMovieDetails(sourceId, movie.movieId) },
-                onOpenSeries = { episode -> onOpenSeriesDetails(sourceId, episode.seriesId) },
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Library",
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
             )
+            if (refreshing && !showInitialMobileLoading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    strokeWidth = 2.dp,
+                )
+            }
+            IconButton(
+                onClick = {
+                    searchExpanded = !searchExpanded
+                    if (!searchExpanded) query = ""
+                },
+            ) {
+                Icon(
+                    imageVector = if (searchExpanded) Icons.Filled.Close else Icons.Filled.Search,
+                    contentDescription = if (searchExpanded) {
+                        "Close Library search"
+                    } else {
+                        "Search Library"
+                    },
+                )
+            }
         }
 
         LazyRow(
@@ -547,21 +327,19 @@ internal fun UnifiedLibraryRoute(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             listItems(
-                items = UnifiedLibraryFilter.entries,
+                items = libraryCatalogSections,
                 key = { it.name },
             ) { option ->
                 FilterChip(
                     selected = filter == option,
                     onClick = {
                         filter = option
-                        offlineOnly = option == UnifiedLibraryFilter.OFFLINE
                         query = ""
                         searchExpanded = false
                     },
                     label = {
                         Text(
                             when (option) {
-                                UnifiedLibraryFilter.OFFLINE -> "Downloads"
                                 UnifiedLibraryFilter.MOVIES -> "Movies"
                                 UnifiedLibraryFilter.SERIES -> "Series"
                             },
@@ -569,46 +347,19 @@ internal fun UnifiedLibraryRoute(
                     },
                 )
             }
-            item(key = "library-search") {
-                IconButton(
-                    onClick = {
-                        searchExpanded = !searchExpanded
-                        if (!searchExpanded) query = ""
-                    },
-                ) {
-                    Icon(
-                        imageVector = if (searchExpanded) Icons.Filled.Close else Icons.Filled.Search,
-                        contentDescription = if (searchExpanded) {
-                            "Close Library search"
-                        } else {
-                            "Search Library"
-                        },
-                    )
-                }
-            }
-            if (refreshing && !showInitialMobileLoading) {
-                item(key = "library-refreshing") {
-                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                }
-            }
         }
 
         when (filter) {
             UnifiedLibraryFilter.MOVIES -> LibraryCategoryStrip(
-                label = "Movie categories",
-                showLabel = false,
                 selectedCategoryKey = movieCategoryKey,
                 categories = vodCatalog.categories.map { it.providerCategoryKey to it.name },
                 onCategorySelected = { movieCategoryKey = it },
             )
             UnifiedLibraryFilter.SERIES -> LibraryCategoryStrip(
-                label = "Series categories",
-                showLabel = false,
                 selectedCategoryKey = seriesCategoryKey,
                 categories = seriesCatalog.categories.map { it.providerCategoryKey to it.name },
                 onCategorySelected = { seriesCategoryKey = it },
             )
-            UnifiedLibraryFilter.OFFLINE -> Unit
         }
 
         if (searchExpanded || query.isNotBlank()) {
@@ -627,7 +378,6 @@ internal fun UnifiedLibraryRoute(
                 placeholder = {
                     Text(
                         when (filter) {
-                            UnifiedLibraryFilter.OFFLINE -> "Search Downloads"
                             UnifiedLibraryFilter.MOVIES -> "Search Movies"
                             UnifiedLibraryFilter.SERIES -> "Search Series"
                         },
@@ -637,7 +387,15 @@ internal fun UnifiedLibraryRoute(
             )
         }
 
-        if (refreshWarning && !offlineOnly) {
+        if (showContinueWatching && sourceId != null) {
+            LibraryUnifiedContinueWatchingStrip(
+                items = continueWatching,
+                onOpenMovie = { movie -> onOpenMovieDetails(sourceId, movie.movieId) },
+                onOpenSeries = { episode -> onOpenSeriesDetails(sourceId, episode.seriesId) },
+            )
+        }
+
+        if (refreshWarning) {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(10.dp),
@@ -657,14 +415,6 @@ internal fun UnifiedLibraryRoute(
             }
         }
 
-        playbackError?.let { message ->
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-            )
-        }
-
         if (showInitialMobileLoading) {
             LibraryLoadingState(modifier = Modifier.weight(1f))
             return
@@ -672,7 +422,6 @@ internal fun UnifiedLibraryRoute(
 
         if (!hasItems) {
             LibraryEmptyState(
-                offlineOnly = offlineOnly,
                 sourceKind = sourceKind,
                 modifier = Modifier.weight(1f),
             )
@@ -682,47 +431,12 @@ internal fun UnifiedLibraryRoute(
         LibraryCatalogView(
             filter = filter,
             sourceId = sourceId,
-            offlineOnly = offlineOnly,
             visibleMovies = visibleMovies,
-            orphanedOfflineMovies = orphanedOfflineMovies,
             visibleSeries = visibleSeries,
-            orphanedOfflineSeries = orphanedOfflineSeries,
             movieDownloadsByKey = movieDownloadsByKey,
             seriesGroupByIdentity = seriesGroupByIdentity,
-            focusKeys = visibleFocusKeys,
-            focusItemKey = focusItemKey,
-            focusRequestGeneration = focusRequestGeneration,
-            itemFocusRequester = libraryItemFocusRequester,
-            gridState = libraryGridState,
-            onItemFocused = { itemKey -> rememberedFocusItemKey = itemKey },
-            onOpenMovie = { movieSourceId, movieId ->
-                onOpenMovieDetails(movieSourceId, movieId)
-            },
-            onOpenCatalogSeries = { seriesSourceId, seriesId, _ ->
-                onOpenSeriesDetails(seriesSourceId, seriesId)
-            },
-            onOpenOfflineSeries = { group ->
-                playbackError = null
-                selectedSeriesKey = group.key
-            },
-            onPlayOfflineMovie = { download ->
-                seriesReturnEpisodeId = null
-                val catalogKey = libraryCatalogMovieFocusKey(
-                    sourceId = download.sourceId,
-                    movieId = download.contentId,
-                )
-                val offlineKey = libraryOfflineMovieFocusKey(download.downloadId)
-                pendingMovieReturnFocusKey = when {
-                    catalogKey in visibleFocusKeys -> catalogKey
-                    offlineKey in visibleFocusKeys -> offlineKey
-                    else -> rememberedFocusItemKey
-                }
-                playDownload(download)
-            },
-            onPauseMovie = { download -> scope.launch { downloadRuntime.pause(download.downloadId) } },
-            onResumeMovie = { download -> scope.launch { downloadRuntime.resume(download.downloadId) } },
-            onRetryMovie = { download -> scope.launch { downloadRuntime.retry(download.downloadId) } },
-            onRemoveMovie = { download -> scope.launch { downloadRuntime.remove(download.downloadId) } },
+            onOpenMovie = onOpenMovieDetails,
+            onOpenSeries = onOpenSeriesDetails,
             modifier = Modifier.weight(1f),
         )
     }
@@ -730,38 +444,28 @@ internal fun UnifiedLibraryRoute(
 
 @Composable
 private fun LibraryCategoryStrip(
-    label: String,
-    showLabel: Boolean,
     selectedCategoryKey: String?,
     categories: List<Pair<String, String>>,
     onCategorySelected: (String?) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(if (showLabel) 4.dp else 2.dp)) {
-        if (showLabel) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+    if (categories.isEmpty()) return
+    LazyRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+        contentPadding = PaddingValues(end = 12.dp),
+    ) {
+        listItems(categories, key = { it.first }) { (categoryKey, categoryName) ->
+            FilterChip(
+                selected = selectedCategoryKey == categoryKey,
+                onClick = { onCategorySelected(categoryKey) },
+                label = {
+                    Text(
+                        text = categoryName,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
             )
-        }
-        LazyRow(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(7.dp),
-            contentPadding = PaddingValues(end = 12.dp),
-        ) {
-            listItems(categories, key = { it.first }) { (categoryKey, categoryName) ->
-                FilterChip(
-                    selected = selectedCategoryKey == categoryKey,
-                    onClick = { onCategorySelected(categoryKey) },
-                    label = {
-                        Text(
-                            text = categoryName,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    },
-                )
-            }
         }
     }
 }
@@ -798,7 +502,6 @@ private fun LibraryLoadingState(
 
 @Composable
 private fun LibraryEmptyState(
-    offlineOnly: Boolean,
     sourceKind: String?,
     modifier: Modifier = Modifier,
 ) {
@@ -808,20 +511,18 @@ private fun LibraryEmptyState(
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Icon(
-                imageVector = if (offlineOnly) Icons.Filled.DownloadDone else Icons.Filled.Search,
+                imageVector = Icons.Filled.Search,
                 contentDescription = null,
                 modifier = Modifier.size(34.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                text = if (offlineOnly) "No completed downloads" else "No matching media",
+                text = "No matching media",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
             )
             Text(
-                text = if (offlineOnly) {
-                    "Only completed downloads whose local files are still present appear here."
-                } else if (sourceKind != SourceKinds.XTREAM) {
+                text = if (sourceKind != SourceKinds.XTREAM) {
                     "Movies and Series require an Xtream-compatible source."
                 } else {
                     "Try another category, section or search term."
@@ -837,112 +538,41 @@ private fun LibraryEmptyState(
 private fun LibraryCatalogView(
     filter: UnifiedLibraryFilter,
     sourceId: String?,
-    offlineOnly: Boolean,
     visibleMovies: List<VodMovie>,
-    orphanedOfflineMovies: List<OfflineDownload>,
     visibleSeries: List<SeriesSummary>,
-    orphanedOfflineSeries: List<LibrarySeriesGroup>,
     movieDownloadsByKey: Map<String, OfflineDownload>,
     seriesGroupByIdentity: Map<String, LibrarySeriesGroup>,
-    focusKeys: List<String>,
-    focusItemKey: String?,
-    focusRequestGeneration: Int,
-    itemFocusRequester: FocusRequester,
-    gridState: LazyGridState,
-    onItemFocused: (String) -> Unit,
     onOpenMovie: (sourceId: String, movieId: String) -> Unit,
-    onOpenCatalogSeries: (sourceId: String, seriesId: String, group: LibrarySeriesGroup?) -> Unit,
-    onOpenOfflineSeries: (LibrarySeriesGroup) -> Unit,
-    onPlayOfflineMovie: (OfflineDownload) -> Unit,
-    onPauseMovie: (OfflineDownload) -> Unit,
-    onResumeMovie: (OfflineDownload) -> Unit,
-    onRetryMovie: (OfflineDownload) -> Unit,
-    onRemoveMovie: (OfflineDownload) -> Unit,
+    onOpenSeries: (sourceId: String, seriesId: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val focusIndex = remember(focusKeys, focusItemKey) { focusKeys.indexOf(focusItemKey) }
-
-    LaunchedEffect(
-        focusItemKey,
-        focusRequestGeneration,
-        focusIndex,
-    ) {
-        if (focusRequestGeneration <= 0 || focusIndex < 0) return@LaunchedEffect
-        gridState.scrollToItem(focusIndex)
-        withFrameNanos { }
-        itemFocusRequester.requestFocus()
-    }
-
-    fun itemModifier(itemKey: String): Modifier {
-        val requesterModifier = if (itemKey == focusItemKey) {
-            Modifier.focusRequester(itemFocusRequester)
-        } else {
-            Modifier
-        }
-        return requesterModifier.onFocusChanged { focusState ->
-            if (focusState.hasFocus) {
-                onItemFocused(itemKey)
-            }
-        }
-    }
-
     LazyVerticalGrid(
-        state = gridState,
-        columns = GridCells.Adaptive(minSize = 150.dp),
+        columns = GridCells.Adaptive(minSize = OwnPlayMediaLayout.MinimumPosterWidthDp.dp),
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(top = 2.dp, bottom = 18.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(OwnPlayMediaLayout.GridGapDp.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        if (filter != UnifiedLibraryFilter.SERIES) {
-            gridItems(visibleMovies, key = { "catalog-movie:${it.movieId}" }) { movie ->
-                val movieSourceId = sourceId ?: return@gridItems
-                UnifiedMovieCard(
-                    movie = movie,
-                    download = movieDownloadsByKey["$movieSourceId:${movie.movieId}"],
-                    onOpen = { onOpenMovie(movieSourceId, movie.movieId) },
-                    onPlayOffline = onPlayOfflineMovie,
-                    onPause = onPauseMovie,
-                    onResume = onResumeMovie,
-                    onRetry = onRetryMovie,
-                    onRemove = onRemoveMovie,
-                    modifier = itemModifier(
-                        libraryCatalogMovieFocusKey(movieSourceId, movie.movieId),
-                    ),
-                )
+        when (filter) {
+            UnifiedLibraryFilter.MOVIES -> {
+                gridItems(visibleMovies, key = { "catalog-movie:${it.movieId}" }) { movie ->
+                    val resolvedSourceId = sourceId ?: return@gridItems
+                    UnifiedMovieCard(
+                        movie = movie,
+                        download = movieDownloadsByKey["$resolvedSourceId:${movie.movieId}"],
+                        onOpen = { onOpenMovie(resolvedSourceId, movie.movieId) },
+                    )
+                }
             }
-            gridItems(orphanedOfflineMovies, key = { "offline-movie:${it.downloadId}" }) { download ->
-                OfflineOnlyMovieCard(
-                    download = download,
-                    onPlay = { onPlayOfflineMovie(download) },
-                    onRetry = { onRetryMovie(download) },
-                    onRemove = { onRemoveMovie(download) },
-                    modifier = itemModifier(libraryOfflineMovieFocusKey(download.downloadId)),
-                )
-            }
-        }
-
-        if (filter != UnifiedLibraryFilter.MOVIES) {
-            gridItems(visibleSeries, key = { "catalog-series:${it.seriesId}" }) { series ->
-                val seriesSourceId = sourceId ?: return@gridItems
-                val group = seriesGroupByIdentity["$seriesSourceId:${series.seriesId}"]
-                UnifiedSeriesCard(
-                    series = series,
-                    group = group,
-                    offlineMode = offlineOnly,
-                    onOpen = { onOpenCatalogSeries(seriesSourceId, series.seriesId, group) },
-                    onOpenOfflineSeries = onOpenOfflineSeries,
-                    modifier = itemModifier(
-                        libraryCatalogSeriesFocusKey(seriesSourceId, series.seriesId),
-                    ),
-                )
-            }
-            gridItems(orphanedOfflineSeries, key = { "offline-series:${it.key}" }) { group ->
-                LibrarySeriesCard(
-                    group = group,
-                    onOpenOfflineSeries = { onOpenOfflineSeries(group) },
-                    modifier = itemModifier(libraryOfflineSeriesFocusKey(group)),
-                )
+            UnifiedLibraryFilter.SERIES -> {
+                gridItems(visibleSeries, key = { "catalog-series:${it.seriesId}" }) { series ->
+                    val resolvedSourceId = sourceId ?: return@gridItems
+                    UnifiedSeriesCard(
+                        series = series,
+                        group = seriesGroupByIdentity["$resolvedSourceId:${series.seriesId}"],
+                        onOpen = { onOpenSeries(resolvedSourceId, series.seriesId) },
+                    )
+                }
             }
         }
     }
@@ -953,53 +583,62 @@ private fun UnifiedMovieCard(
     movie: VodMovie,
     download: OfflineDownload?,
     onOpen: () -> Unit,
-    onPlayOffline: (OfflineDownload) -> Unit,
-    onPause: (OfflineDownload) -> Unit,
-    onResume: (OfflineDownload) -> Unit,
-    onRetry: (OfflineDownload) -> Unit,
-    onRemove: (OfflineDownload) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
+    val progress = progressFraction(movie.positionMs, movie.durationMs)
+    val verifiedOffline = download?.libraryOfflinePresentation()?.verifiedOffline == true
+
+    Column(
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onOpen),
-        shape = RoundedCornerShape(10.dp),
-        tonalElevation = 0.dp,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Column(
-            modifier = Modifier.padding(7.dp),
-            verticalArrangement = Arrangement.spacedBy(5.dp),
+        RemotePoster(
+            url = movie.posterUrl,
+            title = movie.name,
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(OwnPlayMediaLayout.PosterAspectRatio),
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(3.dp),
         ) {
-            RemotePoster(
-                url = movie.posterUrl,
-                title = movie.name,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(2f / 3f),
-            )
-            Text(
-                text = movie.name,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (download?.libraryOfflinePresentation()?.verifiedOffline == true) {
-                LibraryOfflineBadge()
-            }
-            MovieStatusText(download = download)
-            download?.let { managedDownload ->
-                MovieDownloadActions(
-                    download = managedDownload,
-                    onPlay = onPlayOffline,
-                    onPause = onPause,
-                    onResume = onResume,
-                    onRetry = onRetry,
-                    onRemove = onRemove,
-                    modifier = Modifier.fillMaxWidth(),
+            if (progress != null && !movie.progressCompleted) {
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier.fillMaxSize(),
                 )
             }
+        }
+        Text(
+            text = movie.name,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        when {
+            movie.resumeAvailable -> Text(
+                text = continueWatchingResumeLabel(movie.positionMs, movie.durationMs),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                maxLines = 1,
+            )
+            movie.progressCompleted -> Text(
+                text = "Watched",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+            verifiedOffline -> Text(
+                text = "Available offline",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                maxLines = 1,
+            )
         }
     }
 }
@@ -1008,282 +647,46 @@ private fun UnifiedMovieCard(
 private fun UnifiedSeriesCard(
     series: SeriesSummary,
     group: LibrarySeriesGroup?,
-    offlineMode: Boolean,
     onOpen: () -> Unit,
-    onOpenOfflineSeries: (LibrarySeriesGroup) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val offlineEpisodes = group?.episodes?.count(OfflineDownload::countsForOfflineFilter) ?: 0
-    Surface(
+    val offlineEpisodes = group?.episodes?.count { episode ->
+        episode.libraryOfflinePresentation().verifiedOffline
+    } ?: 0
+
+    Column(
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onOpen),
-        shape = RoundedCornerShape(10.dp),
-        tonalElevation = 0.dp,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Column(
-            modifier = Modifier.padding(7.dp),
-            verticalArrangement = Arrangement.spacedBy(5.dp),
-        ) {
-            RemotePoster(
-                url = series.posterUrl,
-                title = series.name,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(2f / 3f),
-            )
+        RemotePoster(
+            url = series.posterUrl,
+            title = series.name,
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(OwnPlayMediaLayout.PosterAspectRatio),
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(3.dp),
+        )
+        Text(
+            text = series.name,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (offlineEpisodes > 0) {
             Text(
-                text = series.name,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            series.description?.trim()?.takeIf(String::isNotBlank)?.let { description ->
-                Text(
-                    text = description,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            if (offlineEpisodes > 0) {
-                LibraryOfflineBadge()
-            }
-            SeriesStatusText(
-                offlineEpisodes = offlineEpisodes,
-                offlineMode = offlineMode,
-            )
-            group?.let { managedGroup ->
-                Button(
-                    onClick = { onOpenOfflineSeries(managedGroup) },
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                ) {
-                    Icon(Icons.Filled.DownloadDone, contentDescription = null, modifier = Modifier.size(17.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Offline episodes", maxLines = 1, softWrap = false)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun OfflineOnlyMovieCard(
-    download: OfflineDownload,
-    onPlay: () -> Unit,
-    onRetry: () -> Unit,
-    onRemove: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(onClick = onPlay),
-        shape = RoundedCornerShape(10.dp),
-        tonalElevation = 0.dp,
-    ) {
-        Column(
-            modifier = Modifier.padding(7.dp),
-            verticalArrangement = Arrangement.spacedBy(5.dp),
-        ) {
-            RemotePoster(
-                url = download.posterUrl,
-                title = download.title,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(2f / 3f),
-            )
-            Text(
-                text = download.title,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            LibraryOfflineBadge()
-            Text(
-                text = "${movieOfflineLabel(download)} · no longer in the active catalog",
+                text = librarySeriesOfflineLabel(offlineEpisodes) ?: "Available offline",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
+                color = MaterialTheme.colorScheme.primary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                when (download.state) {
-                    DownloadStates.COMPLETED -> Button(onClick = onPlay) {
-                        Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(5.dp))
-                        Text("Play Offline")
-                    }
-                    DownloadStates.FAILED -> Button(onClick = onRetry) { Text("Retry") }
-                    else -> MovieStatusText(download = download)
-                }
-                Spacer(Modifier.weight(1f))
-                IconButton(onClick = onRemove) {
-                    Icon(Icons.Filled.Delete, contentDescription = "Remove download")
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun MovieDownloadActions(
-    download: OfflineDownload,
-    onPlay: (OfflineDownload) -> Unit,
-    onPause: (OfflineDownload) -> Unit,
-    onResume: (OfflineDownload) -> Unit,
-    onRetry: (OfflineDownload) -> Unit,
-    onRemove: (OfflineDownload) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        when (download.state) {
-            DownloadStates.COMPLETED -> Button(
-                onClick = { onPlay(download) },
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-            ) {
-                Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(17.dp))
-                Spacer(Modifier.width(4.dp))
-                Text("Play Offline", maxLines = 1, softWrap = false)
-            }
-            DownloadStates.DOWNLOADING,
-            DownloadStates.QUEUED,
-            -> FilledTonalButton(
-                onClick = { onPause(download) },
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-            ) {
-                Icon(Icons.Filled.Pause, contentDescription = null, modifier = Modifier.size(17.dp))
-                Spacer(Modifier.width(4.dp))
-                Text("Pause", maxLines = 1, softWrap = false)
-            }
-            DownloadStates.PAUSED -> FilledTonalButton(
-                onClick = { onResume(download) },
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-            ) {
-                Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(17.dp))
-                Spacer(Modifier.width(4.dp))
-                Text("Resume", maxLines = 1, softWrap = false)
-            }
-            DownloadStates.FAILED -> FilledTonalButton(
-                onClick = { onRetry(download) },
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-            ) {
-                Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(17.dp))
-                Spacer(Modifier.width(4.dp))
-                Text("Retry", maxLines = 1, softWrap = false)
-            }
-        }
-        Spacer(Modifier.weight(1f))
-        IconButton(onClick = { onRemove(download) }) {
-            Icon(Icons.Filled.Delete, contentDescription = "Remove download")
-        }
-    }
-}
-
-@Composable
-private fun MovieStatusText(download: OfflineDownload?) {
-    Text(
-        text = movieOfflineLabel(download),
-        style = MaterialTheme.typography.labelSmall,
-        color = movieStatusColor(download),
-        maxLines = 2,
-        overflow = TextOverflow.Ellipsis,
-    )
-}
-
-@Composable
-private fun SeriesStatusText(
-    offlineEpisodes: Int,
-    offlineMode: Boolean,
-) {
-    Text(
-        text = when {
-            offlineEpisodes > 0 -> requireNotNull(librarySeriesOfflineLabel(offlineEpisodes))
-            offlineMode -> "Not available offline"
-            else -> "Series"
-        },
-        style = MaterialTheme.typography.labelSmall,
-        color = if (offlineEpisodes > 0) {
-            MaterialTheme.colorScheme.primary
-        } else {
-            MaterialTheme.colorScheme.onSurfaceVariant
-        },
-        maxLines = 2,
-        overflow = TextOverflow.Ellipsis,
-    )
-}
-
-@Composable
-private fun movieStatusColor(download: OfflineDownload?) = when {
-    download == null -> MaterialTheme.colorScheme.onSurfaceVariant
-    download.isMissingFile() -> MaterialTheme.colorScheme.error
-    download.state == DownloadStates.FAILED -> MaterialTheme.colorScheme.error
-    else -> MaterialTheme.colorScheme.primary
-}
-
-private fun OfflineDownload.countsForOfflineFilter(): Boolean =
-    state == DownloadStates.COMPLETED && !isMissingFile()
-
-private fun OfflineDownload.isMissingFile(): Boolean =
-    state == DownloadStates.FAILED && failureReason == MISSING_FILE_REASON
-
-private fun movieOfflineLabel(download: OfflineDownload?): String = when {
-    download == null -> "Movie"
-    download.isMissingFile() -> "File missing · Download again"
-    download.state == DownloadStates.COMPLETED -> download.libraryOfflinePresentation().let { presentation ->
-        "${presentation.badgeLabel} · ${presentation.storageLabel}"
-    }
-    download.state == DownloadStates.DOWNLOADING -> "Downloading"
-    download.state == DownloadStates.QUEUED -> "Queued for download"
-    download.state == DownloadStates.PAUSED -> "Download paused"
-    download.state == DownloadStates.FAILED -> download.failureReason ?: "Download failed"
-    else -> "Movie"
-}
-
-private fun libraryCatalogMovieFocusKey(sourceId: String, movieId: String): String =
-    "movie:$sourceId:$movieId"
-
-private fun libraryOfflineMovieFocusKey(downloadId: String): String =
-    "offline-movie:$downloadId"
-
-private fun libraryCatalogSeriesFocusKey(sourceId: String, seriesId: String): String =
-    "series:$sourceId:$seriesId"
-
-private fun libraryOfflineSeriesFocusKey(group: LibrarySeriesGroup): String =
-    "offline-series:${group.key.sourceId}:${group.key.identity}"
-
-private fun libraryVisibleFocusKeys(
-    filter: UnifiedLibraryFilter,
-    sourceId: String?,
-    visibleMovies: List<VodMovie>,
-    orphanedOfflineMovies: List<OfflineDownload>,
-    visibleSeries: List<SeriesSummary>,
-    orphanedOfflineSeries: List<LibrarySeriesGroup>,
-): List<String> = buildList {
-    val resolvedSourceId = sourceId ?: return@buildList
-    if (filter != UnifiedLibraryFilter.SERIES) {
-        visibleMovies.forEach { movie ->
-            add(libraryCatalogMovieFocusKey(resolvedSourceId, movie.movieId))
-        }
-        orphanedOfflineMovies.forEach { download ->
-            add(libraryOfflineMovieFocusKey(download.downloadId))
-        }
-    }
-    if (filter != UnifiedLibraryFilter.MOVIES) {
-        visibleSeries.forEach { series ->
-            add(libraryCatalogSeriesFocusKey(resolvedSourceId, series.seriesId))
-        }
-        orphanedOfflineSeries.forEach { group ->
-            add(libraryOfflineSeriesFocusKey(group))
         }
     }
 }
@@ -1297,24 +700,3 @@ internal fun shouldShowMobileLibraryInitialLoading(
     !offlineOnly &&
         !hasItems &&
         (refreshing || initialRefreshPending)
-
-private suspend fun enqueueSeriesEpisode(
-    downloadRuntime: OfflineDownloadFeatureRuntime,
-    sourceId: String,
-    episode: SeriesEpisode,
-) {
-    downloadRuntime.enqueue(
-        OfflineDownloadSpec(
-            sourceId = sourceId,
-            mediaKind = DownloadMediaKinds.SERIES_EPISODE,
-            contentId = episode.episodeId,
-            providerStreamId = episode.providerEpisodeId,
-            title = episode.title,
-            seriesTitle = episode.seriesTitle,
-            seasonNumber = episode.seasonNumber,
-            episodeNumber = episode.episodeNumber,
-            posterUrl = episode.posterUrl,
-            containerExtension = episode.containerExtension,
-        ),
-    )
-}

@@ -14,16 +14,24 @@ class DownloadPlaybackBridgeTest {
         val firstOwner = Any()
         val secondOwner = Any()
         var playedDownloadId: String? = null
+        var startedFromBeginning = false
 
-        DownloadPlaybackBridge.register(firstOwner) { playedDownloadId = "first" }
-        DownloadPlaybackBridge.register(secondOwner) { download ->
+        DownloadPlaybackBridge.register(firstOwner) { _, _ -> playedDownloadId = "first" }
+        DownloadPlaybackBridge.register(secondOwner) { download, startFromBeginning ->
             playedDownloadId = download.downloadId
+            startedFromBeginning = startFromBeginning
         }
 
         DownloadPlaybackBridge.clear(firstOwner)
 
-        assertTrue(DownloadPlaybackBridge.request(sampleDownload("download-2")))
+        assertTrue(
+            DownloadPlaybackBridge.request(
+                download = sampleDownload("download-2"),
+                startFromBeginning = true,
+            ),
+        )
         assertEquals("download-2", playedDownloadId)
+        assertTrue(startedFromBeginning)
 
         DownloadPlaybackBridge.clear(secondOwner)
         assertFalse(DownloadPlaybackBridge.request(sampleDownload("download-3")))

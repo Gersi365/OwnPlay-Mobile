@@ -8,32 +8,62 @@ import org.junit.Test
 
 class LibraryPortraitPresentationContractTest {
     @Test
-    fun `Continue Watching precedes Library section controls`() {
+    fun `Library exposes Movies and Series only while Downloads stays primary navigation`() {
         val route = normalizedSource(
             sourceText("src/main/java/app/ownplay/player/ui/library/UnifiedLibraryRoute.kt"),
         )
-        val continueWatchingIndex = route.indexOf("LibraryUnifiedContinueWatchingStrip(")
-        val sectionControlsIndex = route.indexOf("items = UnifiedLibraryFilter.entries")
 
-        assertTrue(continueWatchingIndex >= 0)
-        assertTrue(sectionControlsIndex > continueWatchingIndex)
-        assertFalse(route.contains("LibraryMovieContinueWatchingStrip("))
-        assertFalse(route.contains("LibrarySeriesContinueWatchingStrip("))
+        assertTrue(route.contains("items = libraryCatalogSections"))
+        assertTrue(route.contains("UnifiedLibraryFilter.MOVIES -> \"Movies\""))
+        assertTrue(route.contains("UnifiedLibraryFilter.SERIES -> \"Series\""))
+        assertFalse(route.contains("UnifiedLibraryFilter.OFFLINE"))
+        assertFalse(route.contains("UnifiedLibraryFilter.OFFLINE -> \"Downloads\""))
     }
 
     @Test
-    fun `Library section order is Movies Series Downloads before Search`() {
+    fun `Library catalog uses shared poster density tokens`() {
         val route = normalizedSource(
             sourceText("src/main/java/app/ownplay/player/ui/library/UnifiedLibraryRoute.kt"),
         )
-        val sectionControlsIndex = route.indexOf("items = UnifiedLibraryFilter.entries")
-        val searchIndex = route.indexOf("item(key = \"library-search\")")
+
+        assertTrue(
+            route.contains(
+                "GridCells.Adaptive(minSize = OwnPlayMediaLayout.MinimumPosterWidthDp.dp)",
+            ),
+        )
+        assertTrue(
+            route.contains(
+                "Arrangement.spacedBy(OwnPlayMediaLayout.GridGapDp.dp)",
+            ),
+        )
+        assertTrue(route.contains("aspectRatio(OwnPlayMediaLayout.PosterAspectRatio)"))
+    }
+
+    @Test
+    fun `Library cards are poster first and transfer management is not embedded in grid cards`() {
+        val route = normalizedSource(
+            sourceText("src/main/java/app/ownplay/player/ui/library/UnifiedLibraryRoute.kt"),
+        )
+
+        assertTrue(route.contains("private fun UnifiedMovieCard("))
+        assertTrue(route.contains("private fun UnifiedSeriesCard("))
+        assertTrue(route.contains("Available offline"))
+        assertFalse(route.contains("MovieDownloadActions("))
+        assertFalse(route.contains("OfflineOnlyMovieCard("))
+        assertFalse(route.contains("Offline episodes"))
+    }
+
+    @Test
+    fun `unified Continue Watching remains available after Library browsing controls`() {
+        val route = normalizedSource(
+            sourceText("src/main/java/app/ownplay/player/ui/library/UnifiedLibraryRoute.kt"),
+        )
+        val sectionControlsIndex = route.indexOf("items = libraryCatalogSections")
+        val continueWatchingIndex = route.indexOf("LibraryUnifiedContinueWatchingStrip(")
 
         assertTrue(sectionControlsIndex >= 0)
-        assertTrue(searchIndex > sectionControlsIndex)
-        assertTrue(route.contains("UnifiedLibraryFilter.OFFLINE -> \"Downloads\""))
-        assertTrue(route.contains("UnifiedLibraryFilter.MOVIES -> \"Movies\""))
-        assertTrue(route.contains("UnifiedLibraryFilter.SERIES -> \"Series\""))
-        assertFalse(route.contains("\"Search Offline\""))
+        assertTrue(continueWatchingIndex > sectionControlsIndex)
+        assertFalse(route.contains("LibraryMovieContinueWatchingStrip("))
+        assertFalse(route.contains("LibrarySeriesContinueWatchingStrip("))
     }
 }
