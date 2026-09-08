@@ -32,13 +32,15 @@ class PortraitUiSimplificationContractTest {
     }
 
     @Test
-    fun `Library has Offline filter and no active view-mode selector`() {
+    fun `Library keeps Movies and Series without duplicating Downloads management`() {
         val library = sourceText(
             "src/main/java/app/ownplay/player/ui/library/UnifiedLibraryRoute.kt",
         )
 
         assertFalse(library.contains("UnifiedLibraryFilter.ALL"))
-        assertTrue(library.contains("UnifiedLibraryFilter.OFFLINE"))
+        assertTrue(library.contains("UnifiedLibraryFilter.MOVIES"))
+        assertTrue(library.contains("UnifiedLibraryFilter.SERIES"))
+        assertFalse(library.contains("UnifiedLibraryFilter.OFFLINE"))
         assertFalse(library.contains("ContentViewModeMenu"))
         assertFalse(library.contains("ContentViewModeStore"))
         assertFalse(library.contains("libraryViewMode"))
