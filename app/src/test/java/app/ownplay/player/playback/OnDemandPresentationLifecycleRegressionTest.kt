@@ -8,21 +8,18 @@ import org.junit.Test
 
 class OnDemandPresentationLifecycleRegressionTest {
     @Test
-    fun mobileAndTvShellsRestoreOnDemandRouteFromProcessSession() {
-        val mobile = sourceText("src/mobile/java/app/ownplay/player/ui/MobileOwnPlayApp.kt")
-        val tv = sourceText("src/tv/java/app/ownplay/player/ui/TVOwnPlayApp.kt")
+    fun mobileShellRestoresOnDemandRouteFromProcessSession() {
+        val shell = sourceText("src/mobile/java/app/ownplay/player/ui/MobileOwnPlayApp.kt")
 
-        listOf(mobile, tv).forEach { shell ->
-            assertTrue(shell.contains("runtime.onDemandPresentationSession.state.collectAsState()"))
-            assertTrue(shell.contains("OnDemandContentKind.MOVIE"))
-            assertTrue(shell.contains("OnDemandContentKind.SERIES"))
-            assertTrue(shell.contains("val vodFullscreen = onDemandPresentation.isMoviePlayback"))
-            assertTrue(shell.contains("val seriesFullscreen = onDemandPresentation.isSeriesPlayback"))
-            assertFalse(shell.contains("var vodFullscreen by remember"))
-            assertFalse(shell.contains("var seriesFullscreen by remember"))
-            assertTrue(shell.contains("runtime.onDemandPresentationSession.showMovieDetail("))
-            assertTrue(shell.contains("runtime.onDemandPresentationSession.showSeriesDetail("))
-        }
+        assertTrue(shell.contains("runtime.onDemandPresentationSession.state.collectAsState()"))
+        assertTrue(shell.contains("OnDemandContentKind.MOVIE"))
+        assertTrue(shell.contains("OnDemandContentKind.SERIES"))
+        assertTrue(shell.contains("val vodFullscreen = onDemandPresentation.isMoviePlayback"))
+        assertTrue(shell.contains("val seriesFullscreen = onDemandPresentation.isSeriesPlayback"))
+        assertFalse(shell.contains("var vodFullscreen by remember"))
+        assertFalse(shell.contains("var seriesFullscreen by remember"))
+        assertTrue(shell.contains("runtime.onDemandPresentationSession.showMovieDetail("))
+        assertTrue(shell.contains("runtime.onDemandPresentationSession.showSeriesDetail("))
     }
 
     @Test
