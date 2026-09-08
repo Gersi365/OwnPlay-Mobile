@@ -34,13 +34,24 @@ class PlaybackProgressStartIntentContractTest {
     }
 
     @Test
-    fun `offline playback still derives resume position without clearing persisted progress`() {
-        val library = sourceText("src/main/java/app/ownplay/player/ui/library/UnifiedLibraryRoute.kt")
+    fun `Downloads exposes offline resume and transient restart without clearing saved progress`() {
+        val downloads = sourceText("src/main/java/app/ownplay/player/ui/DownloadsSettingsScreen.kt")
+        val activity = sourceText("src/main/java/app/ownplay/player/MainActivity.kt")
         val playback = sourceText("src/main/java/app/ownplay/player/ui/library/LibraryPlaybackScreen.kt")
 
-        assertTrue(library.contains("downloadRuntime.playbackProgress(download.downloadId)"))
-        assertTrue(library.contains("takeIf { !it.completed }"))
+        assertTrue(downloads.contains("runtime.playbackProgress(download.downloadId)"))
+        assertTrue(downloads.contains("\"Resume Offline\""))
+        assertTrue(downloads.contains("Text(\"Play from beginning\")"))
+        assertTrue(downloads.contains("startFromBeginning = startFromBeginning"))
+
+        assertTrue(activity.contains("downloadRuntime.playbackProgress(download.downloadId)"))
+        assertTrue(activity.contains("if (startFromBeginning)"))
+        assertTrue(activity.contains("0L"))
+        assertTrue(activity.contains("takeIf { !it.completed }"))
         assertTrue(playback.contains("session.initialPositionMs"))
+
+        assertFalse(downloads.contains("clearProgress"))
+        assertFalse(activity.contains("clearProgress"))
         assertFalse(playback.contains("clearProgress"))
     }
 }
