@@ -80,6 +80,15 @@ class ShellLifecycleRegressionTest {
     }
 
     @Test
+    fun mobileLiveBrowsingHasNoLandscapePresentationBranch() {
+        val source = sourceText("src/mobile/java/app/ownplay/player/ui/TargetLiveRoute.kt")
+
+        assertFalse(source.contains("Configuration.ORIENTATION_LANDSCAPE"))
+        assertFalse(source.contains("LocalConfiguration"))
+        assertFalse(source.contains("isLandscape"))
+    }
+
+    @Test
     fun mobileBackHierarchyFallsThroughToExitOnlyAtLiveRoot() {
         listOf(
             "src/mobile/java/app/ownplay/player/ui/MobileOwnPlayApp.kt" to "MobileSection",
