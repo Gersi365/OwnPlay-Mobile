@@ -71,6 +71,24 @@ class MobileLegacyPresentationPurgeContractTest {
         assertFalse(series.contains("SeriesCatalogPane"))
     }
 
+    @Test
+    fun liveRouteDoesNotRetainDeadOnDemandNavigationCallbacks() {
+        val shell = sourceFile("src/mobile/java/app/ownplay/player/ui/MobileOwnPlayApp.kt").readText()
+        val liveEntry = sourceFile("src/mobile/java/app/ownplay/player/ui/LiveRoute.kt").readText()
+        val liveTarget = sourceFile("src/mobile/java/app/ownplay/player/ui/TargetLiveRoute.kt").readText()
+        val liveSection = shell
+            .substringAfter("MobileSection.LIVE -> {")
+            .substringBefore("MobileSection.LIBRARY ->")
+
+        listOf(liveEntry, liveTarget).forEach { source ->
+            assertFalse(source.contains("onOpenMovies"))
+            assertFalse(source.contains("onOpenSeries"))
+        }
+        assertFalse(liveSection.contains("onOpenMovies ="))
+        assertFalse(liveSection.contains("onOpenSeries ="))
+        assertTrue(liveSection.contains("onOpenSettings = ::openSettings"))
+    }
+
     private fun sourceFile(relativePath: String): File {
         val direct = File(relativePath)
         if (direct.exists()) return direct

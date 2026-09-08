@@ -127,7 +127,6 @@ private sealed interface MobileChannelLogoState {
  * only optional secondary line. Provider category names are deliberately never rendered inside a
  * channel row/card.
  */
-@Suppress("UNUSED_PARAMETER")
 @Composable
 internal fun TargetLiveRoute(
     runtime: OwnPlayAppRuntime,
@@ -139,8 +138,6 @@ internal fun TargetLiveRoute(
     onPlay: () -> Unit,
     onPause: () -> Unit,
     onRetry: () -> Unit,
-    onOpenMovies: () -> Unit,
-    onOpenSeries: () -> Unit,
     onOpenSettings: () -> Unit,
     onPreviewRequested: (LivePlaybackSelection) -> Unit,
     onPreviewClosed: () -> Unit,

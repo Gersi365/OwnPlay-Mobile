@@ -483,8 +483,6 @@ private fun MobileOwnPlayAppContent(
                             onPlay = runtime.playbackController::play,
                             onPause = runtime.playbackController::pause,
                             onRetry = runtime.playbackController::retry,
-                            onOpenMovies = { openSection(MobileSection.MOVIES) },
-                            onOpenSeries = { openSection(MobileSection.SERIES) },
                             onOpenSettings = ::openSettings,
                             onPreviewRequested = { selection ->
                                 runtime.livePlaybackPresentationSession.showPreview(selection)
