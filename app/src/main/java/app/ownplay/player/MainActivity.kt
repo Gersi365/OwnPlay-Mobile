@@ -135,7 +135,7 @@ class MainActivity : ComponentActivity() {
                 if (downloadRuntime == null) {
                     onDispose { }
                 } else {
-                    DownloadPlaybackBridge.register(downloadPlaybackOwner) { download ->
+                    DownloadPlaybackBridge.register(downloadPlaybackOwner) { download, startFromBeginning ->
                         activityScope.launch {
                             val request = downloadRuntime.playbackRequest(download.downloadId)
                             if (request == null) {
@@ -151,11 +151,15 @@ class MainActivity : ComponentActivity() {
                             runtime.playbackController.start(request)
                             downloadPlaybackSession = LibraryPlaybackSession(
                                 download = download,
-                                initialPositionMs = progress
-                                    ?.takeIf { !it.completed }
-                                    ?.positionMs
-                                    ?.coerceAtLeast(0L)
-                                    ?: 0L,
+                                initialPositionMs = if (startFromBeginning) {
+                                    0L
+                                } else {
+                                    progress
+                                        ?.takeIf { !it.completed }
+                                        ?.positionMs
+                                        ?.coerceAtLeast(0L)
+                                        ?: 0L
+                                },
                             )
                         }
                     }
