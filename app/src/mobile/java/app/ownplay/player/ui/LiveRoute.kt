@@ -9,6 +9,7 @@ import app.ownplay.player.playback.PlaybackVideoOutput
 import app.ownplay.player.source.SourceSyncState
 
 /** Mobile flavor entry point for the rebuilt Live surface. */
+@Suppress("UNUSED_PARAMETER")
 @Composable
 internal fun LiveRoute(
     runtime: OwnPlayAppRuntime,
@@ -37,8 +38,8 @@ internal fun LiveRoute(
     onPlay = onPlay,
     onPause = onPause,
     onRetry = onRetry,
-    onOpenMovies = onOpenMovies,
-    onOpenSeries = onOpenSeries,
+    onOpenMovies = {},
+    onOpenSeries = {},
     onOpenSettings = onOpenSettings,
     onPreviewRequested = onPreviewRequested,
     onPreviewClosed = onPreviewClosed,
