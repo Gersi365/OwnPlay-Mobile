@@ -24,7 +24,6 @@ import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -152,6 +151,12 @@ private fun MobileVNextOwnPlayAppContent(
                 onDemandPresentation.returnToLibraryOnDetailBack,
         )
     }
+    var movieDetailReturnDestination by remember {
+        mutableStateOf(MobileShellDestination.LIBRARY)
+    }
+    var seriesDetailReturnDestination by remember {
+        mutableStateOf(MobileShellDestination.LIBRARY)
+    }
     var libraryFullscreen by remember { mutableStateOf(false) }
     val vodFullscreen = onDemandPresentation.isMoviePlayback
     val seriesFullscreen = onDemandPresentation.isSeriesPlayback
@@ -240,10 +245,12 @@ private fun MobileVNextOwnPlayAppContent(
         if (target != MobileShellDestination.MOVIES && !preserveCurrentMediaRoute) {
             requestedVodMovieId = null
             movieDetailReturnToLibrary = false
+            movieDetailReturnDestination = MobileShellDestination.LIBRARY
         }
         if (target != MobileShellDestination.SERIES && !preserveCurrentMediaRoute) {
             requestedSeriesId = null
             seriesDetailReturnToLibrary = false
+            seriesDetailReturnDestination = MobileShellDestination.LIBRARY
         }
         navigation = navigation.open(target)
     }
@@ -308,6 +315,8 @@ private fun MobileVNextOwnPlayAppContent(
             requestedSeriesId = null
             movieDetailReturnToLibrary = false
             seriesDetailReturnToLibrary = false
+            movieDetailReturnDestination = MobileShellDestination.LIBRARY
+            seriesDetailReturnDestination = MobileShellDestination.LIBRARY
         }
     }
 
@@ -408,10 +417,34 @@ private fun MobileVNextOwnPlayAppContent(
         ) {
             when (section) {
                 MobileShellDestination.HOME -> MobileVNextHomeRoute(
+                    sourceId = activeSourceId,
                     activeSourceName = activeSummary?.name,
+                    onOpenMovieDetails = { sourceId, movieId ->
+                        rememberActiveSource(sourceId)
+                        runtime.onDemandPresentationSession.showMovieDetail(
+                            sourceId = sourceId,
+                            movieId = movieId,
+                            returnToLibraryOnDetailBack = true,
+                        )
+                        requestedVodMovieId = movieId
+                        movieDetailReturnToLibrary = true
+                        movieDetailReturnDestination = MobileShellDestination.HOME
+                        openSection(MobileShellDestination.MOVIES)
+                    },
+                    onOpenSeriesDetails = { sourceId, seriesId ->
+                        rememberActiveSource(sourceId)
+                        runtime.onDemandPresentationSession.showSeriesDetail(
+                            sourceId = sourceId,
+                            seriesId = seriesId,
+                            returnToLibraryOnDetailBack = true,
+                        )
+                        requestedSeriesId = seriesId
+                        seriesDetailReturnToLibrary = true
+                        seriesDetailReturnDestination = MobileShellDestination.HOME
+                        openSection(MobileShellDestination.SERIES)
+                    },
                     onOpenLive = { openSection(MobileShellDestination.LIVE) },
                     onOpenLibrary = { openSection(MobileShellDestination.LIBRARY) },
-                    onOpenDownloads = { openSection(MobileShellDestination.DOWNLOADS) },
                     onOpenSettings = { openSection(MobileShellDestination.SETTINGS) },
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -478,6 +511,7 @@ private fun MobileVNextOwnPlayAppContent(
                         )
                         requestedVodMovieId = movieId
                         movieDetailReturnToLibrary = true
+                        movieDetailReturnDestination = MobileShellDestination.LIBRARY
                         openSection(MobileShellDestination.MOVIES)
                     },
                     onOpenSeriesDetails = { sourceId, seriesId ->
@@ -489,6 +523,7 @@ private fun MobileVNextOwnPlayAppContent(
                         )
                         requestedSeriesId = seriesId
                         seriesDetailReturnToLibrary = true
+                        seriesDetailReturnDestination = MobileShellDestination.LIBRARY
                         openSection(MobileShellDestination.SERIES)
                     },
                     onFullscreenStateChanged = { fullscreen ->
@@ -506,7 +541,7 @@ private fun MobileVNextOwnPlayAppContent(
                     requestedMovieId = requestedVodMovieId,
                     onRequestedMovieConsumed = { requestedVodMovieId = null },
                     returnToLibraryOnDetailBack = movieDetailReturnToLibrary,
-                    onReturnToLibrary = { openSection(MobileShellDestination.LIBRARY) },
+                    onReturnToLibrary = { openSection(movieDetailReturnDestination) },
                     onOpenLive = { openSection(MobileShellDestination.LIVE) },
                     onOpenSeries = { openSection(MobileShellDestination.SERIES) },
                     onOpenSettings = { openSection(MobileShellDestination.SETTINGS) },
@@ -520,7 +555,7 @@ private fun MobileVNextOwnPlayAppContent(
                     requestedSeriesId = requestedSeriesId,
                     onRequestedSeriesConsumed = { requestedSeriesId = null },
                     returnToLibraryOnDetailBack = seriesDetailReturnToLibrary,
-                    onReturnToLibrary = { openSection(MobileShellDestination.LIBRARY) },
+                    onReturnToLibrary = { openSection(seriesDetailReturnDestination) },
                     onOpenSettings = { openSection(MobileShellDestination.SETTINGS) },
                     onFullscreenStateChanged = onPlaybackFullscreenChanged,
                 )
@@ -689,91 +724,6 @@ private fun MobileVNextPrimaryNavigationBar(
                 alwaysShowLabel = true,
                 colors = colors,
             )
-        }
-    }
-}
-
-@Composable
-private fun MobileVNextHomeRoute(
-    activeSourceName: String?,
-    onOpenLive: () -> Unit,
-    onOpenLibrary: () -> Unit,
-    onOpenDownloads: () -> Unit,
-    onOpenSettings: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier
-            .padding(horizontal = OwnPlaySpacing.Lg, vertical = OwnPlaySpacing.Xl),
-        verticalArrangement = Arrangement.spacedBy(OwnPlaySpacing.Lg),
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(OwnPlaySpacing.Xs)) {
-            Text(
-                text = "Home",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                text = activeSourceName?.let { "Ready · $it" }
-                    ?: "Connect a source to start browsing your media.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-
-        if (activeSourceName == null) {
-            FilledTonalButton(onClick = onOpenSettings) {
-                Text("Open Settings")
-            }
-        } else {
-            MobileHomeAction(
-                title = "Library",
-                detail = "Browse movies and series",
-                icon = { Icon(Icons.Filled.VideoLibrary, contentDescription = null) },
-                onClick = onOpenLibrary,
-            )
-            MobileHomeAction(
-                title = "Live",
-                detail = "Open channels and EPG",
-                icon = { Icon(Icons.Filled.LiveTv, contentDescription = null) },
-                onClick = onOpenLive,
-            )
-            MobileHomeAction(
-                title = "Downloads",
-                detail = "Manage offline media",
-                icon = { Icon(Icons.Filled.Download, contentDescription = null) },
-                onClick = onOpenDownloads,
-            )
-        }
-    }
-}
-
-@Composable
-private fun MobileHomeAction(
-    title: String,
-    detail: String,
-    icon: @Composable () -> Unit,
-    onClick: () -> Unit,
-) {
-    FilledTonalButton(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(OwnPlaySpacing.Md),
-        ) {
-            icon()
-            Column(modifier = Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleMedium)
-                Text(
-                    detail,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
         }
     }
 }
