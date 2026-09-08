@@ -46,6 +46,7 @@ import app.ownplay.player.series.SeriesEpisode
 import app.ownplay.player.series.SeriesSeason
 import app.ownplay.player.series.SeriesSummary
 import app.ownplay.player.source.SourceError
+import app.ownplay.player.ui.OnDemandPlaybackStartMode
 import app.ownplay.player.ui.vod.RemotePoster
 
 @Composable
@@ -169,7 +170,7 @@ internal fun SeriesDetailsPane(
                                     item.contentId == selectedEpisode.episodeId
                             },
                             playFocusRequester = primaryActionFocusRequester,
-                            onPlay = { onPlay(selectedEpisode) },
+                            onPlay = { mode -> onPlay(selectedEpisode.forPlaybackStart(mode)) },
                             onDownload = { onDownload(selectedEpisode) },
                             onPauseDownload = onPauseDownload,
                             onResumeDownload = onResumeDownload,
@@ -223,7 +224,7 @@ internal fun SeriesDetailsPane(
                                         } else {
                                             null
                                         },
-                                        onPlay = { onPlay(episode) },
+                                        onPlay = { mode -> onPlay(episode.forPlaybackStart(mode)) },
                                         onDownload = { onDownload(episode) },
                                         onPauseDownload = onPauseDownload,
                                         onResumeDownload = onResumeDownload,
@@ -241,6 +242,21 @@ internal fun SeriesDetailsPane(
                             selected = selected,
                             details = loaded,
                         )
+                        latestIncompleteEpisode(loaded)?.let { resumeEpisode ->
+                            Button(
+                                onClick = {
+                                    onPlay(
+                                        resumeEpisode.forPlaybackStart(
+                                            OnDemandPlaybackStartMode.RESUME,
+                                        ),
+                                    )
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp),
+                            ) {
+                                Text(seriesResumeLabel(resumeEpisode))
+                            }
+                        }
                         Text(
                             "Seasons",
                             style = MaterialTheme.typography.titleMedium,
@@ -393,7 +409,7 @@ private fun SeriesEpisodeDetailsPane(
     episode: SeriesEpisode,
     download: OfflineDownload?,
     playFocusRequester: FocusRequester,
-    onPlay: () -> Unit,
+    onPlay: (OnDemandPlaybackStartMode) -> Unit,
     onDownload: () -> Unit,
     onPauseDownload: (OfflineDownload) -> Unit,
     onResumeDownload: (OfflineDownload) -> Unit,
@@ -479,7 +495,7 @@ private fun EpisodeRow(
     onOpen: (() -> Unit)? = null,
     showHeader: Boolean = true,
     playFocusRequester: FocusRequester? = null,
-    onPlay: () -> Unit,
+    onPlay: (OnDemandPlaybackStartMode) -> Unit,
     onDownload: () -> Unit,
     onPauseDownload: (OfflineDownload) -> Unit,
     onResumeDownload: (OfflineDownload) -> Unit,
@@ -545,8 +561,13 @@ private fun EpisodeRow(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                val primaryStartMode = if (episode.resumeAvailable) {
+                    OnDemandPlaybackStartMode.RESUME
+                } else {
+                    OnDemandPlaybackStartMode.FROM_BEGINNING
+                }
                 Button(
-                    onClick = onPlay,
+                    onClick = { onPlay(primaryStartMode) },
                     modifier = playFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier,
                     shape = RoundedCornerShape(10.dp),
                 ) {
@@ -558,6 +579,13 @@ private fun EpisodeRow(
                             else -> "Play"
                         },
                     )
+                }
+                if (episode.resumeAvailable) {
+                    TextButton(
+                        onClick = { onPlay(OnDemandPlaybackStartMode.FROM_BEGINNING) },
+                    ) {
+                        Text("Play from beginning")
+                    }
                 }
                 if (!isTelevision && !offlineCopyAvailable) {
                     Button(
@@ -590,9 +618,6 @@ private fun EpisodeRow(
                     IconButton(onClick = { onRemoveDownload(download) }) {
                         Icon(Icons.Filled.Delete, contentDescription = "Remove episode download")
                     }
-                }
-                if ((episode.positionMs ?: 0L) > 0L) {
-                    TextButton(onClick = onClearProgress) { Text("Clear") }
                 }
             }
             if (!isTelevision && offlineCopyAvailable) {
@@ -635,6 +660,30 @@ private fun EpisodeRow(
         }
     }
 }
+
+private fun SeriesEpisode.forPlaybackStart(mode: OnDemandPlaybackStartMode): SeriesEpisode = when (mode) {
+    OnDemandPlaybackStartMode.RESUME -> this
+    OnDemandPlaybackStartMode.FROM_BEGINNING -> copy(
+        positionMs = 0L,
+        progressCompleted = false,
+    )
+}
+
+private fun latestIncompleteEpisode(details: SeriesDetails): SeriesEpisode? =
+    details.seasons
+        .asSequence()
+        .flatMap { season -> season.episodes.asSequence() }
+        .filter(SeriesEpisode::resumeAvailable)
+        .maxWithOrNull(
+            compareBy<SeriesEpisode> { episode -> episode.progressUpdatedAtEpochMillis ?: Long.MIN_VALUE }
+                .thenBy(SeriesEpisode::seasonNumber)
+                .thenBy(SeriesEpisode::episodeNumber)
+                .thenBy(SeriesEpisode::episodeId),
+        )
+
+private fun seriesResumeLabel(episode: SeriesEpisode): String =
+    "Resume S${episode.seasonNumber.toString().padStart(2, '0')} " +
+        "E${episode.episodeNumber.toString().padStart(2, '0')}"
 
 private fun seriesDownloadProgressLabel(download: OfflineDownload): String {
     val downloaded = seriesHumanBytes(download.bytesDownloaded)
