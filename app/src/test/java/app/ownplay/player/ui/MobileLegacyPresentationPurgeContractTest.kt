@@ -9,9 +9,11 @@ class MobileLegacyPresentationPurgeContractTest {
     @Test
     fun dormantLegacyPresentationFilesAreNotRetained() {
         val removed = listOf(
+            "src/main/java/app/ownplay/player/personalization/AppDeviceProfileStore.kt",
             "src/main/java/app/ownplay/player/ui/OwnPlayApp.kt",
             "src/main/java/app/ownplay/player/ui/OrientationSetupScreen.kt",
             "src/main/java/app/ownplay/player/ui/PlaybackOriginBadge.kt",
+            "src/main/java/app/ownplay/player/ui/MobileStartupLoadingSurface.kt",
             "src/main/java/app/ownplay/player/ui/library/UnifiedLibraryRoute.kt",
             "src/main/java/app/ownplay/player/ui/library/LibraryOfflinePresentation.kt",
             "src/main/java/app/ownplay/player/ui/library/LibraryPlaybackPresentationSession.kt",
@@ -20,6 +22,10 @@ class MobileLegacyPresentationPurgeContractTest {
             "src/main/java/app/ownplay/player/ui/live/PortraitLiveViewModes.kt",
             "src/main/java/app/ownplay/player/ui/live/LiveBrowseHierarchy.kt",
             "src/main/java/app/ownplay/player/ui/live/LiveBrowseScreen.kt",
+            "src/main/java/app/ownplay/player/ui/tv/TvPlaybackLifecyclePolicy.kt",
+            "src/main/java/app/ownplay/player/ui/tv/TvRemoteActionGuard.kt",
+            "src/main/java/app/ownplay/player/ui/tv/TvRemoteIndication.kt",
+            "src/main/java/app/ownplay/player/ui/tv/TvRemoteKeySuppression.kt",
             "src/main/java/app/ownplay/player/ui/view/ContentViewMode.kt",
         )
 
@@ -73,6 +79,21 @@ class MobileLegacyPresentationPurgeContractTest {
         assertFalse(activity.contains("updateFullscreenSensorRotationEnabled"))
         assertFalse(root.contains("FocusDirection"))
         assertFalse(root.contains("moveFocus"))
+    }
+
+    @Test
+    fun mobileThemeAndPlaybackBridgeDoNotRetainTvProfileState() {
+        val theme = sourceFile("src/main/java/app/ownplay/player/ui/theme/Theme.kt").readText()
+        val bridge = sourceFile(
+            "src/main/java/app/ownplay/player/playback/PlaybackInteractionBridge.kt",
+        ).readText()
+
+        listOf("AppDeviceProfile", "TvRemoteIndication", "UI_MODE_TYPE_TELEVISION").forEach {
+            assertFalse(theme.contains(it))
+        }
+        assertFalse(theme.contains("CompositionLocalProvider"))
+        assertFalse(bridge.contains("dpadMode"))
+        assertFalse(bridge.contains("setDpadMode"))
     }
 
     @Test
