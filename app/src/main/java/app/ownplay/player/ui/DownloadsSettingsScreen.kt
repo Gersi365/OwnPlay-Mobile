@@ -54,10 +54,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.ownplay.player.download.OfflineDownload
 import app.ownplay.player.download.OfflineDownloadFeatureRuntime
+import app.ownplay.player.download.OfflinePlaybackProgress
 import app.ownplay.player.download.queuedDownloadStatusLabel
 import app.ownplay.player.persistence.download.DownloadMediaKinds
 import app.ownplay.player.persistence.download.DownloadStates
 import kotlinx.coroutines.launch
+
+private const val OFFLINE_RESUME_MIN_POSITION_MILLIS = 5_000L
 
 @Composable
 internal fun DownloadsSettingsScreen(
@@ -77,6 +80,13 @@ internal fun DownloadsSettingsScreen(
     }
     val downloads by runtime.observeAll().collectAsState(initial = emptyList())
     val downloadIds = remember(downloads) { downloads.map { it.downloadId } }
+    val completedDownloadIds = remember(downloads) {
+        downloads
+            .asSequence()
+            .filter { it.state == DownloadStates.COMPLETED }
+            .map { it.downloadId }
+            .toList()
+    }
     val downloadListState = rememberLazyListState()
     val downloadItemFocusRequester = remember { FocusRequester() }
     val focusReturnOwner = remember { Any() }
@@ -86,6 +96,16 @@ internal fun DownloadsSettingsScreen(
     var focusRequestGeneration by remember { mutableIntStateOf(0) }
     var rememberedDownloadId by remember { mutableStateOf<String?>(null) }
     var initialDownloadFocusRequested by remember { mutableStateOf(false) }
+    var resumeOfflineDownloadIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+
+    suspend fun refreshResumeAvailability(downloadId: String) {
+        val resumeAvailable = offlineResumeAvailable(runtime.playbackProgress(downloadId))
+        resumeOfflineDownloadIds = if (resumeAvailable) {
+            resumeOfflineDownloadIds + downloadId
+        } else {
+            resumeOfflineDownloadIds - downloadId
+        }
+    }
 
     pendingRemoval?.let { download ->
         DownloadRemovalConfirmationDialog(
@@ -98,9 +118,20 @@ internal fun DownloadsSettingsScreen(
         )
     }
 
+    LaunchedEffect(completedDownloadIds) {
+        resumeOfflineDownloadIds = buildSet {
+            completedDownloadIds.forEach { downloadId ->
+                if (offlineResumeAvailable(runtime.playbackProgress(downloadId))) {
+                    add(downloadId)
+                }
+            }
+        }
+    }
+
     DisposableEffect(isTelevision, focusReturnOwner) {
-        if (isTelevision) {
-            DownloadPlaybackBridge.registerFocusReturn(focusReturnOwner) { downloadId ->
+        DownloadPlaybackBridge.registerFocusReturn(focusReturnOwner) { downloadId ->
+            scope.launch { refreshResumeAvailability(downloadId) }
+            if (isTelevision) {
                 focusDownloadId = downloadId
                 focusRequestGeneration += 1
             }
@@ -241,6 +272,7 @@ internal fun DownloadsSettingsScreen(
             items(downloads, key = { it.downloadId }) { download ->
                 DownloadRow(
                     download = download,
+                    resumeAvailable = download.downloadId in resumeOfflineDownloadIds,
                     primaryActionFocusRequester = downloadItemFocusRequester
                         .takeIf { focusDownloadId == download.downloadId },
                     onFocusWithin = { rememberedDownloadId = download.downloadId },
@@ -266,6 +298,7 @@ internal fun DownloadsSettingsScreen(
 @Composable
 private fun DownloadRow(
     download: OfflineDownload,
+    resumeAvailable: Boolean,
     primaryActionFocusRequester: FocusRequester?,
     onFocusWithin: () -> Unit,
     onPlayOffline: () -> Unit,
@@ -348,7 +381,7 @@ private fun DownloadRow(
                             contentDescription = null,
                             modifier = Modifier.padding(end = 4.dp),
                         )
-                        Text("Play Offline")
+                        Text(completedOfflineActionLabel(resumeAvailable))
                     }
                     DownloadStates.FAILED -> IconButton(onClick = onRetry, modifier = primaryActionModifier) {
                         Icon(Icons.Filled.Refresh, contentDescription = "Retry download")
@@ -413,6 +446,14 @@ private fun DownloadRow(
         }
     }
 }
+
+internal fun offlineResumeAvailable(progress: OfflinePlaybackProgress?): Boolean =
+    progress != null &&
+        !progress.completed &&
+        progress.positionMs > OFFLINE_RESUME_MIN_POSITION_MILLIS
+
+internal fun completedOfflineActionLabel(resumeAvailable: Boolean): String =
+    if (resumeAvailable) "Resume Offline" else "Play Offline"
 
 private fun downloadSecondaryLabel(download: OfflineDownload): String {
     if (download.mediaKind != DownloadMediaKinds.SERIES_EPISODE) return "Movie"
