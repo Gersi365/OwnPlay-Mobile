@@ -64,7 +64,7 @@ import app.ownplay.player.source.SourceSyncState
 import app.ownplay.player.source.selection.ActivePlaylistSelection
 import app.ownplay.player.source.selection.ActivePlaylistStore
 import app.ownplay.player.source.selection.resolveActivePlaylistId
-import app.ownplay.player.ui.library.UnifiedLibraryRoute
+import app.ownplay.player.ui.library.MobileLibraryRoute
 import app.ownplay.player.ui.series.SeriesRoute
 import app.ownplay.player.ui.vod.VodRoute
 import kotlinx.coroutines.launch
@@ -159,7 +159,6 @@ private fun MobileOwnPlayAppContent(
                 onDemandPresentation.returnToLibraryOnDetailBack,
         )
     }
-    var libraryFullscreen by remember { mutableStateOf(false) }
     val vodFullscreen = onDemandPresentation.isMoviePlayback
     val seriesFullscreen = onDemandPresentation.isSeriesPlayback
     val activeSelection = livePresentation.selection
@@ -346,8 +345,7 @@ private fun MobileOwnPlayAppContent(
         previewActive ||
             fullscreenSelection != null ||
             vodFullscreen ||
-            seriesFullscreen ||
-            libraryFullscreen
+            seriesFullscreen
     val observedLiveTransitionTarget =
         fullscreenSelection?.let(LivePlaybackTransitionTarget::fullscreen)
             ?: if (previewActive) {
@@ -403,7 +401,7 @@ private fun MobileOwnPlayAppContent(
             section == MobileSection.MOVIES ||
             section == MobileSection.SERIES
     val hidePrimaryNavigation =
-        vodFullscreen || seriesFullscreen || libraryFullscreen || section == MobileSection.SETTINGS
+        vodFullscreen || seriesFullscreen || section == MobileSection.SETTINGS
     val showShellHeader =
         section == MobileSection.HOME ||
             section == MobileSection.LIBRARY ||
@@ -515,8 +513,7 @@ private fun MobileOwnPlayAppContent(
                     }
                 }
 
-                MobileSection.LIBRARY -> UnifiedLibraryRoute(
-                    runtime = runtime,
+                MobileSection.LIBRARY -> MobileLibraryRoute(
                     sourceId = activeSourceId,
                     sourceKind = activeSummary?.sourceKind,
                     onOpenMovieDetails = { sourceId, movieId ->
@@ -540,10 +537,6 @@ private fun MobileOwnPlayAppContent(
                         requestedSeriesId = seriesId
                         seriesDetailReturnToLibrary = true
                         openSection(MobileSection.SERIES)
-                    },
-                    onFullscreenStateChanged = { fullscreen ->
-                        libraryFullscreen = fullscreen
-                        onPlaybackFullscreenChanged(fullscreen)
                     },
                 )
 
@@ -583,8 +576,7 @@ private fun MobileOwnPlayAppContent(
                     hasActivePlayback =
                         activeSelection != null ||
                             vodFullscreen ||
-                            seriesFullscreen ||
-                            libraryFullscreen,
+                            seriesFullscreen,
                     onOpenLive = { openSection(MobileSection.LIVE) },
                     onOpenSourceInLive = { sourceId ->
                         if (sourceId != activeSourceId && activeSelection != null) {
@@ -612,7 +604,7 @@ private fun MobileOwnPlayAppContent(
             val resolvedOrigin = playbackOrigin
             if (
                 resolvedOrigin != null &&
-                (vodFullscreen || seriesFullscreen || libraryFullscreen)
+                (vodFullscreen || seriesFullscreen)
             ) {
                 PlaybackOriginBadge(origin = resolvedOrigin)
             }
