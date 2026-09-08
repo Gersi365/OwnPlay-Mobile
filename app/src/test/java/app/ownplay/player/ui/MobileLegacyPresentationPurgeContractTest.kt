@@ -45,8 +45,8 @@ class MobileLegacyPresentationPurgeContractTest {
         val activity = sourceFile("src/main/java/app/ownplay/player/MainActivity.kt").readText()
         val management = sourceFile("src/main/java/app/ownplay/player/ui/LiveManagementScreen.kt").readText()
 
-        assertTrue(activity.contains("MobileStartupLoadingSurface()"))
         assertFalse(activity.contains("OrientationSetupLoadingSurface"))
+        assertFalse(activity.contains("MobileStartupLoadingSurface"))
         assertTrue(management.contains("Visible Categories"))
         assertTrue(management.contains("Hidden Categories"))
         assertTrue(management.contains("Custom Groups"))
@@ -55,6 +55,24 @@ class MobileLegacyPresentationPurgeContractTest {
         assertFalse(management.contains("LiveBrowseScreen("))
         assertFalse(management.contains("LocalConfiguration"))
         assertFalse(management.contains("UI_MODE_TYPE_TELEVISION"))
+    }
+
+    @Test
+    fun activeMobileRuntimeDoesNotRouteThroughTvTargetProfiles() {
+        val activity = sourceFile("src/main/java/app/ownplay/player/MainActivity.kt").readText()
+        val root = sourceFile("src/main/java/app/ownplay/player/ui/OwnPlayRoot.kt").readText()
+
+        listOf(activity, root).forEach { source ->
+            assertFalse(source.contains("IS_TV_BUILD"))
+            assertFalse(source.contains("AppDeviceProfile"))
+            assertFalse(source.contains("TvRemote"))
+            assertFalse(source.contains("TvPlaybackLifecyclePolicy"))
+        }
+        assertFalse(activity.contains("setDpadMode"))
+        assertFalse(activity.contains("updatePictureInPictureEnabled"))
+        assertFalse(activity.contains("updateFullscreenSensorRotationEnabled"))
+        assertFalse(root.contains("FocusDirection"))
+        assertFalse(root.contains("moveFocus"))
     }
 
     @Test
