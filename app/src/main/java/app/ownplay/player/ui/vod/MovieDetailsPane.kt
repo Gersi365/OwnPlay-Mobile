@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import app.ownplay.player.download.OfflineDownload
 import app.ownplay.player.persistence.download.DownloadStates
 import app.ownplay.player.source.SourceError
+import app.ownplay.player.ui.OnDemandPlaybackStartMode
 import app.ownplay.player.vod.VodMovie
 import app.ownplay.player.vod.VodMovieDetails
 
@@ -163,8 +164,13 @@ internal fun MovieDetailsPane(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                val primaryStartMode = if (movie.resumeAvailable) {
+                    OnDemandPlaybackStartMode.RESUME
+                } else {
+                    OnDemandPlaybackStartMode.FROM_BEGINNING
+                }
                 Button(
-                    onClick = { onPlay(movie) },
+                    onClick = { onPlay(movie.forPlaybackStart(primaryStartMode)) },
                     modifier = Modifier
                         .weight(1f)
                         .focusRequester(detailPrimaryFocusRequester),
@@ -192,9 +198,15 @@ internal fun MovieDetailsPane(
                 }
             }
 
-            if ((movie.positionMs ?: 0L) > 0L) {
-                TextButton(onClick = onClearProgress) {
-                    Text("Clear progress")
+            if (movie.resumeAvailable) {
+                FilledTonalButton(
+                    onClick = {
+                        onPlay(movie.forPlaybackStart(OnDemandPlaybackStartMode.FROM_BEGINNING))
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                ) {
+                    Text("Play from beginning")
                 }
             }
 
@@ -369,6 +381,14 @@ internal fun MovieDetailsPane(
             }
         }
     }
+}
+
+private fun VodMovie.forPlaybackStart(mode: OnDemandPlaybackStartMode): VodMovie = when (mode) {
+    OnDemandPlaybackStartMode.RESUME -> this
+    OnDemandPlaybackStartMode.FROM_BEGINNING -> copy(
+        positionMs = 0L,
+        progressCompleted = false,
+    )
 }
 
 private fun movieDownloadProgressLabel(download: OfflineDownload): String {
