@@ -16,6 +16,7 @@ class MobileLegacyPresentationPurgeContractTest {
             "src/main/java/app/ownplay/player/ui/library/LibrarySeriesComponents.kt",
             "src/main/java/app/ownplay/player/ui/library/LibrarySeriesGrouping.kt",
             "src/main/java/app/ownplay/player/ui/live/PortraitLiveViewModes.kt",
+            "src/main/java/app/ownplay/player/ui/live/LiveBrowseHierarchy.kt",
             "src/main/java/app/ownplay/player/ui/view/ContentViewMode.kt",
         )
 
