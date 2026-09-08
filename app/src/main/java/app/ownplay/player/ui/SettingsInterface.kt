@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.MaterialTheme
@@ -28,7 +27,6 @@ internal fun PortraitSettingsMenu(
     summaries: List<PlaylistSourceSummary>,
     onOpenLiveManagement: () -> Unit,
     onOpenPlaylists: () -> Unit,
-    onOpenDownloads: () -> Unit,
 ) {
     Box(
         modifier = Modifier
@@ -60,7 +58,7 @@ internal fun PortraitSettingsMenu(
                     fontWeight = FontWeight.Bold,
                 )
                 Text(
-                    text = "Personalize the player, organize your sources and manage offline media.",
+                    text = "Organize your sources and configure OwnPlay.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -75,19 +73,6 @@ internal fun PortraitSettingsMenu(
                     summaries = summaries,
                     onOpenLiveManagement = onOpenLiveManagement,
                     onOpenPlaylists = onOpenPlaylists,
-                )
-            }
-
-            CompactSettingsSection(
-                icon = Icons.Filled.Download,
-                title = "Downloads",
-                subtitle = "Movies and episodes available offline",
-            ) {
-                SettingsActionRow(
-                    title = "Downloaded media",
-                    detail = "View progress, retry downloads or remove saved media",
-                    actionLabel = "Open downloads",
-                    onClick = onOpenDownloads,
                 )
             }
 

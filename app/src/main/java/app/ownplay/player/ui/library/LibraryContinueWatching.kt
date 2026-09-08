@@ -40,10 +40,12 @@ internal fun LibraryMovieContinueWatchingStrip(
     movies: List<VodMovie>,
     onOpenMovie: (VodMovie) -> Unit,
     modifier: Modifier = Modifier,
+    heading: String = "Continue Watching",
 ) {
     if (movies.isEmpty()) return
     LibraryContinueWatchingStrip(
         modifier = modifier,
+        heading = heading,
         items = movies,
         key = { it.movieId },
         posterUrl = { it.posterUrl },
@@ -61,10 +63,12 @@ internal fun LibrarySeriesContinueWatchingStrip(
     episodes: List<SeriesEpisode>,
     onOpenSeries: (SeriesEpisode) -> Unit,
     modifier: Modifier = Modifier,
+    heading: String = "Continue Watching",
 ) {
     if (episodes.isEmpty()) return
     LibraryContinueWatchingStrip(
         modifier = modifier,
+        heading = heading,
         items = episodes,
         key = { it.episodeId },
         posterUrl = { it.posterUrl },
@@ -81,6 +85,7 @@ internal fun LibrarySeriesContinueWatchingStrip(
 
 @Composable
 private fun <T> LibraryContinueWatchingStrip(
+    heading: String,
     items: List<T>,
     key: (T) -> String,
     posterUrl: (T) -> String?,
@@ -102,7 +107,7 @@ private fun <T> LibraryContinueWatchingStrip(
         verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
         Text(
-            text = "Continue Watching",
+            text = heading,
             style = if (isTelevision) {
                 MaterialTheme.typography.titleMedium
             } else {

@@ -37,8 +37,6 @@ class ShellLifecycleRegressionTest {
                 helper.contains("rememberActiveSource(sourceId)"),
             )
 
-            // Direct writes using the callback sourceId must stay inside the persistence helper.
-            // This catches the Settings -> Live regression where local state changed but DataStore did not.
             assertEquals(
                 "$path must route sourceId selection through rememberActiveSource",
                 1,
@@ -89,7 +87,59 @@ class ShellLifecycleRegressionTest {
     }
 
     @Test
-    fun mobileBackHierarchyFallsThroughToExitOnlyAtLiveRoot() {
+    fun mobilePrimaryNavigationMatchesDurableMediaDestinations() {
+        val source = sourceText("src/mobile/java/app/ownplay/player/ui/MobileOwnPlayApp.kt")
+        val normalized = normalizedSource(source)
+        val nav = normalizedSource(
+            sourceBlockAfter(source, "private fun MobilePrimaryNavigationBar("),
+        )
+
+        assertTrue(
+            "Home must be the default Mobile landing destination",
+            normalized.contains("null -> MobileSection.HOME"),
+        )
+        val homeIndex = nav.indexOf("Text(\"Home\"")
+        val liveIndex = nav.indexOf("Text(\"Live\"")
+        val libraryIndex = nav.indexOf("Text(\"Library\"")
+        val downloadsIndex = nav.indexOf("Text(\"Downloads\"")
+        assertTrue(homeIndex >= 0)
+        assertTrue(liveIndex > homeIndex)
+        assertTrue(libraryIndex > liveIndex)
+        assertTrue(downloadsIndex > libraryIndex)
+        assertFalse("Settings must not be primary navigation", nav.contains("Text(\"Settings\""))
+        assertTrue(
+            "Settings must remain available outside primary navigation",
+            normalized.contains("MobileAppHeader(onOpenSettings = ::openSettings)"),
+        )
+    }
+
+    @Test
+    fun homeIsContinueWatchingFirstAndDownloadsArePrimary() {
+        val shell = normalizedSource(
+            sourceText("src/mobile/java/app/ownplay/player/ui/MobileOwnPlayApp.kt"),
+        )
+        val home = normalizedSource(
+            sourceText("src/mobile/java/app/ownplay/player/ui/MobileHomeScreen.kt"),
+        )
+        val settings = normalizedSource(
+            sourceText("src/main/java/app/ownplay/player/ui/SettingsScreen.kt"),
+        )
+        val settingsMenu = normalizedSource(
+            sourceText("src/main/java/app/ownplay/player/ui/SettingsInterface.kt"),
+        )
+
+        assertTrue(shell.contains("MobileSection.DOWNLOADS -> DownloadsSettingsScreen()"))
+        assertTrue(home.contains("vodCatalog.continueWatching"))
+        assertTrue(home.contains("seriesCatalog.continueWatching"))
+        assertTrue(home.contains("LibraryMovieContinueWatchingStrip("))
+        assertTrue(home.contains("LibrarySeriesContinueWatchingStrip("))
+        assertFalse(settings.contains("SettingsDestination.DOWNLOADS"))
+        assertFalse(settingsMenu.contains("Open downloads"))
+        assertFalse(settingsMenu.contains("onOpenDownloads"))
+    }
+
+    @Test
+    fun mobileBackHierarchyFallsThroughToExitOnlyAtHomeRoot() {
         listOf(
             "src/mobile/java/app/ownplay/player/ui/MobileOwnPlayApp.kt" to "MobileSection",
         ).forEach { (path, sectionType) ->
@@ -99,7 +149,7 @@ class ShellLifecycleRegressionTest {
             val block = normalizedSource(
                 sourceBlockAfter(
                     source,
-                    "BackHandler(enabled = section != $sectionType.LIVE)",
+                    "BackHandler(enabled = section != $sectionType.HOME)",
                 ),
             )
 
@@ -109,8 +159,12 @@ class ShellLifecycleRegressionTest {
                 block.contains("$sectionType.MOVIES, $sectionType.SERIES, -> openSection($sectionType.LIBRARY)"),
             )
             assertTrue(
-                "$path must return Library/Settings roots to Live",
-                block.contains("$sectionType.LIBRARY, $sectionType.SETTINGS, -> openSection($sectionType.LIVE)"),
+                "$path must return Settings to the section that opened it",
+                block.contains("$sectionType.SETTINGS -> openSection(settingsReturnSection)"),
+            )
+            assertTrue(
+                "$path must return primary media roots to Home",
+                block.contains("$sectionType.LIVE, $sectionType.LIBRARY, $sectionType.DOWNLOADS, -> openSection($sectionType.HOME)"),
             )
             assertFalse("$path shell fallback must never show exit itself", block.contains("showExitConfirmation"))
         }

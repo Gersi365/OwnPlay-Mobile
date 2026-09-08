@@ -12,7 +12,6 @@ import app.ownplay.player.source.SourceSyncState
 
 internal enum class SettingsDestination {
     CONTENT,
-    DOWNLOADS,
     LIVE_MANAGEMENT,
     PLAYLISTS,
 }
@@ -33,8 +32,7 @@ internal fun SettingsScreen(
 
     val nestedDestinationBackEnabled =
         destination == SettingsDestination.LIVE_MANAGEMENT ||
-            destination == SettingsDestination.PLAYLISTS ||
-            destination == SettingsDestination.DOWNLOADS
+            destination == SettingsDestination.PLAYLISTS
     BackHandler(enabled = nestedDestinationBackEnabled) {
         destination = SettingsDestination.CONTENT
     }
@@ -60,13 +58,6 @@ internal fun SettingsScreen(
             )
             return
         }
-        SettingsDestination.DOWNLOADS -> {
-            DownloadsSettingsScreen(
-                onBack = { destination = SettingsDestination.CONTENT },
-                focusBackOnEntry = true,
-            )
-            return
-        }
         SettingsDestination.CONTENT -> Unit
     }
 
@@ -74,6 +65,5 @@ internal fun SettingsScreen(
         summaries = summaries,
         onOpenLiveManagement = { destination = SettingsDestination.LIVE_MANAGEMENT },
         onOpenPlaylists = { destination = SettingsDestination.PLAYLISTS },
-        onOpenDownloads = { destination = SettingsDestination.DOWNLOADS },
     )
 }

@@ -16,11 +16,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -44,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.ownplay.player.OwnPlayAppRuntime
@@ -66,8 +70,10 @@ import app.ownplay.player.ui.vod.VodRoute
 import kotlinx.coroutines.launch
 
 private enum class MobileSection {
+    HOME,
     LIVE,
     LIBRARY,
+    DOWNLOADS,
     MOVIES,
     SERIES,
     SETTINGS,
@@ -76,8 +82,8 @@ private enum class MobileSection {
 /**
  * Mobile-only OwnPlay presentation shell.
  *
- * Primary navigation is always Live / Library / Settings. Movies and Series are internal Library
- * routes, never primary destinations. Navigation remains at the bottom in portrait and landscape.
+ * Primary navigation is Home / Live / Library / Downloads. Movies and Series are internal Library
+ * routes. Settings is outside primary media navigation and is opened from contextual/header entry.
  */
 @Composable
 internal fun MobileOwnPlayApp(
@@ -121,10 +127,11 @@ private fun MobileOwnPlayAppContent(
             when (onDemandPresentation.kind) {
                 OnDemandContentKind.MOVIE -> MobileSection.MOVIES
                 OnDemandContentKind.SERIES -> MobileSection.SERIES
-                null -> MobileSection.LIVE
+                null -> MobileSection.HOME
             },
         )
     }
+    var settingsReturnSection by remember { mutableStateOf(MobileSection.HOME) }
     var activeSourceId by remember { mutableStateOf(onDemandPresentation.sourceId) }
     var requestedVodMovieId by remember {
         mutableStateOf(
@@ -247,13 +254,26 @@ private fun MobileOwnPlayAppContent(
         section = target
     }
 
-    BackHandler(enabled = section != MobileSection.LIVE) {
+    fun openSettings() {
+        settingsReturnSection = when (section) {
+            MobileSection.MOVIES,
+            MobileSection.SERIES,
+            -> MobileSection.LIBRARY
+            MobileSection.SETTINGS -> settingsReturnSection
+            else -> section
+        }
+        openSection(MobileSection.SETTINGS)
+    }
+
+    BackHandler(enabled = section != MobileSection.HOME) {
         val interactionHandled = when (section) {
             MobileSection.LIBRARY,
             MobileSection.MOVIES,
             MobileSection.SERIES,
             -> PlaybackInteractionBridge.handleBack()
+            MobileSection.HOME,
             MobileSection.LIVE,
+            MobileSection.DOWNLOADS,
             MobileSection.SETTINGS,
             -> false
         }
@@ -263,10 +283,12 @@ private fun MobileOwnPlayAppContent(
             MobileSection.MOVIES,
             MobileSection.SERIES,
             -> openSection(MobileSection.LIBRARY)
+            MobileSection.SETTINGS -> openSection(settingsReturnSection)
+            MobileSection.LIVE,
             MobileSection.LIBRARY,
-            MobileSection.SETTINGS,
-            -> openSection(MobileSection.LIVE)
-            MobileSection.LIVE -> Unit
+            MobileSection.DOWNLOADS,
+            -> openSection(MobileSection.HOME)
+            MobileSection.HOME -> Unit
         }
     }
 
@@ -380,19 +402,31 @@ private fun MobileOwnPlayAppContent(
         section == MobileSection.LIBRARY ||
             section == MobileSection.MOVIES ||
             section == MobileSection.SERIES
-    val hidePrimaryNavigation = vodFullscreen || seriesFullscreen || libraryFullscreen
+    val hidePrimaryNavigation =
+        vodFullscreen || seriesFullscreen || libraryFullscreen || section == MobileSection.SETTINGS
+    val showShellHeader =
+        section == MobileSection.HOME ||
+            section == MobileSection.LIBRARY ||
+            section == MobileSection.DOWNLOADS
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            if (showShellHeader) {
+                MobileAppHeader(onOpenSettings = ::openSettings)
+            }
+        },
         bottomBar = {
             if (!hidePrimaryNavigation) {
                 MobilePrimaryNavigationBar(
+                    homeSelected = section == MobileSection.HOME,
                     liveSelected = section == MobileSection.LIVE,
                     librarySelected = librarySectionActive,
-                    settingsSelected = section == MobileSection.SETTINGS,
+                    downloadsSelected = section == MobileSection.DOWNLOADS,
+                    onOpenHome = { openSection(MobileSection.HOME) },
                     onOpenLive = { openSection(MobileSection.LIVE) },
                     onOpenLibrary = { openSection(MobileSection.LIBRARY) },
-                    onOpenSettings = { openSection(MobileSection.SETTINGS) },
+                    onOpenDownloads = { openSection(MobileSection.DOWNLOADS) },
                 )
             }
         },
@@ -404,12 +438,40 @@ private fun MobileOwnPlayAppContent(
                 .padding(innerPadding),
         ) {
             when (section) {
+                MobileSection.HOME -> MobileHomeScreen(
+                    sourceId = activeSourceId,
+                    sourceKind = activeSummary?.sourceKind,
+                    onOpenSettings = ::openSettings,
+                    onOpenMovieDetails = { sourceId, movieId ->
+                        rememberActiveSource(sourceId)
+                        runtime.onDemandPresentationSession.showMovieDetail(
+                            sourceId = sourceId,
+                            movieId = movieId,
+                            returnToLibraryOnDetailBack = true,
+                        )
+                        requestedVodMovieId = movieId
+                        movieDetailReturnToLibrary = true
+                        openSection(MobileSection.MOVIES)
+                    },
+                    onOpenSeriesDetails = { sourceId, seriesId ->
+                        rememberActiveSource(sourceId)
+                        runtime.onDemandPresentationSession.showSeriesDetail(
+                            sourceId = sourceId,
+                            seriesId = seriesId,
+                            returnToLibraryOnDetailBack = true,
+                        )
+                        requestedSeriesId = seriesId
+                        seriesDetailReturnToLibrary = true
+                        openSection(MobileSection.SERIES)
+                    },
+                )
+
                 MobileSection.LIVE -> {
                     val sourceId = activeSourceId
                     if (sourceId == null) {
                         MobileNoSourceScreen(
                             syncState = syncState,
-                            onAddPlaylist = { openSection(MobileSection.SETTINGS) },
+                            onAddPlaylist = ::openSettings,
                             modifier = Modifier.fillMaxSize(),
                         )
                     } else {
@@ -425,7 +487,7 @@ private fun MobileOwnPlayAppContent(
                             onRetry = runtime.playbackController::retry,
                             onOpenMovies = { openSection(MobileSection.MOVIES) },
                             onOpenSeries = { openSection(MobileSection.SERIES) },
-                            onOpenSettings = { openSection(MobileSection.SETTINGS) },
+                            onOpenSettings = ::openSettings,
                             onPreviewRequested = { selection ->
                                 runtime.livePlaybackPresentationSession.showPreview(selection)
                                 runtime.playbackController.start(selection.request)
@@ -485,6 +547,8 @@ private fun MobileOwnPlayAppContent(
                     },
                 )
 
+                MobileSection.DOWNLOADS -> DownloadsSettingsScreen()
+
                 MobileSection.MOVIES -> VodRoute(
                     runtime = runtime,
                     sourceId = activeSourceId,
@@ -495,7 +559,7 @@ private fun MobileOwnPlayAppContent(
                     onReturnToLibrary = { openSection(MobileSection.LIBRARY) },
                     onOpenLive = { openSection(MobileSection.LIVE) },
                     onOpenSeries = { openSection(MobileSection.SERIES) },
-                    onOpenSettings = { openSection(MobileSection.SETTINGS) },
+                    onOpenSettings = ::openSettings,
                     onFullscreenStateChanged = onPlaybackFullscreenChanged,
                 )
 
@@ -507,7 +571,7 @@ private fun MobileOwnPlayAppContent(
                     onRequestedSeriesConsumed = { requestedSeriesId = null },
                     returnToLibraryOnDetailBack = seriesDetailReturnToLibrary,
                     onReturnToLibrary = { openSection(MobileSection.LIBRARY) },
-                    onOpenSettings = { openSection(MobileSection.SETTINGS) },
+                    onOpenSettings = ::openSettings,
                     onFullscreenStateChanged = onPlaybackFullscreenChanged,
                 )
 
@@ -557,13 +621,47 @@ private fun MobileOwnPlayAppContent(
 }
 
 @Composable
+private fun MobileAppHeader(onOpenSettings: () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.background,
+        tonalElevation = 0.dp,
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+        ) {
+            Text(
+                text = "OWNPLAY",
+                modifier = Modifier.align(Alignment.CenterStart),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            IconButton(
+                onClick = onOpenSettings,
+                modifier = Modifier.align(Alignment.CenterEnd),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Settings,
+                    contentDescription = "Settings",
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun MobilePrimaryNavigationBar(
+    homeSelected: Boolean,
     liveSelected: Boolean,
     librarySelected: Boolean,
-    settingsSelected: Boolean,
+    downloadsSelected: Boolean,
+    onOpenHome: () -> Unit,
     onOpenLive: () -> Unit,
     onOpenLibrary: () -> Unit,
-    onOpenSettings: () -> Unit,
+    onOpenDownloads: () -> Unit,
 ) {
     val colors = NavigationBarItemDefaults.colors(
         selectedIconColor = MaterialTheme.colorScheme.primary,
@@ -587,6 +685,20 @@ private fun MobilePrimaryNavigationBar(
             tonalElevation = 0.dp,
             windowInsets = WindowInsets(0, 0, 0, 0),
         ) {
+            NavigationBarItem(
+                selected = homeSelected,
+                onClick = onOpenHome,
+                icon = {
+                    Icon(
+                        Icons.Filled.Home,
+                        contentDescription = "Home",
+                        modifier = Modifier.size(23.dp),
+                    )
+                },
+                label = { Text("Home", style = MaterialTheme.typography.labelMedium) },
+                alwaysShowLabel = true,
+                colors = colors,
+            )
             NavigationBarItem(
                 selected = liveSelected,
                 onClick = onOpenLive,
@@ -616,16 +728,16 @@ private fun MobilePrimaryNavigationBar(
                 colors = colors,
             )
             NavigationBarItem(
-                selected = settingsSelected,
-                onClick = onOpenSettings,
+                selected = downloadsSelected,
+                onClick = onOpenDownloads,
                 icon = {
                     Icon(
-                        Icons.Filled.Settings,
-                        contentDescription = "Settings",
+                        Icons.Filled.Download,
+                        contentDescription = "Downloads",
                         modifier = Modifier.size(23.dp),
                     )
                 },
-                label = { Text("Settings", style = MaterialTheme.typography.labelMedium) },
+                label = { Text("Downloads", style = MaterialTheme.typography.labelMedium) },
                 alwaysShowLabel = true,
                 colors = colors,
             )
