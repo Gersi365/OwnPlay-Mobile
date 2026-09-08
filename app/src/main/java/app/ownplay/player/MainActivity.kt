@@ -15,7 +15,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
@@ -23,9 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -41,7 +38,6 @@ import app.ownplay.player.ui.DownloadPlaybackBridge
 import app.ownplay.player.ui.MobileStartupLoadingSurface
 import app.ownplay.player.ui.OwnPlayRoot
 import app.ownplay.player.ui.PictureInPicturePlaybackSurface
-import app.ownplay.player.ui.PlaybackOriginBadge
 import app.ownplay.player.ui.PlaybackWindowController
 import app.ownplay.player.ui.library.LibraryPlaybackScreen
 import app.ownplay.player.ui.library.LibraryPlaybackSession
@@ -128,7 +124,6 @@ class MainActivity : ComponentActivity() {
                 (deviceProfileSelection as? AppDeviceProfileSelection.Configured)
                     ?.settings
                     ?.profile
-            val playbackOrigin by runtime.playbackController.resolvedOrigin.collectAsState()
             val downloadRuntime = offlineDownloadRuntime
             var downloadPlaybackSession by remember {
                 mutableStateOf<LibraryPlaybackSession?>(null)
@@ -253,14 +248,6 @@ class MainActivity : ComponentActivity() {
                                         backContentDescription = "Back to Downloads",
                                         contextLabel = "Downloads",
                                     )
-                                    playbackOrigin?.let { origin ->
-                                        PlaybackOriginBadge(
-                                            origin = origin,
-                                            modifier = Modifier
-                                                .align(Alignment.TopEnd)
-                                                .padding(top = 10.dp, end = 12.dp),
-                                        )
-                                    }
                                 }
                             }
                         }

@@ -11,6 +11,7 @@ class MobileLegacyPresentationPurgeContractTest {
         val removed = listOf(
             "src/main/java/app/ownplay/player/ui/OwnPlayApp.kt",
             "src/main/java/app/ownplay/player/ui/OrientationSetupScreen.kt",
+            "src/main/java/app/ownplay/player/ui/PlaybackOriginBadge.kt",
             "src/main/java/app/ownplay/player/ui/library/UnifiedLibraryRoute.kt",
             "src/main/java/app/ownplay/player/ui/library/LibraryOfflinePresentation.kt",
             "src/main/java/app/ownplay/player/ui/library/LibraryPlaybackPresentationSession.kt",
@@ -68,7 +69,21 @@ class MobileLegacyPresentationPurgeContractTest {
         }
         assertFalse(vod.contains("MoviesCatalogContent"))
         assertFalse(vod.contains("MovieCategoryRail"))
+        assertFalse(vod.contains("onOpenLive"))
+        assertFalse(vod.contains("onOpenSeries"))
+        assertFalse(vod.contains("UNUSED_PARAMETER"))
         assertFalse(series.contains("SeriesCatalogPane"))
+    }
+
+    @Test
+    fun mobileFullscreenDoesNotRetainPlaybackOriginChrome() {
+        val activity = sourceFile("src/main/java/app/ownplay/player/MainActivity.kt").readText()
+        val shell = sourceFile("src/mobile/java/app/ownplay/player/ui/MobileOwnPlayApp.kt").readText()
+
+        listOf(activity, shell).forEach { source ->
+            assertFalse(source.contains("PlaybackOriginBadge"))
+            assertFalse(source.contains("resolvedOrigin.collectAsState"))
+        }
     }
 
     @Test

@@ -117,7 +117,6 @@ private fun MobileOwnPlayAppContent(
     val summaries by runtime.observeSourceSummaries().collectAsState(initial = emptyList())
     val syncState by runtime.sourceSyncState.collectAsState()
     val playbackState by runtime.playbackController.state.collectAsState()
-    val playbackOrigin by runtime.playbackController.resolvedOrigin.collectAsState()
     val playbackTrackState by runtime.playbackTrackController.state.collectAsState()
     val livePresentation by runtime.livePlaybackPresentationSession.state.collectAsState()
     val onDemandPresentation by runtime.onDemandPresentationSession.state.collectAsState()
@@ -226,20 +225,12 @@ private fun MobileOwnPlayAppContent(
         }
 
         val onDemandCurrent = runtime.onDemandPresentationSession.current
-        when (target) {
-            MobileSection.MOVIES -> {
-                if (onDemandCurrent.kind != OnDemandContentKind.MOVIE) {
-                    activeSourceId?.let(runtime.onDemandPresentationSession::showMovieCatalog)
-                }
-            }
-            MobileSection.SERIES -> {
-                if (onDemandCurrent.kind != OnDemandContentKind.SERIES) {
-                    activeSourceId?.let(runtime.onDemandPresentationSession::showSeriesCatalog)
-                }
-            }
-            else -> if (onDemandCurrent.kind != null) {
-                runtime.onDemandPresentationSession.clear()
-            }
+        if (
+            target != MobileSection.MOVIES &&
+            target != MobileSection.SERIES &&
+            onDemandCurrent.kind != null
+        ) {
+            runtime.onDemandPresentationSession.clear()
         }
 
         if (target != MobileSection.MOVIES) {
@@ -548,8 +539,6 @@ private fun MobileOwnPlayAppContent(
                     onRequestedMovieConsumed = { requestedVodMovieId = null },
                     returnToLibraryOnDetailBack = movieDetailReturnToLibrary,
                     onReturnToLibrary = { openSection(MobileSection.LIBRARY) },
-                    onOpenLive = { openSection(MobileSection.LIVE) },
-                    onOpenSeries = { openSection(MobileSection.SERIES) },
                     onOpenSettings = ::openSettings,
                     onFullscreenStateChanged = onPlaybackFullscreenChanged,
                 )
@@ -597,14 +586,6 @@ private fun MobileOwnPlayAppContent(
                         }
                     },
                 )
-            }
-
-            val resolvedOrigin = playbackOrigin
-            if (
-                resolvedOrigin != null &&
-                (vodFullscreen || seriesFullscreen)
-            ) {
-                PlaybackOriginBadge(origin = resolvedOrigin)
             }
         }
     }

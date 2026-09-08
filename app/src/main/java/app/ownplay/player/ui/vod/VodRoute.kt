@@ -51,7 +51,6 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 private const val VOD_EXIT_PROGRESS_SAVE_TIMEOUT_MILLIS = 1_000L
 
-@Suppress("UNUSED_PARAMETER")
 @Composable
 internal fun VodRoute(
     runtime: OwnPlayAppRuntime,
@@ -61,8 +60,6 @@ internal fun VodRoute(
     onRequestedMovieConsumed: () -> Unit = {},
     returnToLibraryOnDetailBack: Boolean = true,
     onReturnToLibrary: () -> Unit = {},
-    onOpenLive: () -> Unit = {},
-    onOpenSeries: () -> Unit = {},
     onOpenSettings: () -> Unit,
     onFullscreenStateChanged: (Boolean) -> Unit,
 ) {
