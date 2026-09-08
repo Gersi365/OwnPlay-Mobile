@@ -10,6 +10,7 @@ class MobileLegacyPresentationPurgeContractTest {
     fun dormantLegacyPresentationFilesAreNotRetained() {
         val removed = listOf(
             "src/main/java/app/ownplay/player/ui/OwnPlayApp.kt",
+            "src/main/java/app/ownplay/player/ui/OrientationSetupScreen.kt",
             "src/main/java/app/ownplay/player/ui/library/UnifiedLibraryRoute.kt",
             "src/main/java/app/ownplay/player/ui/library/LibraryOfflinePresentation.kt",
             "src/main/java/app/ownplay/player/ui/library/LibraryPlaybackPresentationSession.kt",
@@ -17,6 +18,7 @@ class MobileLegacyPresentationPurgeContractTest {
             "src/main/java/app/ownplay/player/ui/library/LibrarySeriesGrouping.kt",
             "src/main/java/app/ownplay/player/ui/live/PortraitLiveViewModes.kt",
             "src/main/java/app/ownplay/player/ui/live/LiveBrowseHierarchy.kt",
+            "src/main/java/app/ownplay/player/ui/live/LiveBrowseScreen.kt",
             "src/main/java/app/ownplay/player/ui/view/ContentViewMode.kt",
         )
 
@@ -35,6 +37,23 @@ class MobileLegacyPresentationPurgeContractTest {
         assertTrue(shell.contains("MobileLibraryRoute("))
         assertFalse(shell.contains("UnifiedLibraryRoute"))
         assertFalse(shell.contains("ContentViewMode"))
+    }
+
+    @Test
+    fun startupAndLiveManagementUseCanonicalMobilePresentation() {
+        val activity = sourceFile("src/main/java/app/ownplay/player/MainActivity.kt").readText()
+        val management = sourceFile("src/main/java/app/ownplay/player/ui/LiveManagementScreen.kt").readText()
+
+        assertTrue(activity.contains("MobileStartupLoadingSurface()"))
+        assertFalse(activity.contains("OrientationSetupLoadingSurface"))
+        assertTrue(management.contains("Visible Categories"))
+        assertTrue(management.contains("Hidden Categories"))
+        assertTrue(management.contains("Custom Groups"))
+        assertTrue(management.contains("Visible Channels"))
+        assertTrue(management.contains("Hidden Channels"))
+        assertFalse(management.contains("LiveBrowseScreen("))
+        assertFalse(management.contains("LocalConfiguration"))
+        assertFalse(management.contains("UI_MODE_TYPE_TELEVISION"))
     }
 
     private fun sourceFile(relativePath: String): File {

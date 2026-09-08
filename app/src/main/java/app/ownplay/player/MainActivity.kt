@@ -38,7 +38,7 @@ import app.ownplay.player.playback.PlaybackInteractionBridge
 import app.ownplay.player.playback.PlaybackMediaKind
 import app.ownplay.player.playback.PlaybackState
 import app.ownplay.player.ui.DownloadPlaybackBridge
-import app.ownplay.player.ui.OrientationSetupLoadingSurface
+import app.ownplay.player.ui.MobileStartupLoadingSurface
 import app.ownplay.player.ui.OwnPlayRoot
 import app.ownplay.player.ui.PictureInPicturePlaybackSurface
 import app.ownplay.player.ui.PlaybackOriginBadge
@@ -181,7 +181,7 @@ class MainActivity : ComponentActivity() {
             OwnPlayTheme(deviceProfile = configuredProfile) {
                 when (deviceProfileSelection) {
                     AppDeviceProfileSelection.Loading -> {
-                        OrientationSetupLoadingSurface()
+                        MobileStartupLoadingSurface()
                     }
                     is AppDeviceProfileSelection.Configured -> {
                         Box(modifier = Modifier.fillMaxSize()) {
