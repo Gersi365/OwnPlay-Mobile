@@ -8,11 +8,11 @@ import app.ownplay.player.download.OfflineDownload
  */
 internal object DownloadPlaybackBridge {
     private var owner: Any? = null
-    private var action: ((OfflineDownload) -> Unit)? = null
+    private var action: ((OfflineDownload, Boolean) -> Unit)? = null
 
     fun register(
         owner: Any,
-        action: (OfflineDownload) -> Unit,
+        action: (download: OfflineDownload, startFromBeginning: Boolean) -> Unit,
     ) {
         this.owner = owner
         this.action = action
@@ -25,9 +25,12 @@ internal object DownloadPlaybackBridge {
         }
     }
 
-    fun request(download: OfflineDownload): Boolean {
+    fun request(
+        download: OfflineDownload,
+        startFromBeginning: Boolean = false,
+    ): Boolean {
         val current = action ?: return false
-        current(download)
+        current(download, startFromBeginning)
         return true
     }
 }
