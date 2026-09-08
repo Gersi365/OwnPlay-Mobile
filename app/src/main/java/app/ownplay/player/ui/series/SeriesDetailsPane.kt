@@ -54,6 +54,7 @@ import app.ownplay.player.series.SeriesEpisode
 import app.ownplay.player.series.SeriesSeason
 import app.ownplay.player.series.SeriesSummary
 import app.ownplay.player.source.SourceError
+import app.ownplay.player.ui.library.progressFraction
 import app.ownplay.player.ui.theme.OwnPlayMediaLayout
 import app.ownplay.player.ui.theme.OwnPlaySpacing
 import app.ownplay.player.ui.vod.RemotePoster
