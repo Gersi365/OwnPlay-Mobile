@@ -13,7 +13,6 @@ import app.ownplay.player.source.SourceSyncState
 internal enum class SettingsDestination {
     HOME,
     SOURCES,
-    DOWNLOADS,
     LIVE_MANAGEMENT,
 }
 
@@ -54,12 +53,6 @@ internal fun SettingsScreen(
             )
             return
         }
-        SettingsDestination.DOWNLOADS -> {
-            DownloadsSettingsScreen(
-                onBack = { destination = SettingsDestination.HOME },
-            )
-            return
-        }
         SettingsDestination.HOME -> Unit
     }
 
@@ -67,6 +60,5 @@ internal fun SettingsScreen(
         summaries = summaries,
         onOpenLiveManagement = { destination = SettingsDestination.LIVE_MANAGEMENT },
         onOpenSources = { destination = SettingsDestination.SOURCES },
-        onOpenDownloads = { destination = SettingsDestination.DOWNLOADS },
     )
 }
