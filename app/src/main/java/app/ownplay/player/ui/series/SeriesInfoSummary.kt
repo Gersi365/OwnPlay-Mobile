@@ -14,6 +14,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.ownplay.player.series.SeriesDetails
 import app.ownplay.player.series.SeriesSummary
+import app.ownplay.player.ui.theme.OwnPlayMediaLayout
+import app.ownplay.player.ui.theme.OwnPlaySpacing
 import app.ownplay.player.ui.vod.RemotePoster
 
 @Composable
@@ -36,34 +38,34 @@ internal fun SeriesInfoSummary(
 
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(OwnPlaySpacing.Md),
     ) {
         RemotePoster(
             url = details.posterUrl ?: selected.posterUrl,
             title = selected.name,
             modifier = Modifier
-                .width(104.dp)
-                .aspectRatio(2f / 3f),
+                .width(132.dp)
+                .aspectRatio(OwnPlayMediaLayout.PosterAspectRatio),
         )
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(7.dp),
+            verticalArrangement = Arrangement.spacedBy(OwnPlaySpacing.Sm),
         ) {
             if (metadata.isNotEmpty()) {
                 Text(
                     text = metadata.joinToString("  ·  "),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 3,
+                    maxLines = 4,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
             details.description?.takeIf(String::isNotBlank)?.let { description ->
                 Text(
                     text = description,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 6,
+                    maxLines = 8,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
