@@ -58,7 +58,7 @@ class LibraryPortraitPresentationContractTest {
         val route = normalizedSource(
             sourceText("src/main/java/app/ownplay/player/ui/library/UnifiedLibraryRoute.kt"),
         )
-        val sectionControlsIndex = route.indexOf("items = libraryCatalogSections")
+        val sectionControlsIndex = route.indexOf("LibrarySectionStrip(")
         val continueWatchingIndex = route.indexOf("LibraryUnifiedContinueWatchingStrip(")
 
         assertTrue(sectionControlsIndex >= 0)
