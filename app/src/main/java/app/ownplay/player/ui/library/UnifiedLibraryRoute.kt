@@ -17,16 +17,17 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.items as listItems
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -38,6 +39,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -50,9 +53,6 @@ import app.ownplay.player.series.SeriesCatalog
 import app.ownplay.player.series.SeriesFeatureRuntime
 import app.ownplay.player.series.SeriesSummary
 import app.ownplay.player.source.SourceResult
-import app.ownplay.player.ui.VNextMediaIconAction
-import app.ownplay.player.ui.VNextMediaPill
-import app.ownplay.player.ui.VNextMediaSearchField
 import app.ownplay.player.ui.theme.OwnPlayMediaLayout
 import app.ownplay.player.ui.vod.RemotePoster
 import app.ownplay.player.vod.VodCatalog
@@ -284,13 +284,13 @@ internal fun UnifiedLibraryRoute(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 12.dp, vertical = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Column(
                 modifier = Modifier.weight(1f),
@@ -298,7 +298,7 @@ internal fun UnifiedLibraryRoute(
             ) {
                 Text(
                     text = "Library",
-                    style = MaterialTheme.typography.headlineSmall,
+                    style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                 )
                 Text(
@@ -317,19 +317,27 @@ internal fun UnifiedLibraryRoute(
                     strokeWidth = 2.dp,
                 )
             }
-            VNextMediaIconAction(
-                icon = if (searchExpanded) Icons.Filled.Close else Icons.Filled.Search,
-                contentDescription = if (searchExpanded) {
-                    "Close Library search"
-                } else {
-                    "Search Library"
-                },
-                selected = searchExpanded,
+            IconButton(
                 onClick = {
                     searchExpanded = !searchExpanded
                     if (!searchExpanded) query = ""
                 },
-            )
+                modifier = Modifier.size(40.dp),
+            ) {
+                Icon(
+                    imageVector = if (searchExpanded) Icons.Filled.Close else Icons.Filled.Search,
+                    contentDescription = if (searchExpanded) {
+                        "Close Library search"
+                    } else {
+                        "Search Library"
+                    },
+                    tint = if (searchExpanded) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
         }
 
         LibrarySectionStrip(
@@ -342,7 +350,7 @@ internal fun UnifiedLibraryRoute(
         )
 
         if (searchExpanded || query.isNotBlank()) {
-            VNextMediaSearchField(
+            LibrarySearchField(
                 value = query,
                 onValueChange = { query = it },
                 placeholder = when (filter) {
@@ -375,22 +383,28 @@ internal fun UnifiedLibraryRoute(
         }
 
         if (refreshWarning) {
-            Surface(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(10.dp),
-                color = MaterialTheme.colorScheme.errorContainer,
+                verticalArrangement = Arrangement.spacedBy(7.dp),
             ) {
                 Row(
-                    modifier = Modifier.padding(10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(7.dp),
                 ) {
-                    Icon(Icons.Filled.ErrorOutline, contentDescription = null)
+                    Icon(
+                        Icons.Filled.ErrorOutline,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                    )
                     Text(
                         text = "This Library section could not refresh. Showing the saved catalog.",
                         style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.error.copy(alpha = 0.35f),
+                )
             }
         }
 
@@ -426,17 +440,13 @@ private fun LibrarySectionStrip(
     filter: UnifiedLibraryFilter,
     onFilterSelected: (UnifiedLibraryFilter) -> Unit,
 ) {
-    LazyRow(
+    Row(
         modifier = Modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(end = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(7.dp),
+        horizontalArrangement = Arrangement.spacedBy(22.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        listItems(
-            items = libraryCatalogSections,
-            key = { it.name },
-        ) { option ->
-            VNextMediaPill(
+        libraryCatalogSections.forEach { option ->
+            LibraryTextTab(
                 label = when (option) {
                     UnifiedLibraryFilter.MOVIES -> "Movies"
                     UnifiedLibraryFilter.SERIES -> "Series"
@@ -457,16 +467,121 @@ private fun LibraryCategoryStrip(
     if (categories.isEmpty()) return
     LazyRow(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(7.dp),
+        horizontalArrangement = Arrangement.spacedBy(18.dp),
         contentPadding = PaddingValues(end = 12.dp),
     ) {
         listItems(categories, key = { it.first }) { (categoryKey, categoryName) ->
-            VNextMediaPill(
+            LibraryTextTab(
                 label = categoryName,
                 selected = selectedCategoryKey == categoryKey,
                 onClick = { onCategorySelected(categoryKey) },
+                compact = true,
             )
         }
+    }
+}
+
+@Composable
+private fun LibraryTextTab(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    compact: Boolean = false,
+) {
+    Column(
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .padding(vertical = if (compact) 5.dp else 7.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(5.dp),
+    ) {
+        Text(
+            text = label,
+            style = if (compact) {
+                MaterialTheme.typography.labelMedium
+            } else {
+                MaterialTheme.typography.titleSmall
+            },
+            fontWeight = FontWeight.SemiBold,
+            color = if (selected) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(2.dp)
+                .clickable(enabled = false) {},
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(
+                        Modifier,
+                    ),
+            )
+        }
+        HorizontalDivider(
+            thickness = 2.dp,
+            color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+        )
+    }
+}
+
+@Composable
+private fun LibrarySearchField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier) {
+        Row(
+            modifier = Modifier.padding(vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Search,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodyMedium.copy(
+                    color = MaterialTheme.colorScheme.onSurface,
+                ),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                decorationBox = { innerTextField ->
+                    Box {
+                        if (value.isBlank()) {
+                            Text(
+                                text = placeholder,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        innerTextField()
+                    }
+                },
+            )
+        }
+        HorizontalDivider(
+            thickness = 1.dp,
+            color = if (value.isNotBlank()) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.outline.copy(alpha = 0.30f)
+            },
+        )
     }
 }
 
@@ -549,9 +664,9 @@ private fun LibraryCatalogView(
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = OwnPlayMediaLayout.MinimumPosterWidthDp.dp),
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(top = 2.dp, bottom = 18.dp),
+        contentPadding = PaddingValues(top = 4.dp, bottom = 18.dp),
         horizontalArrangement = Arrangement.spacedBy(OwnPlayMediaLayout.GridGapDp.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         when (filter) {
             UnifiedLibraryFilter.MOVIES -> {
