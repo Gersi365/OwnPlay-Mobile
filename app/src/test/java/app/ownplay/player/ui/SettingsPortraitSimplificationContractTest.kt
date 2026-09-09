@@ -7,20 +7,30 @@ import org.junit.Test
 
 class SettingsPortraitSimplificationContractTest {
     @Test
-    fun `portrait Settings exposes only contextual app sections`() {
+    fun `portrait Settings exposes only contextual app sections in vNext presentation`() {
         val portrait = sourceText("src/main/java/app/ownplay/player/ui/SettingsPortrait.kt")
+        val components = sourceText("src/main/java/app/ownplay/player/ui/SettingsComponents.kt")
+        val content = sourceText("src/main/java/app/ownplay/player/ui/SettingsContent.kt")
+        val backup = sourceText("src/main/java/app/ownplay/player/ui/BackupRestoreSettingsContent.kt")
 
+        assertTrue(portrait.contains("VNextSettingsSection("))
         listOf("Sources", "Downloads", "Backup & Restore", "About").forEach { title ->
-            assertTrue(portrait.contains("SettingsSectionTitle(\"$title\")"))
+            assertTrue(portrait.contains("title = \"$title\""))
         }
         assertTrue(portrait.contains("SourcesSettingsContent("))
         assertTrue(portrait.contains("actionLabel = \"Open downloads\""))
         assertTrue(portrait.contains("BackupRestoreSettingsContent()"))
         assertTrue(portrait.contains("AboutSettingsContent()"))
-        assertFalse(portrait.contains("CompactSettingsSection("))
+        assertFalse(portrait.contains("SettingsSectionTitle("))
         assertFalse(portrait.contains("title = \"Content\""))
         assertFalse(portrait.contains("Interface"))
         assertFalse(portrait.contains("Playback"))
+
+        assertTrue(components.contains("internal fun VNextSettingsSection("))
+        assertTrue(components.contains("defaultMinSize(minHeight = 56.dp)"))
+        assertFalse(components.contains("IconButton("))
+        assertFalse(content.contains("HorizontalDivider("))
+        assertFalse(backup.contains("HorizontalDivider("))
     }
 
     @Test

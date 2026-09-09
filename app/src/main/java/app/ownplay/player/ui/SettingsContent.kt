@@ -2,7 +2,6 @@ package app.ownplay.player.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -23,7 +22,6 @@ internal fun SourcesSettingsContent(
         actionLabel = "Open sources",
         onClick = onOpenSources,
     )
-    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     SettingsActionRow(
         title = "Live organization",
         detail = "Categories, channels and custom groups",
@@ -45,7 +43,6 @@ internal fun AboutSettingsContent() {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         SettingValueRow(
             label = "Version",
             value = BuildConfig.VERSION_NAME,

@@ -1,8 +1,10 @@
 package app.ownplay.player.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -10,7 +12,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -21,6 +22,49 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+
+@Composable
+internal fun VNextSettingsSection(
+    title: String,
+    subtitle: String,
+    content: @Composable () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f),
+            tonalElevation = 0.dp,
+        ) {
+            Column(
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                content()
+            }
+        }
+    }
+}
 
 @Composable
 internal fun CompactSettingsSection(
@@ -97,7 +141,7 @@ internal fun SettingValueRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 2.dp, vertical = 6.dp),
+            .padding(horizontal = 4.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -127,9 +171,11 @@ internal fun SettingsActionRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 5.dp),
+            .defaultMinSize(minHeight = 56.dp)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 4.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Column(
             modifier = Modifier.weight(1f),
@@ -148,15 +194,11 @@ internal fun SettingsActionRow(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        IconButton(
-            onClick = onClick,
-            modifier = Modifier.size(44.dp),
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = actionLabel,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = actionLabel,
+            modifier = Modifier.size(20.dp),
+            tint = MaterialTheme.colorScheme.primary,
+        )
     }
 }

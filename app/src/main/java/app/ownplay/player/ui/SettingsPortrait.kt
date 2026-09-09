@@ -38,51 +38,57 @@ internal fun PortraitSettingsMenu(
                 .widthIn(max = 720.dp)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 18.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(
                     text = "Settings",
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                 )
                 Text(
-                    text = "Sources, downloads and app data.",
+                    text = "Sources, offline media and app data.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
-            SettingsSectionTitle("Sources")
-            SourcesSettingsContent(
-                summaries = summaries,
-                onOpenLiveManagement = onOpenLiveManagement,
-                onOpenSources = onOpenSources,
-            )
+            VNextSettingsSection(
+                title = "Sources",
+                subtitle = "Providers and Live organization",
+            ) {
+                SourcesSettingsContent(
+                    summaries = summaries,
+                    onOpenLiveManagement = onOpenLiveManagement,
+                    onOpenSources = onOpenSources,
+                )
+            }
 
-            SettingsSectionTitle("Downloads")
-            SettingsActionRow(
+            VNextSettingsSection(
                 title = "Downloads",
-                detail = "Manage active and completed offline media",
-                actionLabel = "Open downloads",
-                onClick = onOpenDownloads,
-            )
+                subtitle = "Offline media and transfer state",
+            ) {
+                SettingsActionRow(
+                    title = "Downloads",
+                    detail = "Manage active and completed offline media",
+                    actionLabel = "Open downloads",
+                    onClick = onOpenDownloads,
+                )
+            }
 
-            SettingsSectionTitle("Backup & Restore")
-            BackupRestoreSettingsContent()
+            VNextSettingsSection(
+                title = "Backup & Restore",
+                subtitle = "Personalization backup only",
+            ) {
+                BackupRestoreSettingsContent()
+            }
 
-            SettingsSectionTitle("About")
-            AboutSettingsContent()
+            VNextSettingsSection(
+                title = "About",
+                subtitle = "App identity and version",
+            ) {
+                AboutSettingsContent()
+            }
         }
     }
-}
-
-@Composable
-private fun SettingsSectionTitle(title: String) {
-    Text(
-        text = title,
-        modifier = Modifier.padding(top = 4.dp),
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.SemiBold,
-    )
 }
