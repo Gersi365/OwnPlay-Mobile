@@ -1,20 +1,21 @@
 package app.ownplay.player.ui
 
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.ErrorOutline
@@ -22,12 +23,10 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -43,14 +42,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import app.ownplay.player.ui.theme.OwnPlayMediaLayout
-import app.ownplay.player.ui.theme.OwnPlaySectionHeader
-import app.ownplay.player.ui.vod.RemotePoster
 import app.ownplay.player.download.OfflineDownload
 import app.ownplay.player.download.OfflineDownloadFeatureRuntime
 import app.ownplay.player.download.queuedDownloadStatusLabel
 import app.ownplay.player.persistence.download.DownloadMediaKinds
 import app.ownplay.player.persistence.download.DownloadStates
+import app.ownplay.player.ui.theme.OwnPlayMediaLayout
+import app.ownplay.player.ui.theme.OwnPlaySectionHeader
+import app.ownplay.player.ui.vod.RemotePoster
 import kotlinx.coroutines.launch
 
 @Composable
@@ -109,7 +108,11 @@ internal fun DownloadsSettingsScreen(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             if (onBack != null) {
-                TextButton(onClick = onBack) { Text("‹ Settings") }
+                VNextMediaSecondaryAction(
+                    label = "Settings",
+                    icon = Icons.AutoMirrored.Filled.ArrowBack,
+                    onClick = onBack,
+                )
             }
             Column(
                 modifier = Modifier.weight(1f),
@@ -249,13 +252,13 @@ private fun DownloadRow(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(16.dp),
         tonalElevation = 0.dp,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
     ) {
         Column(
             modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -264,7 +267,7 @@ private fun DownloadRow(
                 RemotePoster(
                     url = download.posterUrl,
                     title = download.title,
-                    modifier = Modifier.width(56.dp).aspectRatio(OwnPlayMediaLayout.PosterAspectRatio),
+                    modifier = Modifier.width(58.dp).aspectRatio(OwnPlayMediaLayout.PosterAspectRatio),
                 )
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -286,34 +289,39 @@ private fun DownloadRow(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 when (download.state) {
                     DownloadStates.QUEUED,
                     DownloadStates.DOWNLOADING,
-                    -> IconButton(onClick = onPause) {
-                        Icon(Icons.Filled.Pause, contentDescription = "Pause download")
-                    }
-                    DownloadStates.PAUSED -> IconButton(onClick = onResume) {
-                        Icon(Icons.Filled.PlayArrow, contentDescription = "Resume download")
-                    }
-                    DownloadStates.COMPLETED -> TextButton(onClick = { onPlayOffline(false) }) {
-                        Icon(
-                            Icons.Filled.PlayArrow,
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 4.dp),
-                        )
-                        Text(if (resumeAvailable) "Resume Offline" else "Play Offline")
-                    }
-                    DownloadStates.FAILED -> IconButton(onClick = onRetry) {
-                        Icon(Icons.Filled.Refresh, contentDescription = "Retry download")
-                    }
+                    -> VNextMediaIconAction(
+                        icon = Icons.Filled.Pause,
+                        contentDescription = "Pause download",
+                        onClick = onPause,
+                    )
+                    DownloadStates.PAUSED -> VNextMediaIconAction(
+                        icon = Icons.Filled.PlayArrow,
+                        contentDescription = "Resume download",
+                        onClick = onResume,
+                    )
+                    DownloadStates.COMPLETED -> VNextMediaPrimaryAction(
+                        label = if (resumeAvailable) "Resume Offline" else "Play Offline",
+                        icon = Icons.Filled.PlayArrow,
+                        onClick = { onPlayOffline(false) },
+                    )
+                    DownloadStates.FAILED -> VNextMediaIconAction(
+                        icon = Icons.Filled.Refresh,
+                        contentDescription = "Retry download",
+                        onClick = onRetry,
+                    )
                     else -> Unit
                 }
-                IconButton(onClick = onRemove) {
-                    Icon(Icons.Filled.Delete, contentDescription = "Remove download")
-                }
+                VNextMediaIconAction(
+                    icon = Icons.Filled.Delete,
+                    contentDescription = "Remove download",
+                    onClick = onRemove,
+                )
             }
 
             when (download.state) {
@@ -352,9 +360,11 @@ private fun DownloadRow(
                         color = MaterialTheme.colorScheme.primary,
                     )
                     if (resumeAvailable) {
-                        TextButton(onClick = { onPlayOffline(true) }) {
-                            Text("Play from beginning")
-                        }
+                        VNextMediaSecondaryAction(
+                            label = "Play from beginning",
+                            icon = Icons.Filled.PlayArrow,
+                            onClick = { onPlayOffline(true) },
+                        )
                     }
                 }
                 DownloadStates.FAILED -> Row(
