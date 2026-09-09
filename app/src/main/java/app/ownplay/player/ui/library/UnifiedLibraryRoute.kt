@@ -511,20 +511,6 @@ private fun LibraryTextTab(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(2.dp)
-                .clickable(enabled = false) {},
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .then(
-                        Modifier,
-                    ),
-            )
-        }
         HorizontalDivider(
             thickness = 2.dp,
             color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
