@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ExpandLess
@@ -18,9 +19,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -135,7 +134,11 @@ internal fun LiveOrganizationScreen(
                 "Add a playlist before organizing categories and channels.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            TextButton(onClick = onBack) { Text("Back") }
+            VNextMediaSecondaryAction(
+                label = "Settings",
+                icon = Icons.AutoMirrored.Filled.ArrowBack,
+                onClick = onBack,
+            )
         }
         return
     }
@@ -241,56 +244,68 @@ internal fun LiveOrganizationScreen(
     }
 
     val header: @Composable () -> Unit = {
-        Row(
+        Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 8.dp, end = 8.dp, top = 6.dp, bottom = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                .padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = 6.dp),
+            shape = RoundedCornerShape(18.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f),
+            tonalElevation = 0.dp,
         ) {
-            if (selectedCategoryKey != null) {
-                IconButton(onClick = { selectedCategoryKey = null }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+            Row(
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (selectedCategoryKey != null) {
+                    VNextMediaIconAction(
+                        icon = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        onClick = { selectedCategoryKey = null },
+                    )
                 }
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = selectedCategory?.name ?: "Organize Live",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = if (selectedCategory == null) {
-                        "Categories, hidden content and custom groups"
-                    } else {
-                        "Visible and hidden channels"
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            if (selectedCategory == null) {
-                LiveOrganizationSourceMenu(
-                    summaries = summaries,
-                    selectedSourceId = resolvedSourceId,
-                    onSelected = { sourceId ->
-                        selectedSourceId = sourceId
-                        selectedCategoryKey = null
-                    },
-                )
-                TextButton(onClick = onBack) { Text("Done") }
-            } else {
-                TextButton(
-                    onClick = {
-                        setCategoryHidden(selectedCategory, hidden = !selectedCategory.isHidden)
-                    },
-                    enabled = mutationKey == null,
-                ) {
-                    Text(if (selectedCategory.isHidden) "Unhide category" else "Hide category")
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = selectedCategory?.name ?: "Organize Live",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = if (selectedCategory == null) {
+                            "Categories, hidden content and custom groups"
+                        } else {
+                            "Visible and hidden channels"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                if (selectedCategory == null) {
+                    LiveOrganizationSourceMenu(
+                        summaries = summaries,
+                        selectedSourceId = resolvedSourceId,
+                        onSelected = { sourceId ->
+                            selectedSourceId = sourceId
+                            selectedCategoryKey = null
+                        },
+                    )
+                    VNextMediaSecondaryAction(
+                        label = "Done",
+                        onClick = onBack,
+                    )
+                } else {
+                    VNextMediaPill(
+                        label = if (selectedCategory.isHidden) "Unhide category" else "Hide category",
+                        selected = selectedCategory.isHidden,
+                        enabled = mutationKey == null,
+                        onClick = {
+                            setCategoryHidden(selectedCategory, hidden = !selectedCategory.isHidden)
+                        },
+                    )
                 }
             }
         }
@@ -522,8 +537,10 @@ private fun LiveOrganizationRoot(
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item(key = "visible-header") {
             OrganizationSectionHeader(
@@ -617,8 +634,10 @@ private fun LiveOrganizationCategoryDetail(
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item(key = "visible-channel-header") {
             OrganizationSectionHeader(
@@ -701,8 +720,9 @@ private fun OrganizationSectionHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 14.dp, end = 8.dp, top = 14.dp, bottom = 4.dp),
+            .padding(start = 4.dp, end = 2.dp, top = 10.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
             text = "$title · $count",
@@ -711,7 +731,12 @@ private fun OrganizationSectionHeader(
             fontWeight = FontWeight.SemiBold,
         )
         if (actionLabel != null && onAction != null) {
-            TextButton(onClick = onAction, enabled = actionEnabled) { Text(actionLabel) }
+            VNextMediaPill(
+                label = actionLabel,
+                selected = false,
+                enabled = actionEnabled,
+                onClick = onAction,
+            )
         }
     }
 }
@@ -723,23 +748,31 @@ private fun OrganizationExpandableHeader(
     expanded: Boolean,
     onToggle: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onToggle)
-            .padding(start = 14.dp, end = 10.dp, top = 12.dp, bottom = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.20f),
+        tonalElevation = 0.dp,
     ) {
-        Text(
-            text = "$title · $count",
-            modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
-        )
-        Icon(
-            imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-            contentDescription = if (expanded) "Collapse" else "Expand",
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onToggle)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "$title · $count",
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Icon(
+                imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                contentDescription = if (expanded) "Collapse" else "Expand",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 
@@ -752,14 +785,16 @@ private fun OrganizationCategoryRow(
     onVisibilityChange: () -> Unit,
 ) {
     Surface(
-        color = MaterialTheme.colorScheme.background,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
         tonalElevation = 0.dp,
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable(onClick = onOpen)
-                .padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
+                .padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -778,15 +813,14 @@ private fun OrganizationCategoryRow(
                     maxLines = 1,
                 )
             }
-            TextButton(
-                onClick = onVisibilityChange,
+            VNextMediaPill(
+                label = if (hidden) "Unhide" else "Hide",
+                selected = hidden,
                 enabled = !busy,
-            ) {
-                Text(if (hidden) "Unhide" else "Hide")
-            }
+                onClick = onVisibilityChange,
+            )
         }
     }
-    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 }
 
 @Composable
@@ -798,55 +832,60 @@ private fun OrganizationCustomGroupRow(
     onDelete: () -> Unit,
 ) {
     var menuExpanded by remember(group.groupId) { mutableStateOf(false) }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 16.dp, end = 4.dp, top = 9.dp, bottom = 9.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
+        tonalElevation = 0.dp,
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = group.name,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = "$memberCount channels",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Column {
-            IconButton(
-                enabled = !busy,
-                onClick = { menuExpanded = true },
-            ) {
-                Icon(Icons.Filled.MoreVert, contentDescription = "Group actions")
+        Row(
+            modifier = Modifier.padding(start = 14.dp, end = 8.dp, top = 9.dp, bottom = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = group.name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = "$memberCount channels",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
-            DropdownMenu(
-                expanded = menuExpanded,
-                onDismissRequest = { menuExpanded = false },
-            ) {
-                DropdownMenuItem(
-                    text = { Text("Rename") },
-                    onClick = {
-                        menuExpanded = false
-                        onRename()
-                    },
+            Column {
+                VNextMediaIconAction(
+                    icon = Icons.Filled.MoreVert,
+                    contentDescription = "Group actions",
+                    enabled = !busy,
+                    onClick = { menuExpanded = true },
                 )
-                DropdownMenuItem(
-                    text = { Text("Delete") },
-                    onClick = {
-                        menuExpanded = false
-                        onDelete()
-                    },
-                )
+                DropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false },
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Rename") },
+                        onClick = {
+                            menuExpanded = false
+                            onRename()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Delete") },
+                        onClick = {
+                            menuExpanded = false
+                            onDelete()
+                        },
+                    )
+                }
             }
         }
     }
-    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 }
 
 @Composable
@@ -863,114 +902,128 @@ private fun OrganizationChannelRow(
     onEdit: () -> Unit,
 ) {
     var menuExpanded by remember(channel.channelId) { mutableStateOf(false) }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
+        tonalElevation = 0.dp,
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = channel.displayName,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = buildString {
-                    if (channel.isFavorite) append("Favorite")
-                    if (channel.localDisplayName != null) {
-                        if (isNotEmpty()) append(" · ")
-                        append("Local name")
-                    }
-                    if (channel.hasLogoOverride) {
-                        if (isNotEmpty()) append(" · ")
-                        append("Custom logo")
-                    }
-                    if (isEmpty()) append(if (hidden) "Hidden" else "Visible")
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        TextButton(onClick = onVisibilityChange, enabled = !busy) {
-            Text(if (hidden) "Unhide" else "Hide")
-        }
-        Column {
-            IconButton(
-                enabled = !busy,
-                onClick = { menuExpanded = true },
-            ) {
-                Icon(Icons.Filled.MoreVert, contentDescription = "Channel actions")
+        Row(
+            modifier = Modifier.padding(start = 14.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = channel.displayName,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = buildString {
+                        if (channel.isFavorite) append("Favorite")
+                        if (channel.localDisplayName != null) {
+                            if (isNotEmpty()) append(" · ")
+                            append("Local name")
+                        }
+                        if (channel.hasLogoOverride) {
+                            if (isNotEmpty()) append(" · ")
+                            append("Custom logo")
+                        }
+                        if (isEmpty()) append(if (hidden) "Hidden" else "Visible")
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
-            DropdownMenu(
-                expanded = menuExpanded,
-                onDismissRequest = { menuExpanded = false },
-            ) {
-                DropdownMenuItem(
-                    text = { Text("Edit name / logo") },
-                    onClick = {
-                        menuExpanded = false
-                        onEdit()
-                    },
+            VNextMediaPill(
+                label = if (hidden) "Unhide" else "Hide",
+                selected = hidden,
+                enabled = !busy,
+                onClick = onVisibilityChange,
+            )
+            Column {
+                VNextMediaIconAction(
+                    icon = Icons.Filled.MoreVert,
+                    contentDescription = "Channel actions",
+                    enabled = !busy,
+                    onClick = { menuExpanded = true },
                 )
-                DropdownMenuItem(
-                    text = { Text(if (channel.isFavorite) "Remove favorite" else "Favorite") },
-                    onClick = {
-                        menuExpanded = false
-                        onFavoriteChange(!channel.isFavorite)
-                    },
-                )
-                DropdownMenuItem(
-                    text = { Text("Move to top") },
-                    onClick = {
-                        menuExpanded = false
-                        onMoveToTop()
-                    },
-                )
-                DropdownMenuItem(
-                    text = { Text("Move to bottom") },
-                    onClick = {
-                        menuExpanded = false
-                        onMoveToBottom()
-                    },
-                )
-                customGroups.forEach { group ->
-                    val member = group.groupId in channel.customGroupIds
+                DropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false },
+                ) {
                     DropdownMenuItem(
-                        text = {
-                            Text(
-                                if (member) {
-                                    "Remove from ${group.name}"
-                                } else {
-                                    "Add to ${group.name}"
-                                },
-                            )
-                        },
+                        text = { Text("Edit name / logo") },
                         onClick = {
                             menuExpanded = false
-                            onGroupMembershipChange(group, !member)
+                            onEdit()
                         },
                     )
+                    DropdownMenuItem(
+                        text = { Text(if (channel.isFavorite) "Remove favorite" else "Favorite") },
+                        onClick = {
+                            menuExpanded = false
+                            onFavoriteChange(!channel.isFavorite)
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Move to top") },
+                        onClick = {
+                            menuExpanded = false
+                            onMoveToTop()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Move to bottom") },
+                        onClick = {
+                            menuExpanded = false
+                            onMoveToBottom()
+                        },
+                    )
+                    customGroups.forEach { group ->
+                        val member = group.groupId in channel.customGroupIds
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    if (member) {
+                                        "Remove from ${group.name}"
+                                    } else {
+                                        "Add to ${group.name}"
+                                    },
+                                )
+                            },
+                            onClick = {
+                                menuExpanded = false
+                                onGroupMembershipChange(group, !member)
+                            },
+                        )
+                    }
                 }
             }
         }
     }
-    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 }
 
 @Composable
 private fun OrganizationEmptyText(text: String) {
-    Text(
-        text = text,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.18f),
+        tonalElevation = 0.dp,
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
 }
 
 @Composable
@@ -982,13 +1035,11 @@ private fun LiveOrganizationSourceMenu(
     var expanded by remember { mutableStateOf(false) }
     val selected = summaries.firstOrNull { summary -> summary.sourceId == selectedSourceId }
     Column {
-        TextButton(onClick = { expanded = true }) {
-            Text(
-                text = selected?.name ?: "Source",
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
+        VNextMediaPill(
+            label = selected?.name ?: "Source",
+            selected = false,
+            onClick = { expanded = true },
+        )
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
