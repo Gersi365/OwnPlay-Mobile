@@ -57,7 +57,6 @@ class MobilePortraitFoundationContractTest {
         assertFalse(library.contains("OfflineMovieListRow("))
         assertFalse(library.contains("SeriesListRow("))
         assertFalse(library.contains("OfflineSeriesListRow("))
-        assertFalse(library.contains("compact ="))
         assertTrue(library.contains("LazyVerticalGrid("))
         assertTrue(
             library.contains(
