@@ -41,15 +41,16 @@ internal fun VNextMediaIconAction(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     selected: Boolean = false,
+    enabled: Boolean = true,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     Surface(
         modifier = modifier.size(48.dp),
         shape = RoundedCornerShape(14.dp),
-        color = if (selected) {
-            MaterialTheme.colorScheme.primaryContainer
-        } else {
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f)
+        color = when {
+            !enabled -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.24f)
+            selected -> MaterialTheme.colorScheme.primaryContainer
+            else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f)
         },
         tonalElevation = 0.dp,
     ) {
@@ -60,6 +61,7 @@ internal fun VNextMediaIconAction(
                     interactionSource = interactionSource,
                     indication = null,
                     role = Role.Button,
+                    enabled = enabled,
                     onClick = onClick,
                 ),
             contentAlignment = Alignment.Center,
@@ -68,10 +70,10 @@ internal fun VNextMediaIconAction(
                 imageVector = icon,
                 contentDescription = contentDescription,
                 modifier = Modifier.size(20.dp),
-                tint = if (selected) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
+                tint = when {
+                    !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.46f)
+                    selected -> MaterialTheme.colorScheme.primary
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
                 },
             )
         }
@@ -84,15 +86,16 @@ internal fun VNextMediaPill(
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(12.dp),
-        color = if (selected) {
-            MaterialTheme.colorScheme.primaryContainer
-        } else {
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)
+        color = when {
+            !enabled -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.24f)
+            selected -> MaterialTheme.colorScheme.primaryContainer
+            else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)
         },
         tonalElevation = 0.dp,
     ) {
@@ -103,15 +106,16 @@ internal fun VNextMediaPill(
                     interactionSource = interactionSource,
                     indication = null,
                     role = Role.Button,
+                    enabled = enabled,
                     onClick = onClick,
                 )
                 .padding(horizontal = 13.dp, vertical = 8.dp),
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.SemiBold,
-            color = if (selected) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
+            color = when {
+                !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.46f)
+                selected -> MaterialTheme.colorScheme.primary
+                else -> MaterialTheme.colorScheme.onSurfaceVariant
             },
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
