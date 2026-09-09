@@ -56,6 +56,8 @@ class DownloadNotificationUxContractTest {
         assertTrue(worker.contains("NotificationManager.IMPORTANCE_LOW"))
         assertTrue(worker.contains(".setOnlyAlertOnce(true)"))
         assertTrue(worker.contains(".setOngoing(true)"))
+        assertTrue(worker.contains(".setWhen(DownloadNotificationOrder.eventTime(row.createdAtEpochMillis))"))
+        assertTrue(worker.contains(".setSortKey(DownloadNotificationOrder.sortKey(row.createdAtEpochMillis, row.downloadId))"))
         assertTrue(worker.contains("ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC"))
         assertTrue(
             worker.contains(

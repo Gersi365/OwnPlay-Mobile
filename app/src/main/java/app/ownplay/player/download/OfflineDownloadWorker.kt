@@ -568,6 +568,8 @@ class OfflineDownloadWorker(
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setContentTitle("Downloading ${row.title}")
             .setContentText(progressLabel(bytesDownloaded, totalBytes))
+            .setWhen(DownloadNotificationOrder.eventTime(row.createdAtEpochMillis))
+            .setSortKey(DownloadNotificationOrder.sortKey(row.createdAtEpochMillis, row.downloadId))
             .setOnlyAlertOnce(true)
             .setOngoing(true)
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
