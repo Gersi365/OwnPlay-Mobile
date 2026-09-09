@@ -66,7 +66,7 @@ class DownloadActionConsistencyContractTest {
         assertTrue(downloads.contains("scope.launch { runtime.remove(download.downloadId) }"))
         assertTrue(downloads.contains("\"Resume Offline\""))
         assertTrue(downloads.contains("\"Play Offline\""))
-        assertTrue(downloads.contains("Text(\"Play from beginning\")"))
+        assertTrue(downloads.contains("label = \"Play from beginning\""))
         assertTrue(downloads.contains("startFromBeginning = startFromBeginning"))
         assertTrue(downloads.contains("contentDescription = \"Remove download\""))
 
