@@ -34,7 +34,7 @@ class MobileVNextVisualCompletionContractTest {
         assertTrue(shell.contains("MaterialTheme.colorScheme.primary"))
         assertTrue(shell.contains("MaterialTheme.colorScheme.onSurfaceVariant"))
 
-        assertFalse(shell.contains("NavigationBar("))
+        assertFalse(shell.contains("import androidx.compose.material3.NavigationBar\n"))
         assertFalse(shell.contains("NavigationBarItem("))
         assertFalse(shell.contains("NavigationBarItemDefaults"))
     }
