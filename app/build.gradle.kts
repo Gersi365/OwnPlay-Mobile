@@ -6,14 +6,14 @@ plugins {
 }
 
 android {
-    namespace = "app.ownplay.player"
+    namespace = "app.ownplay.mobile"
     compileSdk = 36
 
     defaultConfig {
         minSdk = 26
         targetSdk = 36
         versionCode = 15
-        versionName = "1.0.13-product-polish-update"
+        versionName = "2.0.0-rebuild-foundation"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
