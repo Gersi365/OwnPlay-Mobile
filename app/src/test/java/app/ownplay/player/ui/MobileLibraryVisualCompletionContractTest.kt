@@ -7,21 +7,25 @@ import org.junit.Test
 
 class MobileLibraryVisualCompletionContractTest {
     @Test
-    fun `Library uses vNext media controls and keeps poster first grid`() {
+    fun `Library uses flat catalog controls and keeps poster first grid`() {
         val library = sourceText("src/main/java/app/ownplay/player/ui/library/UnifiedLibraryRoute.kt")
 
-        assertTrue(library.contains("VNextMediaIconAction("))
-        assertTrue(library.contains("VNextMediaSearchField("))
-        assertTrue(library.contains("VNextMediaPill("))
+        assertTrue(library.contains("LibraryTextTab("))
+        assertTrue(library.contains("LibrarySearchField("))
+        assertTrue(library.contains("BasicTextField("))
+        assertTrue(library.contains("HorizontalDivider("))
         assertTrue(library.contains("LazyVerticalGrid("))
         assertTrue(library.contains("GridCells.Adaptive(minSize = OwnPlayMediaLayout.MinimumPosterWidthDp.dp)"))
         assertTrue(library.contains("LibraryUnifiedContinueWatchingStrip("))
+        assertFalse(library.contains("VNextMediaPill("))
+        assertFalse(library.contains("VNextMediaSearchField("))
+        assertFalse(library.contains("VNextMediaIconAction("))
         assertFalse(library.contains("FilterChip("))
         assertFalse(library.contains("OutlinedTextField("))
     }
 
     @Test
-    fun `on demand details use vNext actions without changing canonical vocabulary`() {
+    fun `on demand details keep canonical actions and vocabulary`() {
         val movie = sourceText("src/main/java/app/ownplay/player/ui/vod/MovieDetailsPane.kt")
         val series = sourceText("src/main/java/app/ownplay/player/ui/series/SeriesDetailsPane.kt")
 
