@@ -15,29 +15,24 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -54,6 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -330,16 +326,33 @@ internal fun TargetLiveRoute(
         )
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding(),
-    ) {
+    Column(modifier = Modifier.fillMaxSize()) {
         if (preview != null) {
             Column(
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "PREVIEW",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        text = preview.displayName,
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(start = 10.dp),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
                 LivePreviewPanel(
                     selection = preview,
                     state = playbackState,
@@ -398,7 +411,7 @@ private fun MobileLiveBrowsePane(
             category.providerCategoryKey == state.query.categoryKey
         }
         if (activeCategoryIndex >= 0) {
-            categoryListState.animateScrollToItem(activeCategoryIndex + 1)
+            categoryListState.animateScrollToItem(activeCategoryIndex)
         }
     }
 
@@ -419,25 +432,54 @@ private fun MobileLiveBrowsePane(
 
     Surface(
         modifier = modifier.fillMaxSize(),
-        shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.background,
         tonalElevation = 0.dp,
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(1.dp),
+                ) {
+                    Text(
+                        text = "Live TV",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = when {
+                            state.channels.isNotEmpty() -> "${state.channels.size} channels"
+                            state.catalogChannelCount > 0 -> "Browse channels"
+                            else -> "Your channels"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                MobileSearchButton(
+                    searchExpanded = searchExpanded,
+                    onSearchExpandedChange = onSearchExpandedChange,
+                    onSearchChange = onSearchChange,
+                )
+            }
+
             AnimatedVisibility(
                 visible = searchExpanded || state.query.searchTerm.isNotBlank(),
                 enter = fadeIn(),
                 exit = fadeOut(),
             ) {
-                OutlinedTextField(
+                MobileLiveSearchField(
                     value = state.query.searchTerm,
                     onValueChange = onSearchChange,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 10.dp, vertical = 2.dp),
-                    singleLine = true,
-                    placeholder = { Text("Search channels") },
-                    shape = RoundedCornerShape(10.dp),
+                        .padding(horizontal = 12.dp, vertical = 4.dp),
                 )
             }
 
@@ -445,22 +487,16 @@ private fun MobileLiveBrowsePane(
                 LazyRow(
                     state = categoryListState,
                     modifier = Modifier.fillMaxWidth(),
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 7.dp),
+                    horizontalArrangement = Arrangement.spacedBy(7.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    item(key = "search") {
-                        MobileSearchButton(
-                            searchExpanded = searchExpanded,
-                            onSearchExpandedChange = onSearchExpandedChange,
-                            onSearchChange = onSearchChange,
-                        )
-                    }
                     items(
                         items = state.categories,
                         key = { it.providerCategoryKey },
                     ) { category ->
-                        FilterChip(
+                        MobileCategoryPill(
+                            label = category.name,
                             selected = state.query.categoryKey == category.providerCategoryKey,
                             onClick = {
                                 onCategorySelected(
@@ -471,32 +507,10 @@ private fun MobileLiveBrowsePane(
                                     },
                                 )
                             },
-                            label = {
-                                Text(
-                                    text = category.name,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            },
                         )
                     }
                 }
-            } else {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 2.dp),
-                    horizontalArrangement = Arrangement.End,
-                ) {
-                    MobileSearchButton(
-                        searchExpanded = searchExpanded,
-                        onSearchExpandedChange = onSearchExpandedChange,
-                        onSearchChange = onSearchChange,
-                    )
-                }
             }
-
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
             when {
                 loadingChannels && state.catalogChannelCount == 0 -> MobileLiveStatusState(
@@ -543,7 +557,8 @@ private fun MobileLiveBrowsePane(
                                 },
                             )
                         },
-                    contentPadding = PaddingValues(vertical = 4.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 5.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     items(
                         items = state.channels,
@@ -563,21 +578,126 @@ private fun MobileLiveBrowsePane(
 }
 
 @Composable
+private fun MobileLiveSearchField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f),
+        tonalElevation = 0.dp,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Search,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodyMedium.copy(
+                    color = MaterialTheme.colorScheme.onSurface,
+                ),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                decorationBox = { innerTextField ->
+                    Box {
+                        if (value.isBlank()) {
+                            Text(
+                                text = "Search channels",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        innerTextField()
+                    }
+                },
+            )
+        }
+    }
+}
+
+@Composable
 private fun MobileSearchButton(
     searchExpanded: Boolean,
     onSearchExpandedChange: (Boolean) -> Unit,
     onSearchChange: (String) -> Unit,
 ) {
-    IconButton(
-        onClick = {
-            val next = !searchExpanded
-            onSearchExpandedChange(next)
-            if (!next) onSearchChange("")
+    Surface(
+        modifier = Modifier.size(48.dp),
+        shape = RoundedCornerShape(14.dp),
+        color = if (searchExpanded) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f)
         },
+        tonalElevation = 0.dp,
     ) {
-        Icon(
-            imageVector = if (searchExpanded) Icons.Filled.Close else Icons.Filled.Search,
-            contentDescription = if (searchExpanded) "Close search" else "Search channels",
+        IconButton(
+            onClick = {
+                val next = !searchExpanded
+                onSearchExpandedChange(next)
+                if (!next) onSearchChange("")
+            },
+        ) {
+            Icon(
+                imageVector = if (searchExpanded) Icons.Filled.Close else Icons.Filled.Search,
+                contentDescription = if (searchExpanded) "Close search" else "Search channels",
+                tint = if (searchExpanded) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun MobileCategoryPill(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    Surface(
+        modifier = Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                role = Role.Button,
+                onClick = onClick,
+            ),
+        shape = RoundedCornerShape(999.dp),
+        color = if (selected) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f)
+        },
+        tonalElevation = 0.dp,
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+            color = if (selected) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -590,16 +710,10 @@ private fun MobileChannelRow(
     onClick: () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    Row(
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .background(
-                if (active) {
-                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.58f)
-                } else {
-                    MaterialTheme.colorScheme.background
-                },
-            )
+            .clip(RoundedCornerShape(14.dp))
             .semantics(mergeDescendants = true) {
                 selected = active
                 stateDescription = when {
@@ -615,62 +729,71 @@ private fun MobileChannelRow(
                 role = Role.Button,
                 onClickLabel = if (active) "Open full view" else "Open preview",
                 onClick = onClick,
-            )
-            .padding(horizontal = 14.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ),
+        shape = RoundedCornerShape(14.dp),
+        color = if (active) {
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.72f)
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.26f)
+        },
+        tonalElevation = 0.dp,
     ) {
-        MobileChannelLogo(
-            logoRef = channel.logoRef,
-            title = channel.displayName,
-            modifier = Modifier.size(46.dp),
-        )
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = channel.displayName,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-                color = if (active) {
-                    MaterialTheme.colorScheme.onPrimaryContainer
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                },
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            MobileChannelLogo(
+                logoRef = channel.logoRef,
+                title = channel.displayName,
+                modifier = Modifier.size(46.dp),
             )
-            currentProgram?.let { program ->
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
                 Text(
-                    text = buildString {
-                        program.startLabel?.takeIf(String::isNotBlank)?.let { start ->
-                            append(start)
-                            append(" · ")
-                        }
-                        append(program.title)
-                    },
-                    style = MaterialTheme.typography.bodySmall,
+                    text = channel.displayName,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
                     color = if (active) {
-                        MaterialTheme.colorScheme.primary
+                        MaterialTheme.colorScheme.onPrimaryContainer
                     } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
+                        MaterialTheme.colorScheme.onSurface
                     },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                currentProgram?.let { program ->
+                    Text(
+                        text = buildString {
+                            program.startLabel?.takeIf(String::isNotBlank)?.let { start ->
+                                append(start)
+                                append(" · ")
+                            }
+                            append(program.title)
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (active) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            if (channel.isFavorite) {
+                Text(
+                    text = "★",
+                    modifier = Modifier.clearAndSetSemantics { },
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.labelLarge,
+                )
             }
         }
-        if (channel.isFavorite) {
-            Text(
-                text = "★",
-                modifier = Modifier.clearAndSetSemantics { },
-                color = MaterialTheme.colorScheme.primary,
-                style = MaterialTheme.typography.labelLarge,
-            )
-        }
     }
-    HorizontalDivider(
-        modifier = Modifier.padding(start = 72.dp),
-        color = MaterialTheme.colorScheme.outlineVariant,
-    )
 }
 
 @Composable
@@ -718,7 +841,7 @@ private fun MobileChannelLogo(
     }
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(9.dp))
+            .clip(RoundedCornerShape(12.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .clearAndSetSemantics { },
         contentAlignment = Alignment.Center,

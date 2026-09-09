@@ -9,7 +9,7 @@ import org.junit.Test
 class OnDemandPresentationLifecycleRegressionTest {
     @Test
     fun mobileShellRestoresOnDemandRouteFromProcessSession() {
-        val mobile = sourceText("src/mobile/java/app/ownplay/player/ui/MobileOwnPlayApp.kt")
+        val mobile = sourceText("src/mobile/java/app/ownplay/player/ui/MobileVNextOwnPlayApp.kt")
 
         listOf(mobile).forEach { shell ->
             assertTrue(shell.contains("runtime.onDemandPresentationSession.state.collectAsState()"))

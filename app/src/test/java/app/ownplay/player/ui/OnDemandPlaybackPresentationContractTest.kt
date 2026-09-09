@@ -53,18 +53,16 @@ class OnDemandPlaybackPresentationContractTest {
 
     @Test
     fun `playback origin metadata never renders persistent fullscreen chrome`() {
-        val badge = sourceText("src/main/java/app/ownplay/player/ui/PlaybackOriginBadge.kt")
-        val shell = sourceText("src/main/java/app/ownplay/player/ui/OwnPlayApp.kt")
+        val shell = sourceText("src/mobile/java/app/ownplay/player/ui/MobileVNextOwnPlayApp.kt")
+        val activity = sourceText("src/main/java/app/ownplay/player/MainActivity.kt")
+        val onDemand = sourceText("src/main/java/app/ownplay/player/ui/OnDemandPlaybackSurface.kt")
+        val live = sourceText("src/main/java/app/ownplay/player/ui/PlaybackScreen.kt")
 
-        assertTrue(badge.contains("Playback origin is runtime metadata"))
-        assertTrue(badge.contains(") = Unit"))
-        assertFalse(badge.contains("Text("))
-        assertFalse(badge.contains("Icon("))
-        assertFalse(badge.contains("Surface("))
-        assertFalse(badge.contains("ONLINE"))
-        assertFalse(badge.contains("OFFLINE"))
-        assertFalse(shell.contains("\"ONLINE\""))
-        assertFalse(shell.contains("\"OFFLINE\""))
+        listOf(shell, activity, onDemand, live).forEach { source ->
+            assertFalse(source.contains("PlaybackOriginBadge"))
+            assertFalse(source.contains("\"ONLINE\""))
+            assertFalse(source.contains("\"OFFLINE\""))
+        }
     }
 
     @Test

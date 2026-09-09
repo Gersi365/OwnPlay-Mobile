@@ -8,19 +8,19 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -99,6 +99,7 @@ internal fun PlaylistSettingsScreen(
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -112,16 +113,18 @@ internal fun PlaylistSettingsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Button(onClick = { addMode = AddPlaylistMode.XTREAM }) {
-                Text("Add playlist")
-            }
+            VNextMediaPrimaryAction(
+                label = "Add playlist",
+                onClick = { addMode = AddPlaylistMode.XTREAM },
+            )
         }
 
         sourceSyncStatus(bannerSyncState)?.let { status ->
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
-                color = MaterialTheme.colorScheme.secondaryContainer,
+                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.74f),
+                tonalElevation = 0.dp,
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
@@ -153,21 +156,22 @@ internal fun PlaylistSettingsScreen(
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(18.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.34f),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
                 tonalElevation = 0.dp,
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     Text("No playlists yet", fontWeight = FontWeight.SemiBold)
                     Text(
                         text = "Add Xtream or M3U here. Live remains available while the catalog loads.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Button(onClick = { addMode = AddPlaylistMode.XTREAM }) {
-                        Text("Add playlist")
-                    }
+                    VNextMediaPrimaryAction(
+                        label = "Add playlist",
+                        onClick = { addMode = AddPlaylistMode.XTREAM },
+                    )
                 }
             }
         }
@@ -218,28 +222,31 @@ internal fun PlaylistSettingsScreen(
             )
         }
 
-        HorizontalDivider()
         Text(
             text = "Add source type",
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.SemiBold,
         )
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            OutlinedButton(
+            VNextMediaSecondaryAction(
+                label = "Xtream",
                 onClick = { addMode = AddPlaylistMode.XTREAM },
                 modifier = Modifier.weight(1f),
-            ) { Text("Xtream") }
-            OutlinedButton(
+            )
+            VNextMediaSecondaryAction(
+                label = "M3U URL",
                 onClick = { addMode = AddPlaylistMode.REMOTE_M3U },
                 modifier = Modifier.weight(1f),
-            ) { Text("M3U URL") }
-            OutlinedButton(
+            )
+            VNextMediaSecondaryAction(
+                label = "File",
                 onClick = { addMode = AddPlaylistMode.LOCAL_M3U },
                 modifier = Modifier.weight(1f),
-            ) { Text("File") }
+            )
         }
     }
 
@@ -374,51 +381,85 @@ private fun PlaylistCard(
                 if (syncing) CircularProgressIndicator(strokeWidth = 2.dp)
             }
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .selectable(
-                        selected = isActive,
-                        enabled = summary.enabled,
-                        role = Role.RadioButton,
-                        onClick = onSetActive,
-                    ),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                tonalElevation = 0.dp,
+                color = if (isActive) {
+                    MaterialTheme.colorScheme.primaryContainer
+                } else {
+                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)
+                },
             ) {
-                RadioButton(
-                    selected = isActive,
-                    onClick = null,
-                    enabled = summary.enabled,
-                )
-                Text(
-                    text = when {
-                        activelyImporting -> "Import in progress"
-                        queued -> "Queued for import"
-                        importFailed -> "Retry import before activating"
-                        importing -> "Available after import"
-                        else -> "Use as active playlist"
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    color = if (summary.enabled) {
-                        MaterialTheme.colorScheme.onSurface
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .selectable(
+                            selected = isActive,
+                            enabled = summary.enabled,
+                            role = Role.RadioButton,
+                            onClick = onSetActive,
+                        )
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Surface(
+                        modifier = Modifier.size(10.dp),
+                        shape = CircleShape,
+                        color = if (isActive) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.outlineVariant
+                        },
+                        tonalElevation = 0.dp,
+                    ) {}
+                    Text(
+                        text = when {
+                            activelyImporting -> "Import in progress"
+                            queued -> "Queued for import"
+                            importFailed -> "Retry import before activating"
+                            importing -> "Available after import"
+                            else -> "Use as active playlist"
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = when {
+                            !summary.enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.58f)
+                            isActive -> MaterialTheme.colorScheme.primary
+                            else -> MaterialTheme.colorScheme.onSurface
+                        },
+                    )
+                }
             }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                TextButton(onClick = onOpen, enabled = summary.enabled) { Text("Live") }
-                TextButton(onClick = onRefresh, enabled = !busy) {
-                    Text(if (summary.enabled) "Refresh" else "Retry")
-                }
-                TextButton(onClick = onEdit, enabled = summary.enabled && !syncing) { Text("Edit") }
-                TextButton(onClick = onDelete) { Text("Delete") }
+                VNextMediaPill(
+                    label = "Live",
+                    selected = false,
+                    enabled = summary.enabled,
+                    onClick = onOpen,
+                )
+                VNextMediaPill(
+                    label = if (summary.enabled) "Refresh" else "Retry",
+                    selected = false,
+                    enabled = !busy,
+                    onClick = onRefresh,
+                )
+                VNextMediaPill(
+                    label = "Edit",
+                    selected = false,
+                    enabled = summary.enabled && !syncing,
+                    onClick = onEdit,
+                )
+                VNextMediaPill(
+                    label = "Delete",
+                    selected = false,
+                    onClick = onDelete,
+                )
             }
         }
     }

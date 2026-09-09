@@ -82,7 +82,7 @@ class ShellLifecycleRegressionTest {
     @Test
     fun mobileBackHierarchyFallsThroughToExitOnlyAtLiveRoot() {
         listOf(
-            "src/mobile/java/app/ownplay/player/ui/MobileOwnPlayApp.kt" to "MobileSection",
+            "src/mobile/java/app/ownplay/player/ui/MobileVNextOwnPlayApp.kt" to "MobileShellDestination",
         ).forEach { (path, sectionType) ->
             val source = sourceText(path)
             assertTrue("$path must install a Compose back handler", source.contains("import androidx.activity.compose.BackHandler"))
@@ -109,7 +109,7 @@ class ShellLifecycleRegressionTest {
 
     private companion object {
         val activeShellPaths = listOf(
-            "src/mobile/java/app/ownplay/player/ui/MobileOwnPlayApp.kt",
+            "src/mobile/java/app/ownplay/player/ui/MobileVNextOwnPlayApp.kt",
         )
     }
 }

@@ -43,33 +43,29 @@ class MobileHomePresentationTest {
     }
 
     @Test
-    fun `Home is cache first media content with stable geometry`() {
-        val home = normalizedSource(
-            sourceText("src/mobile/java/app/ownplay/player/ui/MobileVNextHomeRoute.kt"),
-        )
+    fun `active shell excludes Home from primary navigation`() {
         val shell = normalizedSource(
             sourceText("src/mobile/java/app/ownplay/player/ui/MobileVNextOwnPlayApp.kt"),
+        )
+        val navigation = normalizedSource(
+            sourceText("src/mobile/java/app/ownplay/player/ui/MobileShellNavigation.kt"),
         )
         val continueWatching = normalizedSource(
             sourceText("src/main/java/app/ownplay/player/ui/library/LibraryContinueWatching.kt"),
         )
 
-        assertTrue(home.contains("combine("))
-        assertTrue(home.contains("unifiedContinueWatching("))
-        assertTrue(home.contains("Recently Added Movies"))
-        assertTrue(home.contains("Recently Updated Series"))
-        assertTrue(home.contains("items(items = items, key = stableKey)"))
-        assertTrue(home.contains("aspectRatio(OwnPlayMediaLayout.PosterAspectRatio)"))
-        assertFalse(home.contains(".refresh("))
+        assertFalse(shell.contains("MobileVNextHomeRoute("))
+        assertFalse(shell.contains("MobileShellDestination.HOME"))
+        assertFalse(shell.contains("onOpenHome"))
+        assertFalse(navigation.contains("MobilePrimaryDestination.HOME"))
+        assertTrue(navigation.contains("MobilePrimaryDestination.LIVE"))
+        assertTrue(navigation.contains("MobilePrimaryDestination.LIBRARY"))
+        assertTrue(navigation.contains("MobilePrimaryDestination.SETTINGS"))
 
-        assertTrue(shell.contains("movieDetailReturnDestination = MobileShellDestination.HOME"))
-        assertTrue(shell.contains("seriesDetailReturnDestination = MobileShellDestination.HOME"))
-        assertTrue(shell.contains("onReturnToLibrary = { openSection(movieDetailReturnDestination) }"))
-        assertTrue(shell.contains("onReturnToLibrary = { openSection(seriesDetailReturnDestination) }"))
-
-        assertTrue(continueWatching.contains("val cardWidth = 220.dp"))
-        assertTrue(continueWatching.contains("val posterWidth = 58.dp"))
-        assertFalse(continueWatching.contains("val cardWidth = 138.dp"))
+        assertTrue(continueWatching.contains("val cardWidth = 148.dp"))
+        assertTrue(continueWatching.contains("OwnPlayMediaLayout.PosterAspectRatio"))
+        assertFalse(continueWatching.contains("val posterWidth = 58.dp"))
+        assertFalse(continueWatching.contains("val cardWidth = 220.dp"))
     }
 
     private fun movie(

@@ -14,6 +14,7 @@ internal enum class SettingsDestination {
     HOME,
     SOURCES,
     LIVE_MANAGEMENT,
+    DOWNLOADS,
 }
 
 @Composable
@@ -53,6 +54,10 @@ internal fun SettingsScreen(
             )
             return
         }
+        SettingsDestination.DOWNLOADS -> {
+            DownloadsSettingsScreen()
+            return
+        }
         SettingsDestination.HOME -> Unit
     }
 
@@ -60,5 +65,6 @@ internal fun SettingsScreen(
         summaries = summaries,
         onOpenLiveManagement = { destination = SettingsDestination.LIVE_MANAGEMENT },
         onOpenSources = { destination = SettingsDestination.SOURCES },
+        onOpenDownloads = { destination = SettingsDestination.DOWNLOADS },
     )
 }

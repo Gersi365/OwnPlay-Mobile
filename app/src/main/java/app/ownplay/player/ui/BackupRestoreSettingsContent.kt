@@ -7,7 +7,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -90,7 +89,7 @@ internal fun BackupRestoreSettingsContent() {
 
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         SettingsActionRow(
             title = "Backup personalization",
@@ -98,7 +97,6 @@ internal fun BackupRestoreSettingsContent() {
             actionLabel = "Export",
             onClick = { exportLauncher.launch("ownplay-personalization-v1.json") },
         )
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         SettingsActionRow(
             title = "Restore personalization",
             detail = "Import a previous OwnPlay personalization backup",

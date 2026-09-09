@@ -98,12 +98,12 @@ class PictureInPictureWiringContractTest {
     @Test
     fun `Mobile shell exposes every active playback presentation to PiP eligibility`() {
         val source = normalizedSource(
-            sourceText("src/mobile/java/app/ownplay/player/ui/MobileOwnPlayApp.kt"),
+            sourceText("src/mobile/java/app/ownplay/player/ui/MobileVNextOwnPlayApp.kt"),
         )
 
         assertTrue(
             source.contains(
-                "val previewActive = section == MobileSection.LIVE && activeSelection != null && fullscreenSelection == null",
+                "val previewActive = section == MobileShellDestination.LIVE && activeSelection != null && fullscreenSelection == null",
             ),
         )
         assertTrue(

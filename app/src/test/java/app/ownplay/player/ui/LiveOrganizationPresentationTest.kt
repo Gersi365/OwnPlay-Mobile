@@ -109,6 +109,24 @@ class LiveOrganizationPresentationTest {
         )
     }
 
+    @Test
+    fun `active Live organization hierarchy uses vNext management chrome without divider rows`() {
+        val organization = normalizedSource(
+            sourceText("src/main/java/app/ownplay/player/ui/LiveOrganizationScreen.kt"),
+        )
+
+        assertTrue(organization.contains("VNextMediaPill("))
+        assertTrue(organization.contains("VNextMediaIconAction("))
+        assertTrue(organization.contains("shape = RoundedCornerShape(16.dp)"))
+        assertFalse(organization.contains("HorizontalDivider("))
+        assertFalse(organization.contains("IconButton("))
+        assertTrue(organization.contains("runtime.hideCategory("))
+        assertTrue(organization.contains("runtime.unhideCategory("))
+        assertTrue(organization.contains("runtime.executeChannelBulkAction("))
+        assertTrue(organization.contains("runtime.setCategoryOrder("))
+        assertTrue(organization.contains("orderedCategoryKeys = visibleOrderedKeys + hiddenKeys"))
+    }
+
     private fun category(
         key: String,
         name: String,

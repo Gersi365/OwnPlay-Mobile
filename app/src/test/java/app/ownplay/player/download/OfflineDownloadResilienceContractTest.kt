@@ -60,7 +60,7 @@ class OfflineDownloadResilienceContractTest {
     }
 
     @Test
-    fun offlinePlaybackHostVerifiesFilesAndPresentationDisposalDoesNotStopPlayback() {
+    fun explicitOfflineExitPersistsBeforeTeardownWithoutLegacyOriginChrome() {
         val activity = sourceText("src/main/java/app/ownplay/player/MainActivity.kt")
         val screen = sourceText("src/main/java/app/ownplay/player/ui/library/LibraryPlaybackScreen.kt")
 
@@ -71,10 +71,23 @@ class OfflineDownloadResilienceContractTest {
         assertTrue(activity.contains("runtime.playbackController.start(request)"))
         assertTrue(activity.contains("downloadPlaybackSession = LibraryPlaybackSession("))
         assertTrue(activity.contains("LibraryPlaybackScreen("))
+        assertFalse(activity.contains("PlaybackOriginBadge"))
+        assertFalse(activity.contains("resolvedOrigin.collectAsState()"))
+
+        assertTrue(screen.contains("onProgress: (positionMs: Long, durationMs: Long?) -> Job"))
+        val requestExit = sourceBlockAfter(screen, "fun requestExit()")
+        val saveIndex = requestExit.indexOf("onProgress(positionMs, durationMs).join()")
+        val stopIndex = requestExit.indexOf("runtime.playbackController.stop()")
+        val closeIndex = requestExit.indexOf("onExit()")
+
+        assertTrue(requestExit.contains("if (exitRequested) return"))
+        assertTrue(saveIndex >= 0)
+        assertTrue(stopIndex > saveIndex)
+        assertTrue(closeIndex > stopIndex)
 
         val disposal = sourceBlockAfter(screen, "onDispose")
-        assertFalse(disposal.contains("stopIfCurrent"))
+        assertTrue(disposal.contains("if (!exitRequested && currentPosition > 0L)"))
+        assertFalse(disposal.contains("playbackController.stop()"))
         assertTrue(activity.contains("if (isFinishing && ::runtime.isInitialized)"))
-        assertTrue(activity.contains("runtime.playbackController.stop()"))
     }
 }

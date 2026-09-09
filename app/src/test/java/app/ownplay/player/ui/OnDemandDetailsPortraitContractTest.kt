@@ -19,7 +19,7 @@ class OnDemandDetailsPortraitContractTest {
         assertTrue(titleHierarchyIndex > posterIndex)
         assertTrue(movie.contains("width(188.dp)"))
         assertTrue(movie.contains("modifier = Modifier.fillMaxWidth()"))
-        assertTrue(movie.contains("Text(\"Play from beginning\")"))
+        assertTrue(movie.contains("label = \"Play from beginning\""))
         assertTrue(movie.contains("Downloaded · OwnPlay Downloads"))
         assertTrue(movie.contains("Saving to OwnPlay Downloads"))
         assertTrue(movie.contains("MovieDownloadContext("))

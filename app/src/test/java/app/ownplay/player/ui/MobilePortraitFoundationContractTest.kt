@@ -15,7 +15,7 @@ class MobilePortraitFoundationContractTest {
 
     @Test
     fun `active Mobile shell has no rotation driven browsing presentation`() {
-        val shell = sourceText("src/mobile/java/app/ownplay/player/ui/MobileOwnPlayApp.kt")
+        val shell = sourceText("src/mobile/java/app/ownplay/player/ui/MobileVNextOwnPlayApp.kt")
         assertFalse(shell.contains("rotationFullscreenEnabled"))
         assertFalse(shell.contains("liveRotationFullscreenEnabled"))
         assertFalse(shell.contains("ORIENTATION_LANDSCAPE"))

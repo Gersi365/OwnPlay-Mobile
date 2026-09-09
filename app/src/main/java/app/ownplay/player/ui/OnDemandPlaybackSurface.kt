@@ -23,10 +23,9 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -206,19 +205,17 @@ internal fun OnDemandPlaybackSurface(
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        IconButton(
+                        VNextMediaIconAction(
+                            icon = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
                             enabled = !exitRequested,
                             onClick = onExit,
-                        ) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back",
-                                tint = Color.White,
-                            )
-                        }
+                        )
                         Text(
                             text = title,
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(start = 8.dp),
                             color = Color.White,
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.SemiBold,
@@ -264,13 +261,33 @@ internal fun OnDemandPlaybackSurface(
                                 revealControls()
                             },
                             valueRange = 0f..maxDuration.toFloat(),
+                            colors = SliderDefaults.colors(
+                                thumbColor = MaterialTheme.colorScheme.primary,
+                                activeTrackColor = MaterialTheme.colorScheme.primary,
+                                inactiveTrackColor = Color.White.copy(alpha = 0.24f),
+                            ),
                         )
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
                             val playbackActionEnabled =
                                 playbackState is PlaybackState.Playing ||
                                     playbackState is PlaybackState.Paused ||
                                     (playbackState is PlaybackState.Failed && playbackControls.canRetry)
-                            IconButton(
+                            val playing = playbackState is PlaybackState.Playing
+                            val failed = playbackState is PlaybackState.Failed
+                            VNextMediaIconAction(
+                                icon = when {
+                                    failed -> Icons.Filled.Refresh
+                                    playing -> Icons.Filled.Pause
+                                    else -> Icons.Filled.PlayArrow
+                                },
+                                contentDescription = when {
+                                    failed -> "Retry"
+                                    playing -> "Pause"
+                                    else -> "Play"
+                                },
                                 enabled = playbackActionEnabled,
                                 onClick = {
                                     when (playbackState) {
@@ -283,27 +300,7 @@ internal fun OnDemandPlaybackSurface(
                                     }
                                     revealControls()
                                 },
-                            ) {
-                                val playing = playbackState is PlaybackState.Playing
-                                val failed = playbackState is PlaybackState.Failed
-                                Icon(
-                                    imageVector = when {
-                                        failed -> Icons.Filled.Refresh
-                                        playing -> Icons.Filled.Pause
-                                        else -> Icons.Filled.PlayArrow
-                                    },
-                                    contentDescription = when {
-                                        failed -> "Retry"
-                                        playing -> "Pause"
-                                        else -> "Play"
-                                    },
-                                    tint = if (playbackActionEnabled) {
-                                        Color.White
-                                    } else {
-                                        Color.White.copy(alpha = 0.38f)
-                                    },
-                                )
-                            }
+                            )
                             Text(
                                 text = "${formatOnDemandDuration(scrubPositionMs)} / ${formatOnDemandDuration(durationMs)}",
                                 color = Color.White.copy(alpha = 0.82f),
