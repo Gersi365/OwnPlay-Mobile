@@ -1,12 +1,11 @@
 package app.ownplay.mobile.app
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.weight
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
@@ -31,6 +30,7 @@ fun OwnPlayHeader(
             .fillMaxWidth()
             .padding(horizontal = 20.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -53,21 +53,22 @@ fun OwnPlayHeader(
                 fontSize = 14.sp,
             )
         }
-        Spacer(modifier = Modifier.weight(1f))
-        IconButton(onClick = onSearch) {
-            Icon(
-                imageVector = Icons.Filled.Search,
-                contentDescription = "Search",
-                tint = OwnPlayColors.OnBackground,
-                modifier = Modifier.size(28.dp),
-            )
-        }
-        IconButton(onClick = onMore) {
-            Icon(
-                imageVector = Icons.Filled.MoreVert,
-                contentDescription = "More",
-                tint = OwnPlayColors.OnBackground,
-            )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onSearch) {
+                Icon(
+                    imageVector = Icons.Filled.Search,
+                    contentDescription = "Search",
+                    tint = OwnPlayColors.OnBackground,
+                    modifier = Modifier.size(28.dp),
+                )
+            }
+            IconButton(onClick = onMore) {
+                Icon(
+                    imageVector = Icons.Filled.MoreVert,
+                    contentDescription = "More",
+                    tint = OwnPlayColors.OnBackground,
+                )
+            }
         }
     }
 }
