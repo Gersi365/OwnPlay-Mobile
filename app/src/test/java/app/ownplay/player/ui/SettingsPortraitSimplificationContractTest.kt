@@ -7,7 +7,7 @@ import org.junit.Test
 
 class SettingsPortraitSimplificationContractTest {
     @Test
-    fun `portrait Settings exposes only contextual app sections in vNext presentation`() {
+    fun `portrait Settings exposes contextual sections without grouped card slabs`() {
         val portrait = sourceText("src/main/java/app/ownplay/player/ui/SettingsPortrait.kt")
         val components = sourceText("src/main/java/app/ownplay/player/ui/SettingsComponents.kt")
         val content = sourceText("src/main/java/app/ownplay/player/ui/SettingsContent.kt")
@@ -27,7 +27,10 @@ class SettingsPortraitSimplificationContractTest {
         assertFalse(portrait.contains("Playback"))
 
         assertTrue(components.contains("internal fun VNextSettingsSection("))
-        assertTrue(components.contains("defaultMinSize(minHeight = 56.dp)"))
+        assertTrue(components.contains("HorizontalDivider("))
+        assertTrue(components.contains("defaultMinSize(minHeight = 62.dp)"))
+        assertFalse(components.contains("RoundedCornerShape("))
+        assertFalse(components.contains("Surface("))
         assertFalse(components.contains("IconButton("))
         assertFalse(content.contains("HorizontalDivider("))
         assertFalse(backup.contains("HorizontalDivider("))
