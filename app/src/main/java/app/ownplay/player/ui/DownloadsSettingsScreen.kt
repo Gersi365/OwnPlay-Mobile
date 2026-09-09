@@ -1,5 +1,7 @@
 package app.ownplay.player.ui
 
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,11 +18,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -43,6 +43,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import app.ownplay.player.ui.theme.OwnPlayMediaLayout
+import app.ownplay.player.ui.theme.OwnPlaySectionHeader
+import app.ownplay.player.ui.vod.RemotePoster
 import app.ownplay.player.download.OfflineDownload
 import app.ownplay.player.download.OfflineDownloadFeatureRuntime
 import app.ownplay.player.download.queuedDownloadStatusLabel
@@ -62,6 +65,7 @@ internal fun DownloadsSettingsScreen(
         onDispose { runtime.close() }
     }
     val downloads by runtime.observeAll().collectAsState(initial = emptyList())
+    val presentation = remember(downloads) { DownloadsPresentationPolicy.items(downloads) }
     val scope = rememberCoroutineScope()
     var pendingRemoval by remember { mutableStateOf<OfflineDownload?>(null) }
     var resumeDownloadIds by remember { mutableStateOf<Set<String>>(emptySet()) }
@@ -173,29 +177,61 @@ internal fun DownloadsSettingsScreen(
                 .align(Alignment.CenterHorizontally),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            items(downloads, key = { it.downloadId }) { download ->
-                DownloadRow(
-                    download = download,
-                    resumeAvailable = download.downloadId in resumeDownloadIds,
-                    onPlayOffline = { startFromBeginning ->
-                        DownloadPlaybackBridge.request(
+            items(presentation, key = { it.key }, contentType = {
+                when (it) {
+                    is DownloadsListItem.Section -> "section"
+                    is DownloadsListItem.Group -> "group"
+                    is DownloadsListItem.Media -> "media"
+                }
+            }) { item ->
+                when (item) {
+                    is DownloadsListItem.Section -> OwnPlaySectionHeader(
+                        title = item.section.title,
+                        action = {
+                            Text(
+                                text = item.count.toString(),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        },
+                    )
+                    is DownloadsListItem.Group -> Text(
+                        text = item.title,
+                        modifier = Modifier.padding(
+                            start = if (item.isSeason) 12.dp else 0.dp,
+                            top = if (item.isSeason) 0.dp else 8.dp,
+                        ),
+                        style = if (item.isSeason) MaterialTheme.typography.labelLarge
+                            else MaterialTheme.typography.titleMedium,
+                        color = if (item.isSeason) MaterialTheme.colorScheme.onSurfaceVariant
+                            else MaterialTheme.colorScheme.onSurface,
+                    )
+                    is DownloadsListItem.Media -> {
+                        val download = item.download
+                        DownloadRow(
                             download = download,
-                            startFromBeginning = startFromBeginning,
+                            resumeAvailable = download.downloadId in resumeDownloadIds,
+                            onPlayOffline = { startFromBeginning ->
+                                DownloadPlaybackBridge.request(
+                                    download = download,
+                                    startFromBeginning = startFromBeginning,
+                                )
+                            },
+                            onPause = {
+                                scope.launch { runtime.pause(download.downloadId) }
+                            },
+                            onResume = {
+                                scope.launch { runtime.resume(download.downloadId) }
+                            },
+                            onRetry = {
+                                scope.launch { runtime.retry(download.downloadId) }
+                            },
+                            onRemove = {
+                                pendingRemoval = download
+                            },
                         )
-                    },
-                    onPause = {
-                        scope.launch { runtime.pause(download.downloadId) }
-                    },
-                    onResume = {
-                        scope.launch { runtime.resume(download.downloadId) }
-                    },
-                    onRetry = {
-                        scope.launch { runtime.retry(download.downloadId) }
-                    },
-                    onRemove = {
-                        pendingRemoval = download
-                    },
-                )
+                    }
+                }
             }
         }
     }
@@ -213,33 +249,29 @@ private fun DownloadRow(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(14.dp),
         tonalElevation = 0.dp,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Icon(
-                    imageVector = if (download.mediaKind == DownloadMediaKinds.SERIES_EPISODE) {
-                        Icons.Filled.VideoLibrary
-                    } else {
-                        Icons.Filled.Movie
-                    },
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
+                RemotePoster(
+                    url = download.posterUrl,
+                    title = download.title,
+                    modifier = Modifier.width(56.dp).aspectRatio(OwnPlayMediaLayout.PosterAspectRatio),
                 )
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = download.title,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
@@ -250,6 +282,13 @@ private fun DownloadRow(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 when (download.state) {
                     DownloadStates.QUEUED,
                     DownloadStates.DOWNLOADING,
@@ -341,8 +380,8 @@ private fun DownloadRow(
 private fun downloadSecondaryLabel(download: OfflineDownload): String {
     if (download.mediaKind != DownloadMediaKinds.SERIES_EPISODE) return "Movie"
     val episode = listOfNotNull(
-        download.seasonNumber?.let { "S$it" },
-        download.episodeNumber?.let { "E$it" },
+        download.seasonNumber?.let { "S${it.toString().padStart(2, '0')}" },
+        download.episodeNumber?.let { "E${it.toString().padStart(2, '0')}" },
     ).joinToString(" · ")
     return listOfNotNull(
         download.seriesTitle?.takeIf(String::isNotBlank),
