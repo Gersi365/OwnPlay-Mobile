@@ -1,7 +1,6 @@
 package app.ownplay.player
 
 import android.Manifest
-import android.app.AlertDialog
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.os.Build
@@ -44,6 +43,7 @@ import app.ownplay.player.ui.DownloadPlaybackBridge
 import app.ownplay.player.ui.OwnPlayRoot
 import app.ownplay.player.ui.PictureInPicturePlaybackSurface
 import app.ownplay.player.ui.PlaybackWindowController
+import app.ownplay.player.ui.VNextConfirmationDialog
 import app.ownplay.player.ui.library.LibraryPlaybackScreen
 import app.ownplay.player.ui.library.LibraryPlaybackSession
 import app.ownplay.player.ui.theme.OwnPlayTheme
@@ -67,7 +67,7 @@ class MainActivity : ComponentActivity() {
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
     private val activityScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var playbackFullscreen = false
-    private var exitConfirmationDialog: AlertDialog? = null
+    private var exitConfirmationRequested by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -232,6 +232,19 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
+
+                if (exitConfirmationRequested) {
+                    VNextConfirmationDialog(
+                        title = "Exit OwnPlay?",
+                        message = "Are you sure you want to close the app?",
+                        confirmLabel = "Exit",
+                        onConfirm = {
+                            exitConfirmationRequested = false
+                            finish()
+                        },
+                        onDismiss = { exitConfirmationRequested = false },
+                    )
+                }
             }
         }
         playbackWindowController.attachWindowRoot(findViewById(android.R.id.content))
@@ -315,8 +328,6 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        exitConfirmationDialog?.dismiss()
-        exitConfirmationDialog = null
         if (isFinishing && ::runtime.isInitialized) {
             runtime.playbackController.stop()
         }
@@ -412,14 +423,8 @@ class MainActivity : ComponentActivity() {
         }
 
     private fun showExitConfirmation() {
-        if (isFinishing || exitConfirmationDialog?.isShowing == true) return
-        exitConfirmationDialog = AlertDialog.Builder(this)
-            .setTitle("Exit OwnPlay?")
-            .setMessage("Are you sure you want to close the app?")
-            .setNegativeButton("Cancel", null)
-            .setPositiveButton("Exit") { _, _ -> finish() }
-            .setOnDismissListener { exitConfirmationDialog = null }
-            .show()
+        if (isFinishing || isDestroyed || exitConfirmationRequested) return
+        exitConfirmationRequested = true
     }
 
     private fun hideStatusBar() {

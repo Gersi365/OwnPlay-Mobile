@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Android host/window theme only. Compose content is styled by OwnPlayTheme.
+        Explicit colors keep startup and system-owned window chrome aligned with the vNext palette.
+    -->
+    <style name="OwnPlayHostTheme" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowBackground">#07070D</item>
+        <item name="android:colorAccent">#8B5CF6</item>
+        <item name="android:statusBarColor">#07070D</item>
+        <item name="android:navigationBarColor">#07070D</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:fontFamily">sans</item>
+    </style>
+</resources>
