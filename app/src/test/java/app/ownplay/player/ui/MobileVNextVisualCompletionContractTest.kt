@@ -7,34 +7,41 @@ import org.junit.Test
 
 class MobileVNextVisualCompletionContractTest {
     @Test
-    fun `Live browse uses vNext media first controls instead of management chrome`() {
+    fun `Live browse is flat media hierarchy instead of legacy pill and card chrome`() {
         val live = sourceText("src/mobile/java/app/ownplay/player/ui/TargetLiveRoute.kt")
 
         assertTrue(live.contains("MobileLiveSearchField("))
         assertTrue(live.contains("BasicTextField("))
-        assertTrue(live.contains("MobileCategoryPill("))
-        assertTrue(live.contains("verticalArrangement = Arrangement.spacedBy(6.dp)"))
+        assertTrue(live.contains("MobileSearchAction("))
+        assertTrue(live.contains("MobileCategoryTab("))
+        assertTrue(live.contains("HorizontalDivider("))
         assertTrue(live.contains("LivePreviewPanel("))
         assertTrue(live.contains("EpgPanel("))
+        assertTrue(live.contains(".width(2.dp)"))
+        assertTrue(live.contains("Color.Transparent"))
 
+        assertFalse(live.contains("MobileCategoryPill("))
         assertFalse(live.contains("FilterChip("))
         assertFalse(live.contains("OutlinedTextField("))
-        assertFalse(live.contains("HorizontalDivider("))
     }
 
     @Test
-    fun `primary shell chrome is custom stable and color driven`() {
+    fun `primary shell removes permanent brand header and rounded navigation slab`() {
         val shell = sourceText("src/mobile/java/app/ownplay/player/ui/MobileVNextOwnPlayApp.kt")
 
-        assertTrue(shell.contains("MobileVNextNavItem("))
+        assertTrue(shell.contains("MobileMediaNavigationBar("))
+        assertTrue(shell.contains("MobileMediaNavItem("))
         assertTrue(shell.contains(".selectable("))
+        assertTrue(shell.contains("HorizontalDivider("))
         assertTrue(shell.contains("MobilePrimaryDestination.LIVE"))
         assertTrue(shell.contains("MobilePrimaryDestination.LIBRARY"))
         assertTrue(shell.contains("MobilePrimaryDestination.SETTINGS"))
         assertTrue(shell.contains("MaterialTheme.colorScheme.primary"))
         assertTrue(shell.contains("MaterialTheme.colorScheme.onSurfaceVariant"))
 
-        assertFalse(shell.contains("import androidx.compose.material3.NavigationBar\n"))
+        assertFalse(shell.contains("MobileVNextHeader("))
+        assertFalse(shell.contains("MobileVNextPrimaryNavigationBar("))
+        assertFalse(shell.contains("MobileVNextNavItem("))
         assertFalse(shell.contains("NavigationBarItem("))
         assertFalse(shell.contains("NavigationBarItemDefaults"))
     }

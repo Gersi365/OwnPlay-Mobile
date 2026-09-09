@@ -17,8 +17,10 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
@@ -30,12 +32,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -48,6 +49,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
@@ -125,7 +127,7 @@ private sealed interface MobileChannelLogoState {
  *
  * Categories are filters only. Channel identity is logo + channel name, with current EPG as the
  * only optional secondary line. Provider category names are deliberately never rendered inside a
- * channel row/card.
+ * channel row.
  */
 @Suppress("UNUSED_PARAMETER")
 @Composable
@@ -329,28 +331,22 @@ internal fun TargetLiveRoute(
     Column(modifier = Modifier.fillMaxSize()) {
         if (preview != null) {
             Column(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        text = preview.displayName,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                     Text(
                         text = "PREVIEW",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary,
-                    )
-                    Text(
-                        text = preview.displayName,
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(start = 10.dp),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
                     )
                 }
                 LivePreviewPanel(
@@ -430,147 +426,144 @@ private fun MobileLiveBrowsePane(
         }
     }
 
-    Surface(
-        modifier = modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background,
-        tonalElevation = 0.dp,
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            Row(
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 10.dp, top = 10.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(1.dp),
+            ) {
+                Text(
+                    text = "Live",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = when {
+                        state.channels.isNotEmpty() -> "${state.channels.size} channels"
+                        state.catalogChannelCount > 0 -> "Browse channels"
+                        else -> "Your channels"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            MobileSearchAction(
+                searchExpanded = searchExpanded,
+                onSearchExpandedChange = onSearchExpandedChange,
+                onSearchChange = onSearchChange,
+            )
+        }
+
+        AnimatedVisibility(
+            visible = searchExpanded || state.query.searchTerm.isNotBlank(),
+            enter = fadeIn(),
+            exit = fadeOut(),
+        ) {
+            MobileLiveSearchField(
+                value = state.query.searchTerm,
+                onValueChange = onSearchChange,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+            )
+        }
+
+        if (state.categories.isNotEmpty()) {
+            LazyRow(
+                state = categoryListState,
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(18.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(1.dp),
-                ) {
-                    Text(
-                        text = "Live TV",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Text(
-                        text = when {
-                            state.channels.isNotEmpty() -> "${state.channels.size} channels"
-                            state.catalogChannelCount > 0 -> "Browse channels"
-                            else -> "Your channels"
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                MobileSearchButton(
-                    searchExpanded = searchExpanded,
-                    onSearchExpandedChange = onSearchExpandedChange,
-                    onSearchChange = onSearchChange,
-                )
-            }
-
-            AnimatedVisibility(
-                visible = searchExpanded || state.query.searchTerm.isNotBlank(),
-                enter = fadeIn(),
-                exit = fadeOut(),
-            ) {
-                MobileLiveSearchField(
-                    value = state.query.searchTerm,
-                    onValueChange = onSearchChange,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 4.dp),
-                )
-            }
-
-            if (state.categories.isNotEmpty()) {
-                LazyRow(
-                    state = categoryListState,
-                    modifier = Modifier.fillMaxWidth(),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 7.dp),
-                    horizontalArrangement = Arrangement.spacedBy(7.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    items(
-                        items = state.categories,
-                        key = { it.providerCategoryKey },
-                    ) { category ->
-                        MobileCategoryPill(
-                            label = category.name,
-                            selected = state.query.categoryKey == category.providerCategoryKey,
-                            onClick = {
-                                onCategorySelected(
-                                    if (state.query.categoryKey == category.providerCategoryKey) {
-                                        null
-                                    } else {
-                                        category.providerCategoryKey
-                                    },
-                                )
-                            },
-                        )
-                    }
-                }
-            }
-
-            when {
-                loadingChannels && state.catalogChannelCount == 0 -> MobileLiveStatusState(
-                    title = "Loading channels",
-                    detail = "Preparing your Live catalog…",
-                    loading = true,
-                    modifier = Modifier.weight(1f),
-                )
-                state.catalogChannelCount == 0 -> MobileLiveEmptyState(
-                    failed = channelRefreshFailed,
-                    onRetry = onRetry,
-                    onOpenSettings = onOpenSettings,
-                    modifier = Modifier.weight(1f),
-                )
-                state.channels.isEmpty() -> MobileLiveStatusState(
-                    title = "No matching channels",
-                    detail = if (state.query.searchTerm.isNotBlank()) {
-                        "Try another search term or category."
-                    } else {
-                        "This category does not contain any channels."
-                    },
-                    modifier = Modifier.weight(1f),
-                )
-                else -> LazyColumn(
-                    state = channelListState,
-                    modifier = Modifier
-                        .weight(1f)
-                        .pointerInput(state.categories, state.query.categoryKey) {
-                            var totalHorizontalDrag = 0f
-                            detectHorizontalDragGestures(
-                                onDragStart = { totalHorizontalDrag = 0f },
-                                onHorizontalDrag = { change, dragAmount ->
-                                    totalHorizontalDrag += dragAmount
-                                    change.consume()
-                                },
-                                onDragEnd = {
-                                    val triggerDistance = max(
-                                        viewConfiguration.touchSlop * 4f,
-                                        size.width * MOBILE_CATEGORY_SWIPE_TRIGGER_FRACTION,
-                                    )
-                                    if (abs(totalHorizontalDrag) >= triggerDistance) {
-                                        selectAdjacentCategory(totalHorizontalDrag)
-                                    }
+                items(
+                    items = state.categories,
+                    key = { it.providerCategoryKey },
+                ) { category ->
+                    MobileCategoryTab(
+                        label = category.name,
+                        selected = state.query.categoryKey == category.providerCategoryKey,
+                        onClick = {
+                            onCategorySelected(
+                                if (state.query.categoryKey == category.providerCategoryKey) {
+                                    null
+                                } else {
+                                    category.providerCategoryKey
                                 },
                             )
                         },
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 5.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    items(
-                        items = state.channels,
-                        key = { it.channelId },
-                    ) { channel ->
-                        MobileChannelRow(
-                            channel = channel,
-                            currentProgram = currentEpgByChannelId[channel.channelId],
-                            active = channel.channelId == playingChannelId,
-                            onClick = { onChannelSelected(channel.channelId) },
+                    )
+                }
+            }
+        }
+
+        when {
+            loadingChannels && state.catalogChannelCount == 0 -> MobileLiveStatusState(
+                title = "Loading channels",
+                detail = "Preparing your Live catalog…",
+                loading = true,
+                modifier = Modifier.weight(1f),
+            )
+            state.catalogChannelCount == 0 -> MobileLiveEmptyState(
+                failed = channelRefreshFailed,
+                onRetry = onRetry,
+                onOpenSettings = onOpenSettings,
+                modifier = Modifier.weight(1f),
+            )
+            state.channels.isEmpty() -> MobileLiveStatusState(
+                title = "No matching channels",
+                detail = if (state.query.searchTerm.isNotBlank()) {
+                    "Try another search term or category."
+                } else {
+                    "This category does not contain any channels."
+                },
+                modifier = Modifier.weight(1f),
+            )
+            else -> LazyColumn(
+                state = channelListState,
+                modifier = Modifier
+                    .weight(1f)
+                    .pointerInput(state.categories, state.query.categoryKey) {
+                        var totalHorizontalDrag = 0f
+                        detectHorizontalDragGestures(
+                            onDragStart = { totalHorizontalDrag = 0f },
+                            onHorizontalDrag = { change, dragAmount ->
+                                totalHorizontalDrag += dragAmount
+                                change.consume()
+                            },
+                            onDragEnd = {
+                                val triggerDistance = max(
+                                    viewConfiguration.touchSlop * 4f,
+                                    size.width * MOBILE_CATEGORY_SWIPE_TRIGGER_FRACTION,
+                                )
+                                if (abs(totalHorizontalDrag) >= triggerDistance) {
+                                    selectAdjacentCategory(totalHorizontalDrag)
+                                }
+                            },
                         )
-                    }
+                    },
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+            ) {
+                items(
+                    items = state.channels,
+                    key = { it.channelId },
+                ) { channel ->
+                    MobileChannelRow(
+                        channel = channel,
+                        currentProgram = currentEpgByChannelId[channel.channelId],
+                        active = channel.channelId == playingChannelId,
+                        onClick = { onChannelSelected(channel.channelId) },
+                    )
                 }
             }
         }
@@ -583,14 +576,9 @@ private fun MobileLiveSearchField(
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f),
-        tonalElevation = 0.dp,
-    ) {
+    Column(modifier = modifier) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
+            modifier = Modifier.padding(vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -623,74 +611,66 @@ private fun MobileLiveSearchField(
                 },
             )
         }
+        HorizontalDivider(
+            thickness = 1.dp,
+            color = if (value.isNotBlank()) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.outline.copy(alpha = 0.30f)
+            },
+        )
     }
 }
 
 @Composable
-private fun MobileSearchButton(
+private fun MobileSearchAction(
     searchExpanded: Boolean,
     onSearchExpandedChange: (Boolean) -> Unit,
     onSearchChange: (String) -> Unit,
 ) {
-    Surface(
-        modifier = Modifier.size(48.dp),
-        shape = RoundedCornerShape(14.dp),
-        color = if (searchExpanded) {
-            MaterialTheme.colorScheme.primaryContainer
-        } else {
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f)
+    IconButton(
+        onClick = {
+            val next = !searchExpanded
+            onSearchExpandedChange(next)
+            if (!next) onSearchChange("")
         },
-        tonalElevation = 0.dp,
+        modifier = Modifier.size(40.dp),
     ) {
-        IconButton(
-            onClick = {
-                val next = !searchExpanded
-                onSearchExpandedChange(next)
-                if (!next) onSearchChange("")
+        Icon(
+            imageVector = if (searchExpanded) Icons.Filled.Close else Icons.Filled.Search,
+            contentDescription = if (searchExpanded) "Close search" else "Search channels",
+            tint = if (searchExpanded) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
             },
-        ) {
-            Icon(
-                imageVector = if (searchExpanded) Icons.Filled.Close else Icons.Filled.Search,
-                contentDescription = if (searchExpanded) "Close search" else "Search channels",
-                tint = if (searchExpanded) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-            )
-        }
+        )
     }
 }
 
 @Composable
-private fun MobileCategoryPill(
+private fun MobileCategoryTab(
     label: String,
     selected: Boolean,
     onClick: () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    Surface(
+    Column(
         modifier = Modifier
-            .clip(RoundedCornerShape(999.dp))
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 role = Role.Button,
                 onClick = onClick,
-            ),
-        shape = RoundedCornerShape(999.dp),
-        color = if (selected) {
-            MaterialTheme.colorScheme.primaryContainer
-        } else {
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f)
-        },
-        tonalElevation = 0.dp,
+            )
+            .padding(vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
         Text(
             text = label,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
             color = if (selected) {
                 MaterialTheme.colorScheme.primary
             } else {
@@ -698,6 +678,14 @@ private fun MobileCategoryPill(
             },
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(2.dp)
+                .background(
+                    if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                ),
         )
     }
 }
@@ -710,10 +698,9 @@ private fun MobileChannelRow(
     onClick: () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    Surface(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
             .semantics(mergeDescendants = true) {
                 selected = active
                 stateDescription = when {
@@ -729,24 +716,32 @@ private fun MobileChannelRow(
                 role = Role.Button,
                 onClickLabel = if (active) "Open full view" else "Open preview",
                 onClick = onClick,
+            )
+            .background(
+                if (active) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+                } else {
+                    Color.Transparent
+                },
             ),
-        shape = RoundedCornerShape(14.dp),
-        color = if (active) {
-            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.72f)
-        } else {
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.26f)
-        },
-        tonalElevation = 0.dp,
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+            modifier = Modifier.padding(vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(11.dp),
         ) {
+            Box(
+                modifier = Modifier
+                    .width(2.dp)
+                    .height(44.dp)
+                    .background(
+                        if (active) MaterialTheme.colorScheme.primary else Color.Transparent,
+                    ),
+            )
             MobileChannelLogo(
                 logoRef = channel.logoRef,
                 title = channel.displayName,
-                modifier = Modifier.size(46.dp),
+                modifier = Modifier.size(44.dp),
             )
             Column(
                 modifier = Modifier.weight(1f),
@@ -757,7 +752,7 @@ private fun MobileChannelRow(
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Medium,
                     color = if (active) {
-                        MaterialTheme.colorScheme.onPrimaryContainer
+                        MaterialTheme.colorScheme.primary
                     } else {
                         MaterialTheme.colorScheme.onSurface
                     },
@@ -774,11 +769,7 @@ private fun MobileChannelRow(
                             append(program.title)
                         },
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (active) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -793,6 +784,11 @@ private fun MobileChannelRow(
                 )
             }
         }
+        HorizontalDivider(
+            modifier = Modifier.padding(start = 57.dp),
+            thickness = 1.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.16f),
+        )
     }
 }
 
@@ -841,8 +837,8 @@ private fun MobileChannelLogo(
     }
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.52f))
             .clearAndSetSemantics { },
         contentAlignment = Alignment.Center,
     ) {
@@ -991,7 +987,7 @@ private fun MobileLiveEmptyState(
         modifier = modifier
             .fillMaxWidth()
             .padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
+        verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
@@ -1004,9 +1000,15 @@ private fun MobileLiveEmptyState(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TextButton(onClick = onRetry) { Text("Retry") }
-            TextButton(onClick = onOpenSettings) { Text("Settings") }
-        }
+        VNextMediaPrimaryAction(
+            label = "Retry",
+            onClick = onRetry,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        VNextMediaSecondaryAction(
+            label = "Settings",
+            onClick = onOpenSettings,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }

@@ -13,20 +13,20 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -39,11 +39,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.ownplay.player.OwnPlayAppRuntime
@@ -62,12 +62,11 @@ import app.ownplay.player.source.selection.ActivePlaylistStore
 import app.ownplay.player.source.selection.resolveActivePlaylistId
 import app.ownplay.player.ui.library.UnifiedLibraryRoute
 import app.ownplay.player.ui.series.SeriesRoute
-import app.ownplay.player.ui.theme.OwnPlaySpacing
 import app.ownplay.player.ui.vod.VodRoute
 import kotlinx.coroutines.launch
 
 /**
- * vNext Mobile presentation shell.
+ * Mobile media shell.
  *
  * Primary destinations are Live / Library / Settings. Downloads remains available from Settings.
  * Playback/session ownership remains delegated to the established controllers and presentation
@@ -370,19 +369,13 @@ private fun MobileVNextOwnPlayAppContent(
 
     val activeSummary = summaries.firstOrNull { it.sourceId == activeSourceId && it.enabled }
     val shellFullscreen = vodFullscreen || seriesFullscreen || libraryFullscreen
-    val showHeader = !shellFullscreen
     val showPrimaryNavigation = !shellFullscreen
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            if (showHeader) {
-                MobileVNextHeader()
-            }
-        },
         bottomBar = {
             if (showPrimaryNavigation) {
-                MobileVNextPrimaryNavigationBar(
+                MobileMediaNavigationBar(
                     selectedDestination = section.primaryDestination(),
                     onOpenLive = { openSection(MobileShellDestination.LIVE) },
                     onOpenLibrary = { openSection(MobileShellDestination.LIBRARY) },
@@ -401,7 +394,7 @@ private fun MobileVNextOwnPlayAppContent(
                 MobileShellDestination.LIVE -> {
                     val sourceId = activeSourceId
                     if (sourceId == null) {
-                        MobileVNextNoSourceScreen(
+                        MobileNoSourceScreen(
                             syncState = syncState,
                             onAddPlaylist = { openSection(MobileShellDestination.SETTINGS) },
                             modifier = Modifier.fillMaxSize(),
@@ -543,38 +536,7 @@ private fun MobileVNextOwnPlayAppContent(
 }
 
 @Composable
-private fun MobileVNextHeader() {
-    Surface(
-        color = MaterialTheme.colorScheme.background,
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(50.dp)
-                .padding(horizontal = OwnPlaySpacing.Lg),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(OwnPlaySpacing.Sm),
-        ) {
-            Surface(
-                modifier = Modifier.size(8.dp),
-                shape = RoundedCornerShape(4.dp),
-                color = MaterialTheme.colorScheme.primary,
-                tonalElevation = 0.dp,
-            ) {}
-            Text(
-                text = "OwnPlay",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground,
-            )
-        }
-    }
-}
-
-@Composable
-private fun MobileVNextPrimaryNavigationBar(
+private fun MobileMediaNavigationBar(
     selectedDestination: MobilePrimaryDestination?,
     onOpenLive: () -> Unit,
     onOpenLibrary: () -> Unit,
@@ -586,37 +548,32 @@ private fun MobileVNextPrimaryNavigationBar(
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
     ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = OwnPlaySpacing.Md, vertical = 6.dp),
-            shape = RoundedCornerShape(20.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.38f),
-            tonalElevation = 0.dp,
-            shadowElevation = 0.dp,
-        ) {
+        Column {
+            HorizontalDivider(
+                thickness = 1.dp,
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.22f),
+            )
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(58.dp)
-                    .padding(horizontal = 4.dp),
+                    .height(56.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                MobileVNextNavItem(
+                MobileMediaNavItem(
                     icon = Icons.Filled.LiveTv,
                     label = "Live",
                     selected = selectedDestination == MobilePrimaryDestination.LIVE,
                     onClick = onOpenLive,
                     modifier = Modifier.weight(1f),
                 )
-                MobileVNextNavItem(
+                MobileMediaNavItem(
                     icon = Icons.Filled.VideoLibrary,
                     label = "Library",
                     selected = selectedDestination == MobilePrimaryDestination.LIBRARY,
                     onClick = onOpenLibrary,
                     modifier = Modifier.weight(1f),
                 )
-                MobileVNextNavItem(
+                MobileMediaNavItem(
                     icon = Icons.Filled.Settings,
                     label = "Settings",
                     selected = selectedDestination == MobilePrimaryDestination.SETTINGS,
@@ -629,7 +586,7 @@ private fun MobileVNextPrimaryNavigationBar(
 }
 
 @Composable
-private fun MobileVNextNavItem(
+private fun MobileMediaNavItem(
     icon: ImageVector,
     label: String,
     selected: Boolean,
@@ -643,20 +600,27 @@ private fun MobileVNextNavItem(
     }
     Column(
         modifier = modifier
-            .height(58.dp)
+            .height(56.dp)
             .selectable(
                 selected = selected,
                 onClick = onClick,
                 role = Role.Tab,
-            )
-            .padding(vertical = 7.dp),
+            ),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically),
     ) {
+        Box(
+            modifier = Modifier
+                .width(20.dp)
+                .height(2.dp)
+                .background(
+                    if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                ),
+        )
         Icon(
             imageVector = icon,
             contentDescription = label,
-            modifier = Modifier.size(21.dp),
+            modifier = Modifier.size(20.dp),
             tint = contentColor,
         )
         Text(
@@ -668,56 +632,50 @@ private fun MobileVNextNavItem(
 }
 
 @Composable
-private fun MobileVNextNoSourceScreen(
+private fun MobileNoSourceScreen(
     syncState: SourceSyncState,
     onAddPlaylist: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val loading = syncState.sourceId != null
     Box(
-        modifier = modifier.padding(horizontal = 24.dp, vertical = 28.dp),
+        modifier = modifier.padding(horizontal = 28.dp, vertical = 32.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Surface(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .widthIn(max = 440.dp),
-            shape = RoundedCornerShape(20.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.34f),
-            tonalElevation = 0.dp,
-            shadowElevation = 0.dp,
+                .widthIn(max = 380.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Column(
-                modifier = Modifier.padding(horizontal = 28.dp, vertical = 26.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                if (loading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(30.dp),
-                        strokeWidth = 2.dp,
-                    )
-                }
-                Text(
-                    text = if (loading) "Preparing Live TV" else "No playlist configured",
-                    style = MaterialTheme.typography.titleLarge,
-                    textAlign = TextAlign.Center,
+            if (loading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(28.dp),
+                    strokeWidth = 2.dp,
                 )
-                Text(
-                    text = if (loading) {
-                        "Loading channels from your active playlist…"
-                    } else {
-                        "Add an Xtream or M3U playlist in Settings to start watching."
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
+            }
+            Text(
+                text = if (loading) "Preparing Live TV" else "No playlist configured",
+                style = MaterialTheme.typography.headlineSmall,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                text = if (loading) {
+                    "Loading channels from your active playlist…"
+                } else {
+                    "Add an Xtream or M3U playlist in Settings to start watching."
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+            if (!loading) {
+                VNextMediaPrimaryAction(
+                    label = "Open Settings",
+                    onClick = onAddPlaylist,
+                    modifier = Modifier.fillMaxWidth(),
                 )
-                if (!loading) {
-                    TextButton(onClick = onAddPlaylist) {
-                        Text("Open Settings")
-                    }
-                }
             }
         }
     }

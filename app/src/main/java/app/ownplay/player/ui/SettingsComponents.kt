@@ -8,12 +8,11 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -31,15 +30,15 @@ internal fun VNextSettingsSection(
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(7.dp),
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 4.dp),
+            modifier = Modifier.padding(horizontal = 2.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.labelLarge,
+                style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.SemiBold,
             )
@@ -50,18 +49,14 @@ internal fun VNextSettingsSection(
             )
         }
 
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(18.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f),
-            tonalElevation = 0.dp,
-        ) {
-            Column(
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                content()
-            }
+        Column(modifier = Modifier.fillMaxWidth()) {
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.22f),
+            )
+            content()
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.22f),
+            )
         }
     }
 }
@@ -75,31 +70,19 @@ internal fun CompactSettingsSection(
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(9.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 4.dp),
+            modifier = Modifier.padding(horizontal = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(11.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Surface(
-                modifier = Modifier.size(40.dp),
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.36f),
-                tonalElevation = 0.dp,
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center,
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                }
-            }
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = MaterialTheme.colorScheme.primary,
+            )
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -117,18 +100,14 @@ internal fun CompactSettingsSection(
             }
         }
 
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.24f),
-            tonalElevation = 0.dp,
-        ) {
-            Column(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                content()
-            }
+        Column(modifier = Modifier.fillMaxWidth()) {
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.22f),
+            )
+            content()
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.22f),
+            )
         }
     }
 }
@@ -141,7 +120,7 @@ internal fun SettingValueRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 4.dp, vertical = 9.dp),
+            .padding(horizontal = 2.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -171,9 +150,9 @@ internal fun SettingsActionRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .defaultMinSize(minHeight = 56.dp)
+            .defaultMinSize(minHeight = 62.dp)
             .clickable(onClick = onClick)
-            .padding(horizontal = 4.dp, vertical = 9.dp),
+            .padding(horizontal = 2.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -198,7 +177,7 @@ internal fun SettingsActionRow(
             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = actionLabel,
             modifier = Modifier.size(20.dp),
-            tint = MaterialTheme.colorScheme.primary,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
