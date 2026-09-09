@@ -31,7 +31,7 @@ class LivePlaybackContinuityContractTest {
 
     @Test
     fun `Mobile Preview to fullscreen uses the continuity transition gate`() {
-        val shell = sourceText("src/mobile/java/app/ownplay/player/ui/MobileOwnPlayApp.kt")
+        val shell = sourceText("src/mobile/java/app/ownplay/player/ui/MobileVNextOwnPlayApp.kt")
         val handoff = normalizedSource(
             sourceBlockAfter(
                 shell,
@@ -53,7 +53,7 @@ class LivePlaybackContinuityContractTest {
 
     @Test
     fun `Mobile fullscreen to Preview uses the continuity transition gate`() {
-        val shell = sourceText("src/mobile/java/app/ownplay/player/ui/MobileOwnPlayApp.kt")
+        val shell = sourceText("src/mobile/java/app/ownplay/player/ui/MobileVNextOwnPlayApp.kt")
         val handoff = normalizedSource(
             sourceBlockAfter(
                 shell,
