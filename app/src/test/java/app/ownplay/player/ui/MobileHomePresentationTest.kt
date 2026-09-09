@@ -62,9 +62,10 @@ class MobileHomePresentationTest {
         assertTrue(navigation.contains("MobilePrimaryDestination.LIBRARY"))
         assertTrue(navigation.contains("MobilePrimaryDestination.SETTINGS"))
 
-        assertTrue(continueWatching.contains("val cardWidth = 220.dp"))
-        assertTrue(continueWatching.contains("val posterWidth = 58.dp"))
-        assertFalse(continueWatching.contains("val cardWidth = 138.dp"))
+        assertTrue(continueWatching.contains("val cardWidth = 148.dp"))
+        assertTrue(continueWatching.contains("OwnPlayMediaLayout.PosterAspectRatio"))
+        assertFalse(continueWatching.contains("val posterWidth = 58.dp"))
+        assertFalse(continueWatching.contains("val cardWidth = 220.dp"))
     }
 
     private fun movie(

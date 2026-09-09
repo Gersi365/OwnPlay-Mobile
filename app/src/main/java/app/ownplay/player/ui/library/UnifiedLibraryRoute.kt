@@ -23,12 +23,9 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -53,6 +50,9 @@ import app.ownplay.player.series.SeriesCatalog
 import app.ownplay.player.series.SeriesFeatureRuntime
 import app.ownplay.player.series.SeriesSummary
 import app.ownplay.player.source.SourceResult
+import app.ownplay.player.ui.VNextMediaIconAction
+import app.ownplay.player.ui.VNextMediaPill
+import app.ownplay.player.ui.VNextMediaSearchField
 import app.ownplay.player.ui.theme.OwnPlayMediaLayout
 import app.ownplay.player.ui.vod.RemotePoster
 import app.ownplay.player.vod.VodCatalog
@@ -285,68 +285,80 @@ internal fun UnifiedLibraryRoute(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 12.dp, vertical = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(
-                text = "Library",
+            Column(
                 modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-            )
+                verticalArrangement = Arrangement.spacedBy(1.dp),
+            ) {
+                Text(
+                    text = "Library",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = when {
+                        refreshing && !showInitialMobileLoading -> "Refreshing saved catalog…"
+                        filter == UnifiedLibraryFilter.MOVIES -> "$mediaCount movies"
+                        else -> "$mediaCount series"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             if (refreshing && !showInitialMobileLoading) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(16.dp),
                     strokeWidth = 2.dp,
                 )
             }
-            IconButton(
+            VNextMediaIconAction(
+                icon = if (searchExpanded) Icons.Filled.Close else Icons.Filled.Search,
+                contentDescription = if (searchExpanded) {
+                    "Close Library search"
+                } else {
+                    "Search Library"
+                },
+                selected = searchExpanded,
                 onClick = {
                     searchExpanded = !searchExpanded
                     if (!searchExpanded) query = ""
                 },
-            ) {
-                Icon(
-                    imageVector = if (searchExpanded) Icons.Filled.Close else Icons.Filled.Search,
-                    contentDescription = if (searchExpanded) {
-                        "Close Library search"
-                    } else {
-                        "Search Library"
-                    },
-                )
-            }
+            )
         }
 
-        LazyRow(
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(end = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            listItems(
-                items = libraryCatalogSections,
-                key = { it.name },
-            ) { option ->
-                FilterChip(
-                    selected = filter == option,
-                    onClick = {
-                        filter = option
-                        query = ""
-                        searchExpanded = false
-                    },
-                    label = {
-                        Text(
-                            when (option) {
-                                UnifiedLibraryFilter.MOVIES -> "Movies"
-                                UnifiedLibraryFilter.SERIES -> "Series"
-                            },
-                        )
-                    },
-                )
-            }
+        LibrarySectionStrip(
+            filter = filter,
+            onFilterSelected = { option ->
+                filter = option
+                query = ""
+                searchExpanded = false
+            },
+        )
+
+        if (searchExpanded || query.isNotBlank()) {
+            VNextMediaSearchField(
+                value = query,
+                onValueChange = { query = it },
+                placeholder = when (filter) {
+                    UnifiedLibraryFilter.MOVIES -> "Search Movies"
+                    UnifiedLibraryFilter.SERIES -> "Search Series"
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
+        if (showContinueWatching && sourceId != null) {
+            LibraryUnifiedContinueWatchingStrip(
+                items = continueWatching,
+                onOpenMovie = { movie -> onOpenMovieDetails(sourceId, movie.movieId) },
+                onOpenSeries = { episode -> onOpenSeriesDetails(sourceId, episode.seriesId) },
+            )
         }
 
         when (filter) {
@@ -359,39 +371,6 @@ internal fun UnifiedLibraryRoute(
                 selectedCategoryKey = seriesCategoryKey,
                 categories = seriesCatalog.categories.map { it.providerCategoryKey to it.name },
                 onCategorySelected = { seriesCategoryKey = it },
-            )
-        }
-
-        if (searchExpanded || query.isNotBlank()) {
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                leadingIcon = {
-                    Icon(
-                        Icons.Filled.Search,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
-                    )
-                },
-                placeholder = {
-                    Text(
-                        when (filter) {
-                            UnifiedLibraryFilter.MOVIES -> "Search Movies"
-                            UnifiedLibraryFilter.SERIES -> "Search Series"
-                        },
-                    )
-                },
-                shape = RoundedCornerShape(10.dp),
-            )
-        }
-
-        if (showContinueWatching && sourceId != null) {
-            LibraryUnifiedContinueWatchingStrip(
-                items = continueWatching,
-                onOpenMovie = { movie -> onOpenMovieDetails(sourceId, movie.movieId) },
-                onOpenSeries = { episode -> onOpenSeriesDetails(sourceId, episode.seriesId) },
             )
         }
 
@@ -443,6 +422,33 @@ internal fun UnifiedLibraryRoute(
 }
 
 @Composable
+private fun LibrarySectionStrip(
+    filter: UnifiedLibraryFilter,
+    onFilterSelected: (UnifiedLibraryFilter) -> Unit,
+) {
+    LazyRow(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(end = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        listItems(
+            items = libraryCatalogSections,
+            key = { it.name },
+        ) { option ->
+            VNextMediaPill(
+                label = when (option) {
+                    UnifiedLibraryFilter.MOVIES -> "Movies"
+                    UnifiedLibraryFilter.SERIES -> "Series"
+                },
+                selected = filter == option,
+                onClick = { onFilterSelected(option) },
+            )
+        }
+    }
+}
+
+@Composable
 private fun LibraryCategoryStrip(
     selectedCategoryKey: String?,
     categories: List<Pair<String, String>>,
@@ -455,16 +461,10 @@ private fun LibraryCategoryStrip(
         contentPadding = PaddingValues(end = 12.dp),
     ) {
         listItems(categories, key = { it.first }) { (categoryKey, categoryName) ->
-            FilterChip(
+            VNextMediaPill(
+                label = categoryName,
                 selected = selectedCategoryKey == categoryKey,
                 onClick = { onCategorySelected(categoryKey) },
-                label = {
-                    Text(
-                        text = categoryName,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                },
             )
         }
     }

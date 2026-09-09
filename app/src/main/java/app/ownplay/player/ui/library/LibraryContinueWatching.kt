@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,22 +13,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.ownplay.player.series.SeriesEpisode
+import app.ownplay.player.ui.theme.OwnPlayMediaLayout
 import app.ownplay.player.ui.vod.RemotePoster
 import app.ownplay.player.vod.VodMovie
 import kotlin.math.roundToInt
@@ -136,87 +129,63 @@ private fun <T> LibraryContinueWatchingStrip(
     onOpen: (T) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val cardWidth = 220.dp
-    val posterWidth = 58.dp
+    val cardWidth = 148.dp
 
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
             text = "Continue Watching",
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
         )
         LazyRow(
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(end = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             items(items = items, key = key) { item ->
-                var focused by remember(key(item)) { mutableStateOf(false) }
                 val progress = progressFraction(positionMs(item), durationMs(item))
-                Surface(
+                Column(
                     modifier = Modifier
                         .width(cardWidth)
-                        .onFocusChanged { focused = it.isFocused }
                         .clickable { onOpen(item) },
-                    shape = RoundedCornerShape(10.dp),
-                    color = if (focused) {
-                        MaterialTheme.colorScheme.secondaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f)
-                    },
-                    tonalElevation = 0.dp,
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Row(
-                        modifier = Modifier.padding(6.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Column(
-                            modifier = Modifier.width(posterWidth),
-                            verticalArrangement = Arrangement.spacedBy(3.dp),
-                        ) {
-                            RemotePoster(
-                                url = posterUrl(item),
-                                title = title(item),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .aspectRatio(2f / 3f),
-                            )
-                            ContinueWatchingProgressSlot(progress = progress)
-                        }
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            Text(
-                                text = title(item),
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            subtitle(item)?.let { secondaryText ->
-                                Text(
-                                    text = secondaryText,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                            Text(
-                                text = continueWatchingResumeLabel(
-                                    positionMs = positionMs(item),
-                                    durationMs = durationMs(item),
-                                ),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                maxLines = 1,
-                            )
-                        }
+                    RemotePoster(
+                        url = posterUrl(item),
+                        title = title(item),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(OwnPlayMediaLayout.PosterAspectRatio),
+                    )
+                    ContinueWatchingProgressSlot(progress = progress)
+                    Text(
+                        text = title(item),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    subtitle(item)?.let { secondaryText ->
+                        Text(
+                            text = secondaryText,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                     }
+                    Text(
+                        text = continueWatchingResumeLabel(
+                            positionMs = positionMs(item),
+                            durationMs = durationMs(item),
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                    )
                 }
             }
         }

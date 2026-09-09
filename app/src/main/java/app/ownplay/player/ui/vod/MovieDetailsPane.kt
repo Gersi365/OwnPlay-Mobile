@@ -2,7 +2,6 @@ package app.ownplay.player.ui.vod
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -12,7 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -23,16 +21,11 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,6 +36,9 @@ import androidx.compose.ui.unit.dp
 import app.ownplay.player.download.OfflineDownload
 import app.ownplay.player.persistence.download.DownloadStates
 import app.ownplay.player.source.SourceError
+import app.ownplay.player.ui.VNextMediaIconAction
+import app.ownplay.player.ui.VNextMediaPrimaryAction
+import app.ownplay.player.ui.VNextMediaSecondaryAction
 import app.ownplay.player.ui.theme.OwnPlayMediaLayout
 import app.ownplay.player.ui.theme.OwnPlaySpacing
 import app.ownplay.player.vod.VodMovie
@@ -69,6 +65,12 @@ internal fun MovieDetailsPane(
     val offlineCopyAvailable = download?.state == DownloadStates.COMPLETED
     val target = details?.movie ?: movie
     val title = details?.movie?.name ?: movie.name
+    val playLabel = when {
+        offlineCopyAvailable && movie.resumeAvailable -> "Resume Offline"
+        offlineCopyAvailable -> "Play Offline"
+        movie.resumeAvailable -> "Resume"
+        else -> "Play"
+    }
 
     Surface(
         modifier = modifier,
@@ -89,16 +91,22 @@ internal fun MovieDetailsPane(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(onClick = onDismiss) {
-                    Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
-                }
+                VNextMediaIconAction(
+                    icon = Icons.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    onClick = onDismiss,
+                )
                 Spacer(Modifier.weight(1f))
-                IconButton(onClick = { onFavoriteChanged(!movie.isFavorite) }) {
-                    Icon(
-                        if (movie.isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                        contentDescription = if (movie.isFavorite) "Remove favorite" else "Favorite",
-                    )
-                }
+                VNextMediaIconAction(
+                    icon = if (movie.isFavorite) {
+                        Icons.Filled.Favorite
+                    } else {
+                        Icons.Filled.FavoriteBorder
+                    },
+                    contentDescription = if (movie.isFavorite) "Remove favorite" else "Favorite",
+                    selected = movie.isFavorite,
+                    onClick = { onFavoriteChanged(!movie.isFavorite) },
+                )
             }
 
             RemotePoster(
@@ -172,30 +180,19 @@ internal fun MovieDetailsPane(
                 )
             }
 
-            Button(
+            VNextMediaPrimaryAction(
+                label = playLabel,
+                icon = Icons.Filled.PlayArrow,
                 onClick = { onPlay(movie) },
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(OwnPlayMediaLayout.ContentCornerRadius),
-            ) {
-                Icon(Icons.Filled.PlayArrow, contentDescription = null)
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    when {
-                        offlineCopyAvailable && movie.resumeAvailable -> "Resume Offline"
-                        offlineCopyAvailable -> "Play Offline"
-                        movie.resumeAvailable -> "Resume"
-                        else -> "Play"
-                    },
-                )
-            }
+            )
 
             if (movie.resumeAvailable) {
-                TextButton(
+                VNextMediaSecondaryAction(
+                    label = "Play from beginning",
                     onClick = { onPlayFromBeginning(movie) },
-                    modifier = Modifier.align(Alignment.CenterHorizontally),
-                ) {
-                    Text("Play from beginning")
-                }
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
 
             MovieDownloadContext(
@@ -240,9 +237,11 @@ private fun MovieDownloadContext(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             val managedDownload = requireNotNull(download)
-            IconButton(onClick = { onRemoveDownload(managedDownload) }) {
-                Icon(Icons.Filled.Delete, contentDescription = "Remove download")
-            }
+            VNextMediaIconAction(
+                icon = Icons.Filled.Delete,
+                contentDescription = "Remove download",
+                onClick = { onRemoveDownload(managedDownload) },
+            )
         }
         return
     }
@@ -260,7 +259,20 @@ private fun MovieDownloadContext(
             DownloadStates.FAILED -> "Retry"
             else -> "Download"
         }
-        FilledTonalButton(
+        val downloadIcon = when (download?.state) {
+            DownloadStates.QUEUED,
+            DownloadStates.DOWNLOADING,
+            -> Icons.Filled.Pause
+            DownloadStates.PAUSED -> Icons.Filled.PlayArrow
+            DownloadStates.FAILED -> Icons.Filled.Refresh
+            else -> Icons.Filled.Download
+        }
+        VNextMediaSecondaryAction(
+            label = downloadLabel,
+            icon = downloadIcon,
+            selected = download?.state == DownloadStates.QUEUED ||
+                download?.state == DownloadStates.DOWNLOADING ||
+                download?.state == DownloadStates.PAUSED,
             onClick = {
                 when (download?.state) {
                     DownloadStates.QUEUED,
@@ -272,28 +284,14 @@ private fun MovieDownloadContext(
                     DownloadStates.COMPLETED -> Unit
                 }
             },
-            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
-            shape = RoundedCornerShape(OwnPlayMediaLayout.PosterCornerRadius),
-        ) {
-            Icon(
-                imageVector = when (download?.state) {
-                    DownloadStates.QUEUED,
-                    DownloadStates.DOWNLOADING,
-                    -> Icons.Filled.Pause
-                    DownloadStates.PAUSED -> Icons.Filled.PlayArrow
-                    DownloadStates.FAILED -> Icons.Filled.Refresh
-                    else -> Icons.Filled.Download
-                },
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-            )
-            Spacer(Modifier.width(6.dp))
-            Text(downloadLabel)
-        }
+            modifier = Modifier.weight(1f),
+        )
         download?.let { managedDownload ->
-            IconButton(onClick = { onRemoveDownload(managedDownload) }) {
-                Icon(Icons.Filled.Delete, contentDescription = "Remove download")
-            }
+            VNextMediaIconAction(
+                icon = Icons.Filled.Delete,
+                contentDescription = "Remove download",
+                onClick = { onRemoveDownload(managedDownload) },
+            )
         }
     }
 
