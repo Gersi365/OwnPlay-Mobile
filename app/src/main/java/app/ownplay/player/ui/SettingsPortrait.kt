@@ -24,6 +24,7 @@ internal fun PortraitSettingsMenu(
     summaries: List<PlaylistSourceSummary>,
     onOpenLiveManagement: () -> Unit,
     onOpenSources: () -> Unit,
+    onOpenDownloads: () -> Unit,
 ) {
     Box(
         modifier = Modifier
@@ -46,7 +47,7 @@ internal fun PortraitSettingsMenu(
                     fontWeight = FontWeight.Bold,
                 )
                 Text(
-                    text = "Sources and app data.",
+                    text = "Sources, downloads and app data.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -57,6 +58,14 @@ internal fun PortraitSettingsMenu(
                 summaries = summaries,
                 onOpenLiveManagement = onOpenLiveManagement,
                 onOpenSources = onOpenSources,
+            )
+
+            SettingsSectionTitle("Downloads")
+            SettingsActionRow(
+                title = "Downloads",
+                detail = "Manage active and completed offline media",
+                actionLabel = "Open downloads",
+                onClick = onOpenDownloads,
             )
 
             SettingsSectionTitle("Backup & Restore")

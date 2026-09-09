@@ -6,21 +6,23 @@ import org.junit.Test
 
 class MobileShellNavigationTest {
     @Test
-    fun `primary navigation order is Home Live Library Downloads`() {
+    fun `primary navigation order is Live Library Settings`() {
         assertEquals(
             listOf(
-                MobilePrimaryDestination.HOME,
                 MobilePrimaryDestination.LIVE,
                 MobilePrimaryDestination.LIBRARY,
-                MobilePrimaryDestination.DOWNLOADS,
+                MobilePrimaryDestination.SETTINGS,
             ),
             mobilePrimaryNavigationOrder,
         )
     }
 
     @Test
-    fun `settings is outside primary navigation`() {
-        assertNull(MobileShellDestination.SETTINGS.primaryDestination())
+    fun `settings is a primary destination`() {
+        assertEquals(
+            MobilePrimaryDestination.SETTINGS,
+            MobileShellDestination.SETTINGS.primaryDestination(),
+        )
     }
 
     @Test
@@ -36,36 +38,17 @@ class MobileShellNavigationTest {
     }
 
     @Test
-    fun `settings round trip returns to exact calling destination`() {
+    fun `Library and Settings roots back to Live`() {
         listOf(
-            MobileShellDestination.HOME,
-            MobileShellDestination.LIVE,
             MobileShellDestination.LIBRARY,
-            MobileShellDestination.DOWNLOADS,
-            MobileShellDestination.MOVIES,
-            MobileShellDestination.SERIES,
-        ).forEach { origin ->
-            val settingsState = MobileShellNavigationState
-                .initial(origin)
-                .open(MobileShellDestination.SETTINGS)
-
-            assertEquals(origin, settingsState.backTarget())
-        }
-    }
-
-    @Test
-    fun `top level media destinations back to Home`() {
-        listOf(
-            MobileShellDestination.LIVE,
-            MobileShellDestination.LIBRARY,
-            MobileShellDestination.DOWNLOADS,
+            MobileShellDestination.SETTINGS,
         ).forEach { destination ->
             assertEquals(
-                MobileShellDestination.HOME,
+                MobileShellDestination.LIVE,
                 MobileShellNavigationState.initial(destination).backTarget(),
             )
         }
-        assertNull(MobileShellNavigationState.initial(MobileShellDestination.HOME).backTarget())
+        assertNull(MobileShellNavigationState.initial(MobileShellDestination.LIVE).backTarget())
     }
 
     @Test
