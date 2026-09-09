@@ -41,7 +41,7 @@ class PlaybackProgressStartIntentContractTest {
 
         assertTrue(downloads.contains("runtime.playbackProgress(download.downloadId)"))
         assertTrue(downloads.contains("\"Resume Offline\""))
-        assertTrue(downloads.contains("Text(\"Play from beginning\")"))
+        assertTrue(downloads.contains("label = \"Play from beginning\""))
         assertTrue(downloads.contains("startFromBeginning = startFromBeginning"))
 
         assertTrue(activity.contains("downloadRuntime.playbackProgress(download.downloadId)"))
