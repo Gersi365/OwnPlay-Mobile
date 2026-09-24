@@ -14,7 +14,7 @@ permissions:
 jobs:
   runtime-emulator-qa:
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    timeout-minutes: 40
 
     steps:
       - name: Checkout execution mirror
@@ -54,24 +54,76 @@ jobs:
           echo "$(dirname "$SDKMANAGER")" >> "$GITHUB_PATH"
           export PATH="$SDK_ROOT/platform-tools:$SDK_ROOT/emulator:$(dirname "$SDKMANAGER"):$PATH"
 
-          echo "no" | "$AVDMANAGER" create avd             --force             --name ownplay-qa-api35             --package "system-images;android-35;google_apis;x86_64"             --device "pixel_6"
+          export ANDROID_AVD_HOME="$RUNNER_TEMP/ownplay-avd"
+          mkdir -p "$ANDROID_AVD_HOME"
+
+          echo "no" | "$AVDMANAGER" create avd \
+            --force \
+            --name ownplay-qa-api35 \
+            --path "$ANDROID_AVD_HOME/ownplay-qa-api35.avd" \
+            --package "system-images;android-35;google_apis;x86_64" \
+            --device "pixel_6"
+
+          "$SDK_ROOT/emulator/emulator" -list-avds | tee avd-list.txt
+          grep -qx "ownplay-qa-api35" avd-list.txt
 
           if [[ -e /dev/kvm ]]; then
             sudo chmod 666 /dev/kvm
+          else
+            echo "ERROR: /dev/kvm is unavailable; refusing an unaccelerated emulator run." >&2
+            exit 2
           fi
 
-          nohup "$SDK_ROOT/emulator/emulator"             -avd ownplay-qa-api35             -no-window             -no-audio             -no-boot-anim             -no-snapshot             -gpu swiftshader_indirect             -camera-back none             -camera-front none             > emulator.log 2>&1 &
+          nohup "$SDK_ROOT/emulator/emulator" \
+            -avd ownplay-qa-api35 \
+            -no-window \
+            -no-audio \
+            -no-boot-anim \
+            -no-snapshot \
+            -gpu swiftshader_indirect \
+            -camera-back none \
+            -camera-front none \
+            > emulator.log 2>&1 &
+          emulator_pid=$!
+          echo "$emulator_pid" > emulator.pid
 
-          adb wait-for-device
+          device_ready=0
+          for _ in $(seq 1 48); do
+            if ! kill -0 "$emulator_pid" 2>/dev/null; then
+              echo "ERROR: Emulator exited before registering with adb." >&2
+              cat emulator.log >&2 || true
+              exit 2
+            fi
+            if adb devices | awk 'NR > 1 && $2 == "device" { print $1 }' | grep -q .; then
+              device_ready=1
+              break
+            fi
+            sleep 5
+          done
+          if [[ "$device_ready" -ne 1 ]]; then
+            echo "ERROR: Emulator did not register with adb within 4 minutes." >&2
+            cat emulator.log >&2 || true
+            exit 2
+          fi
+
           booted=0
-          for _ in $(seq 1 120); do
+          for _ in $(seq 1 48); do
+            if ! kill -0 "$emulator_pid" 2>/dev/null; then
+              echo "ERROR: Emulator exited before Android completed boot." >&2
+              cat emulator.log >&2 || true
+              exit 2
+            fi
             if [[ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == "1" ]]; then
               booted=1
               break
             fi
             sleep 5
           done
-          test "$booted" = "1"
+          if [[ "$booted" -ne 1 ]]; then
+            echo "ERROR: Android did not complete boot within 4 minutes after adb registration." >&2
+            cat emulator.log >&2 || true
+            exit 2
+          fi
 
           adb shell input keyevent 82 || true
           adb devices -l
