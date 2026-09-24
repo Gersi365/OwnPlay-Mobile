@@ -1,0 +1,95 @@
+name: Android Validation
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Gradle 9.6.0
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+
+      - name: Ensure Android SDK 36
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          test -n "$SDK_ROOT"
+          SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "$SDKMANAGER" ]]; then
+            SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          fi
+          test -x "$SDKMANAGER"
+          if [[ ! -f "$SDK_ROOT/platforms/android-36/android.jar" || ! -d "$SDK_ROOT/build-tools/36.0.0" ]]; then
+            "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+          fi
+          test -f "$SDK_ROOT/platforms/android-36/android.jar"
+          test -x "$SDK_ROOT/build-tools/36.0.0/apksigner"
+
+      - name: Validate source without APK
+        shell: bash
+        env:
+          OWNPLAY_SOURCE_MANIFEST: ${{ github.workspace }}/SOURCE_TREE_SHA256.txt
+        run: bash tools/validate-source-no-apk.sh
+
+      - name: Build debug QA APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle :app:assembleDebug --rerun-tasks --no-build-cache --stacktrace
+          test -f app/build/outputs/apk/debug/app-debug.apk
+          sha256sum app/build/outputs/apk/debug/app-debug.apk | tee app/build/outputs/apk/debug/app-debug.apk.sha256
+
+      - name: Verify APK signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          "$SDK_ROOT/build-tools/36.0.0/apksigner" verify --verbose --print-certs \
+            app/build/outputs/apk/debug/app-debug.apk \
+            | tee app/build/outputs/apk/debug/APKSIGNER_VERIFY.txt
+
+      - name: Write QA build metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "source_manifest_sha256=$(sha256sum SOURCE_TREE_SHA256.txt | awk '{print $1}')"
+            echo "github_commit=${GITHUB_SHA}"
+            echo "github_run_id=${GITHUB_RUN_ID}"
+            echo "github_run_url=https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo "gradle_version=$(gradle --version | awk '/^Gradle / {print $2; exit}')"
+            echo "java_version=$(java -version 2>&1 | head -n 1)"
+            echo "android_platform=36"
+            echo "build_tools=36.0.0"
+          } | tee app/build/outputs/apk/debug/QA_BUILD_METADATA.txt
+
+      - name: Upload QA APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: OwnPlay-Mobile-debug-QA
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/debug/app-debug.apk.sha256
+            app/build/outputs/apk/debug/APKSIGNER_VERIFY.txt
+            app/build/outputs/apk/debug/QA_BUILD_METADATA.txt
+          retention-days: 7
