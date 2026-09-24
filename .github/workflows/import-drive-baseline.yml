@@ -1,0 +1,60 @@
+name: Import Drive Baseline
+
+on:
+  push:
+    branches:
+      - bootstrap-import
+
+permissions:
+  contents: write
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout bootstrap branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reassemble and verify payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARCHIVE="$RUNNER_TEMP/ownplay-source.zip"
+          cat import-payload/ownplay-source.zip.part-* > "$ARCHIVE"
+          echo "0b480a9aee1537a7114a1dd4c9a8ba29a4fc669c56374f865f85933d87f89749  $ARCHIVE" | sha256sum -c -
+
+      - name: Extract and verify Drive baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARCHIVE="$RUNNER_TEMP/ownplay-source.zip"
+          STAGE="$RUNNER_TEMP/ownplay-drive-source"
+          rm -rf "$STAGE"
+          mkdir -p "$STAGE"
+          unzip -q "$ARCHIVE" -d "$STAGE"
+          cd "$STAGE"
+          test "$(find . -type f | wc -l)" -eq 268
+          sha256sum -c "$GITHUB_WORKSPACE/SOURCE_TREE_SHA256.txt"
+
+      - name: Materialize source tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          STAGE="$RUNNER_TEMP/ownplay-drive-source"
+          rsync -a "$STAGE/" "$GITHUB_WORKSPACE/"
+          rm -rf "$GITHUB_WORKSPACE/import-payload"
+          cd "$GITHUB_WORKSPACE"
+          test "$(awk 'NF { n++ } END { print n+0 }' SOURCE_TREE_SHA256.txt)" -eq 268
+          sha256sum -c SOURCE_TREE_SHA256.txt
+
+      - name: Commit Drive baseline to main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Import current OwnPlay Mobile Drive baseline"
+          git push origin HEAD:main
