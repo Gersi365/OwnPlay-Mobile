@@ -1,0 +1,155 @@
+name: Runtime Emulator QA
+
+on:
+  push:
+    branches:
+      - "runtime-qa/emulator-api35-20260924"
+    paths:
+      - ".github/workflows/runtime-emulator-qa.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  runtime-emulator-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+
+    steps:
+      - name: Checkout execution mirror
+        uses: actions/checkout@v4
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Setup Gradle 9.6.0
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.6.0"
+
+      - name: Provision Android emulator target
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          test -n "$SDK_ROOT"
+
+          SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "$SDKMANAGER" ]]; then
+            SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager -perm -u+x -print -quit)"
+          fi
+          test -x "$SDKMANAGER"
+
+          AVDMANAGER="$(dirname "$SDKMANAGER")/avdmanager"
+          test -x "$AVDMANAGER"
+
+          "$SDKMANAGER"             "platform-tools"             "platforms;android-36"             "build-tools;36.0.0"             "emulator"             "system-images;android-35;google_apis;x86_64"
+
+          echo "$SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
+          echo "$SDK_ROOT/emulator" >> "$GITHUB_PATH"
+          echo "$(dirname "$SDKMANAGER")" >> "$GITHUB_PATH"
+
+          echo "no" | "$AVDMANAGER" create avd             --force             --name ownplay-qa-api35             --package "system-images;android-35;google_apis;x86_64"             --device "pixel_6"
+
+          if [[ -e /dev/kvm ]]; then
+            sudo chmod 666 /dev/kvm
+          fi
+
+          nohup "$SDK_ROOT/emulator/emulator"             -avd ownplay-qa-api35             -no-window             -no-audio             -no-boot-anim             -no-snapshot             -gpu swiftshader_indirect             -camera-back none             -camera-front none             > emulator.log 2>&1 &
+
+          adb wait-for-device
+          booted=0
+          for _ in $(seq 1 120); do
+            if [[ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == "1" ]]; then
+              booted=1
+              break
+            fi
+            sleep 5
+          done
+          test "$booted" = "1"
+
+          adb shell input keyevent 82 || true
+          adb devices -l
+          test "$(adb devices | awk 'NR > 1 && $2 == "device" { count++ } END { print count+0 }')" = "1"
+
+      - name: Run authoritative instrumentation QA
+        id: runtime
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p qa-evidence
+          set +e
+          bash tools/run-android-instrumentation-qa.sh 2>&1 | tee qa-evidence/runtime-qa.log
+          status=${PIPESTATUS[0]}
+          set -e
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Capture runtime evidence
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          mkdir -p qa-evidence
+
+          {
+            echo "github_repository=${GITHUB_REPOSITORY}"
+            echo "github_commit=${GITHUB_SHA}"
+            echo "github_run_id=${GITHUB_RUN_ID}"
+            echo "github_run_url=https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo "runtime_runner_sha256=$(sha256sum tools/run-android-instrumentation-qa.sh | awk '{print $1}')"
+            echo "source_manifest_sha256=$(sha256sum SOURCE_TREE_SHA256.txt | awk '{print $1}')"
+            echo "android_release=$(adb shell getprop ro.build.version.release 2>/dev/null | tr -d '\r')"
+            echo "android_sdk=$(adb shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r')"
+            echo "device_model=$(adb shell getprop ro.product.model 2>/dev/null | tr -d '\r')"
+            echo "runtime_exit_code=${{ steps.runtime.outputs.exit_code }}"
+          } > qa-evidence/RUNTIME_QA_METADATA.txt
+
+          adb devices -l > qa-evidence/ADB_DEVICES.txt 2>&1
+
+          adb shell am start -W -n app.ownplay.mobile/.MainActivity             > qa-evidence/APP_LAUNCH.txt 2>&1
+          sleep 3
+          adb exec-out screencap -p > qa-evidence/app-launch.png
+
+          if [[ -d app/build/outputs/androidTest-results ]]; then
+            cp -R app/build/outputs/androidTest-results qa-evidence/androidTest-results
+          fi
+          if [[ -d app/build/reports/androidTests ]]; then
+            cp -R app/build/reports/androidTests qa-evidence/androidTests-report
+          fi
+
+          app_apk="app/build/outputs/apk/debug/app-debug.apk"
+          test_apk="app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          if [[ -f "$app_apk" ]]; then
+            cp "$app_apk" qa-evidence/app-debug.apk
+            sha256sum "$app_apk" > qa-evidence/app-debug.apk.sha256
+            "$SDK_ROOT/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$app_apk"               > qa-evidence/APKSIGNER_VERIFY.txt 2>&1
+          fi
+          if [[ -f "$test_apk" ]]; then
+            cp "$test_apk" qa-evidence/app-debug-androidTest.apk
+            sha256sum "$test_apk" > qa-evidence/app-debug-androidTest.apk.sha256
+          fi
+
+          cp emulator.log qa-evidence/emulator.log 2>/dev/null || true
+          exit 0
+
+      - name: Upload runtime QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: OwnPlay-Mobile-runtime-emulator-QA
+          path: qa-evidence/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Enforce runtime QA result
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ steps.runtime.outputs.exit_code }}" = "0"
