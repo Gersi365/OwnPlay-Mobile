@@ -1,0 +1,13 @@
+#EXTM3U
+#EXTINF:-1 tvg-id="al-news-1" tvg-name="Top Lajme" group-title="Shqipëri Lajme",Top Lajme HD
+https://fixture.invalid/al/news.m3u8
+#EXTINF:-1 tvg-id="it-movie-1" tvg-name="Cinema Uno" group-title="Italia Cinema",Cinema Uno
+https://fixture.invalid/it/cinema.m3u8
+#EXTINF:-1 tvg-id="de-sport-1" tvg-name="DAZN Fußball" group-title="Deutschland Sport",DAZN Fußball
+https://fixture.invalid/de/sport.m3u8
+#EXTINF:-1 tvg-id="se-kids-1" tvg-name="Barnkanalen" group-title="Sverige Barn",Barnkanalen
+https://fixture.invalid/se/kids.m3u8
+#EXTINF:-1 tvg-id="unknown-1" tvg-name="Mystery One" group-title="Premium Mix",Mystery One
+https://fixture.invalid/unknown/one.m3u8
+#EXTINF:-1 tvg-id="unknown-2" tvg-name="Mystery One Plus" group-title="Premium Mix",Mystery One Plus
+https://fixture.invalid/unknown/two.m3u8
