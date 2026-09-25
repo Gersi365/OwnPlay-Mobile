@@ -48,7 +48,7 @@ private enum class BackupOperation(val status: String) {
 @Composable
 internal fun BackupRestoreSection(
     repository: BackupRestoreRepository,
-    onMessage: (String) -> Unit,
+    onMessage: (SettingsOperationMessage) -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -63,8 +63,12 @@ internal fun BackupRestoreSection(
             operation = BackupOperation.EXPORTING
             val message = when (val result = repository.exportBackup()) {
                 is BackupExportResult.Success ->
-                    if (writeBackupFile(context, uri, result.bytes)) "Backup exported." else "Backup export failed."
-                BackupExportResult.Failure -> "Backup export failed."
+                    if (writeBackupFile(context, uri, result.bytes)) {
+                        SettingsOperationMessage.success("Backup exported.")
+                    } else {
+                        SettingsOperationMessage.error("Backup export failed.")
+                    }
+                BackupExportResult.Failure -> SettingsOperationMessage.error("Backup export failed.")
             }
             operation = null
             onMessage(message)
@@ -79,7 +83,7 @@ internal fun BackupRestoreSection(
             val backup = readBackupFile(context, uri)
             if (backup == null) {
                 operation = null
-                onMessage("Backup file could not be read.")
+                onMessage(SettingsOperationMessage.error("Backup file could not be read."))
                 return@launch
             }
             when (val preview = repository.previewRestore(backup)) {
@@ -88,12 +92,14 @@ internal fun BackupRestoreSection(
                     pendingPlan = preview.plan
                 }
                 is BackupRestorePreview.Conflicted -> onMessage(
-                    "Restore blocked: ${preview.plan.sourceResolutions.count { it.action == BackupSourceRestoreAction.CONFLICT }} local source identity/connection conflict(s) with this backup. OwnPlay does not remap or merge sources automatically. Resolve the conflicting local source or backup, then retry.",
+                    SettingsOperationMessage.error(
+                        "Restore blocked: ${preview.plan.sourceResolutions.count { it.action == BackupSourceRestoreAction.CONFLICT }} local source identity/connection conflict(s) with this backup. OwnPlay does not remap or merge sources automatically. Resolve the conflicting local source or backup, then retry.",
+                    ),
                 )
                 is BackupRestorePreview.Rejected -> onMessage(
-                    backupRejectedMessage(preview.issues),
+                    SettingsOperationMessage.error(backupRejectedMessage(preview.issues)),
                 )
-                BackupRestorePreview.StorageFailure -> onMessage("Restore preview could not read local state.")
+                BackupRestorePreview.StorageFailure -> onMessage(SettingsOperationMessage.error("Restore preview could not read local state."))
             }
             operation = null
         }
@@ -222,14 +228,14 @@ private fun RestoreConfirmationDialog(
     )
 }
 
-private fun restoreMessage(result: BackupRestoreResult): String = when (result) {
+private fun restoreMessage(result: BackupRestoreResult): SettingsOperationMessage = when (result) {
     is BackupRestoreResult.Success -> {
         val report = result.report
         val skipped = report.skippedCategoryPersonalization +
             report.skippedChannelPersonalization + report.skippedMediaFavorites +
             report.skippedLivePlacements + report.skippedCustomGroups +
             report.skippedCustomGroupMemberships
-        buildString {
+        val text = buildString {
             append("Restore complete: ${report.mergedSources} merged, ")
             append("${report.createdDisabledSources} created disabled")
             if (skipped > 0) append(", $skipped personalization item(s) skipped")
@@ -238,11 +244,19 @@ private fun restoreMessage(result: BackupRestoreResult): String = when (result) 
             }
             append('.')
         }
+        if (skipped > 0 || report.refreshScheduleSyncFailures > 0) {
+            SettingsOperationMessage.info(text)
+        } else {
+            SettingsOperationMessage.success(text)
+        }
     }
-    is BackupRestoreResult.Conflicted ->
-        "Restore blocked by a local source identity/connection conflict with this backup. OwnPlay does not remap or merge sources automatically. Resolve the conflict, then retry."
-    is BackupRestoreResult.Rejected -> backupRejectedMessage(result.issues)
-    BackupRestoreResult.StorageFailure -> "Restore failed without completing durable state changes."
+    is BackupRestoreResult.Conflicted -> SettingsOperationMessage.error(
+        "Restore blocked by a local source identity/connection conflict with this backup. OwnPlay does not remap or merge sources automatically. Resolve the conflict, then retry.",
+    )
+    is BackupRestoreResult.Rejected -> SettingsOperationMessage.error(backupRejectedMessage(result.issues))
+    BackupRestoreResult.StorageFailure -> SettingsOperationMessage.error(
+        "Restore failed without completing durable state changes.",
+    )
 }
 
 private fun backupRejectedMessage(issues: List<BackupValidationIssue>): String =

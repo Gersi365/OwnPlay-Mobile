@@ -97,6 +97,33 @@ private enum class ProviderManagementFilter(val label: String) {
     FAVORITES("Favorites"),
 }
 
+internal enum class SettingsMessageSeverity {
+    INFO,
+    SUCCESS,
+    ERROR,
+}
+
+internal data class SettingsOperationMessage(
+    val text: String,
+    val severity: SettingsMessageSeverity,
+) {
+    companion object {
+        fun info(text: String) = SettingsOperationMessage(text, SettingsMessageSeverity.INFO)
+        fun success(text: String) = SettingsOperationMessage(text, SettingsMessageSeverity.SUCCESS)
+        fun error(text: String) = SettingsOperationMessage(text, SettingsMessageSeverity.ERROR)
+    }
+}
+
+private fun settingsResultMessage(
+    succeeded: Boolean,
+    success: String,
+    failure: String,
+): SettingsOperationMessage = if (succeeded) {
+    SettingsOperationMessage.success(success)
+} else {
+    SettingsOperationMessage.error(failure)
+}
+
 @Composable
 fun SettingsScreen(
     modifier: Modifier = Modifier,
@@ -231,7 +258,7 @@ private fun SettingsSourcesScreen(
     val scope = rememberCoroutineScope()
     var busyIds by remember { mutableStateOf(emptySet<String>()) }
     var refreshingIds by remember { mutableStateOf(emptySet<String>()) }
-    var message by remember { mutableStateOf<String?>(null) }
+    var message by remember { mutableStateOf<SettingsOperationMessage?>(null) }
     var addType by remember { mutableStateOf<SourceType?>(null) }
     var addSubmitting by remember { mutableStateOf(false) }
     var addError by remember { mutableStateOf<String?>(null) }
@@ -239,7 +266,7 @@ private fun SettingsSourcesScreen(
     var reconnectSource by remember { mutableStateOf<SourceSummary?>(null) }
     var removeSource by remember { mutableStateOf<SourceSummary?>(null) }
 
-    fun runForSource(source: SourceSummary, block: suspend () -> String) {
+    fun runForSource(source: SourceSummary, block: suspend () -> SettingsOperationMessage) {
         if (source.sourceId.value in busyIds) return
         busyIds = busyIds + source.sourceId.value
         scope.launch {
@@ -248,7 +275,7 @@ private fun SettingsSourcesScreen(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
-                message = "Could not complete the operation for ${source.displayName}."
+                message = SettingsOperationMessage.error("Could not complete the operation for ${source.displayName}.")
             } finally {
                 busyIds = busyIds - source.sourceId.value
             }
@@ -269,6 +296,7 @@ private fun SettingsSourcesScreen(
 
         message?.let { status ->
             item {
+                val isError = status.severity == SettingsMessageSeverity.ERROR
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -276,11 +304,11 @@ private fun SettingsSourcesScreen(
                             liveRegion = LiveRegionMode.Polite
                         },
                     shape = OwnPlayShapes.Medium,
-                    color = OwnPlayColors.Surface,
+                    color = if (isError) OwnPlayColors.Error.copy(alpha = 0.12f) else OwnPlayColors.Surface,
                 ) {
                     Text(
-                        text = status,
-                        color = OwnPlayColors.TextSecondary,
+                        text = status.text,
+                        color = if (isError) OwnPlayColors.Error else OwnPlayColors.TextSecondary,
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
                     )
                 }
@@ -319,11 +347,11 @@ private fun SettingsSourcesScreen(
                             enabled = activeSource != null,
                             onClick = {
                                 scope.launch {
-                                    message = if (repository.clearActiveSource()) {
-                                        "No active source selected."
-                                    } else {
-                                        "Could not clear the active source."
-                                    }
+                                    message = settingsResultMessage(
+                                        succeeded = repository.clearActiveSource(),
+                                        success = "No active source selected.",
+                                        failure = "Could not clear the active source.",
+                                    )
                                 }
                             },
                         ) { Text("No active source") }
@@ -347,11 +375,11 @@ private fun SettingsSourcesScreen(
                         refreshing = source.sourceId.value in refreshingIds,
                         onSetActive = {
                             runForSource(source) {
-                                if (repository.setActiveSource(source.sourceId)) {
-                                    "${source.displayName} is now active."
-                                } else {
-                                    "Could not select ${source.displayName}."
-                                }
+                                settingsResultMessage(
+                                    succeeded = repository.setActiveSource(source.sourceId),
+                                    success = "${source.displayName} is now active.",
+                                    failure = "Could not select ${source.displayName}.",
+                                )
                             }
                         },
                         onRefresh = {
@@ -360,9 +388,12 @@ private fun SettingsSourcesScreen(
                                 refreshingIds = refreshingIds + sourceId
                                 try {
                                     when (val result = repository.refreshSource(source.sourceId)) {
-                                        SourceRefreshResult.Success -> "${source.displayName} refreshed."
+                                        SourceRefreshResult.Success ->
+                                            SettingsOperationMessage.success("${source.displayName} refreshed.")
                                         is SourceRefreshResult.Failure ->
-                                            result.safeMessage ?: "${source.displayName} refresh failed."
+                                            SettingsOperationMessage.error(
+                                                result.safeMessage ?: "${source.displayName} refresh failed.",
+                                            )
                                     }
                                 } finally {
                                     refreshingIds = refreshingIds - sourceId
@@ -458,13 +489,13 @@ private fun SettingsSourcesScreen(
                         try {
                             val result = repository.addSource(input)
                             if (result is SourceMutationResult.Success) {
-                                message = "Xtream source added and catalog imported."
+                                message = SettingsOperationMessage.success("Xtream source added and catalog imported.")
                                 addType = null
                             } else {
                                 addError = mutationMessage(
                                     result = result,
                                     success = "Xtream source added and catalog imported.",
-                                )
+                                ).text
                             }
                         } catch (cancelled: CancellationException) {
                             throw cancelled
@@ -494,13 +525,13 @@ private fun SettingsSourcesScreen(
                         try {
                             val result = repository.addSource(input)
                             if (result is SourceMutationResult.Success) {
-                                message = "M3U source added and catalog imported."
+                                message = SettingsOperationMessage.success("M3U source added and catalog imported.")
                                 addType = null
                             } else {
                                 addError = mutationMessage(
                                     result = result,
                                     success = "M3U source added and catalog imported.",
-                                )
+                                ).text
                             }
                         } catch (cancelled: CancellationException) {
                             throw cancelled
@@ -563,11 +594,11 @@ private fun SettingsSourcesScreen(
                     onClick = {
                         removeSource = null
                         runForSource(source) {
-                            if (repository.removeSource(source.sourceId)) {
-                                "${source.displayName} removed."
-                            } else {
-                                "Could not remove ${source.displayName}."
-                            }
+                            settingsResultMessage(
+                                succeeded = repository.removeSource(source.sourceId),
+                                success = "${source.displayName} removed.",
+                                failure = "Could not remove ${source.displayName}.",
+                            )
                         }
                     },
                 ) { Text("Remove") }
@@ -711,7 +742,7 @@ private fun SourceSettingsCard(
 private fun RefreshScheduleSection(
     source: SourceSummary?,
     repository: SourceRefreshScheduleRepository,
-    onMessage: (String) -> Unit,
+    onMessage: (SettingsOperationMessage) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     if (source == null) {
@@ -754,11 +785,11 @@ private fun RefreshScheduleSection(
                         onClick = {
                             scope.launch {
                                 onMessage(
-                                    if (repository.setSchedule(source.sourceId, option)) {
-                                        "Refresh schedule set to ${option.displayName}."
-                                    } else {
-                                        "Could not update refresh schedule."
-                                    },
+                                    settingsResultMessage(
+                                        succeeded = repository.setSchedule(source.sourceId, option),
+                                        success = "Refresh schedule set to ${option.displayName}.",
+                                        failure = "Could not update refresh schedule.",
+                                    ),
                                 )
                             }
                         },
@@ -778,11 +809,11 @@ private fun RefreshScheduleSection(
             onCheckedChange = { target ->
                 scope.launch {
                     onMessage(
-                        if (repository.setWifiOnly(source.sourceId, target)) {
-                            if (target) "Wi-Fi-only refresh enabled." else "Wi-Fi-only refresh disabled."
-                        } else {
-                            "Could not update Wi-Fi-only refresh."
-                        },
+                        settingsResultMessage(
+                            succeeded = repository.setWifiOnly(source.sourceId, target),
+                            success = if (target) "Wi-Fi-only refresh enabled." else "Wi-Fi-only refresh disabled.",
+                            failure = "Could not update Wi-Fi-only refresh.",
+                        ),
                     )
                 }
             },
@@ -874,7 +905,7 @@ private fun SettingsToggleRow(
 @Composable
 private fun DisplayPreferencesSection(
     repository: DisplayPreferencesRepository,
-    onMessage: (String) -> Unit,
+    onMessage: (SettingsOperationMessage) -> Unit,
 ) {
     val preferences by repository.preferences.collectAsState(initial = DisplayPreferences())
     val scope = rememberCoroutineScope()
@@ -890,11 +921,11 @@ private fun DisplayPreferencesSection(
             onCheckedChange = { target ->
                 scope.launch {
                     onMessage(
-                        if (repository.setShowChannelLogos(target)) {
-                            if (target) "Channel logos enabled." else "Channel logos hidden."
-                        } else {
-                            "Could not update display preference."
-                        },
+                        settingsResultMessage(
+                            succeeded = repository.setShowChannelLogos(target),
+                            success = if (target) "Channel logos enabled." else "Channel logos hidden.",
+                            failure = "Could not update display preference.",
+                        ),
                     )
                 }
             },
@@ -906,11 +937,11 @@ private fun DisplayPreferencesSection(
             onCheckedChange = { target ->
                 scope.launch {
                     onMessage(
-                        if (repository.setHideChannelPrefix(target)) {
-                            if (target) "OwnPlay channel prefixes hidden." else "Full channel names restored."
-                        } else {
-                            "Could not update display preference."
-                        },
+                        settingsResultMessage(
+                            succeeded = repository.setHideChannelPrefix(target),
+                            success = if (target) "OwnPlay channel prefixes hidden." else "Full channel names restored.",
+                            failure = "Could not update display preference.",
+                        ),
                     )
                 }
             },
@@ -922,11 +953,11 @@ private fun DisplayPreferencesSection(
             onCheckedChange = { target ->
                 scope.launch {
                     onMessage(
-                        if (repository.setShowCategoryFlags(target)) {
-                            if (target) "Country flags enabled for provider labels." else "Country flags hidden."
-                        } else {
-                            "Could not update category-flag preference."
-                        },
+                        settingsResultMessage(
+                            succeeded = repository.setShowCategoryFlags(target),
+                            success = if (target) "Country flags enabled for provider labels." else "Country flags hidden.",
+                            failure = "Could not update category-flag preference.",
+                        ),
                     )
                 }
             },
@@ -938,11 +969,11 @@ private fun DisplayPreferencesSection(
             onCheckedChange = { target ->
                 scope.launch {
                     onMessage(
-                        if (repository.setHideLiveCategoryPrefix(target)) {
-                            if (target) "Live category prefixes hidden." else "Full Live category names restored."
-                        } else {
-                            "Could not update Live category-label preference."
-                        },
+                        settingsResultMessage(
+                            succeeded = repository.setHideLiveCategoryPrefix(target),
+                            success = if (target) "Live category prefixes hidden." else "Full Live category names restored.",
+                            failure = "Could not update Live category-label preference.",
+                        ),
                     )
                 }
             },
@@ -954,11 +985,11 @@ private fun DisplayPreferencesSection(
             onCheckedChange = { target ->
                 scope.launch {
                     onMessage(
-                        if (repository.setHideLibraryCategoryPrefix(target)) {
-                            if (target) "Library category prefixes hidden." else "Full Library category names restored."
-                        } else {
-                            "Could not update Library category-label preference."
-                        },
+                        settingsResultMessage(
+                            succeeded = repository.setHideLibraryCategoryPrefix(target),
+                            success = if (target) "Library category prefixes hidden." else "Full Library category names restored.",
+                            failure = "Could not update Library category-label preference.",
+                        ),
                     )
                 }
             },
@@ -970,11 +1001,11 @@ private fun DisplayPreferencesSection(
             onCheckedChange = { target ->
                 scope.launch {
                     onMessage(
-                        if (repository.setPreferTvgName(target)) {
-                            if (target) "tvg-name preferred for channel labels." else "Provider display name preferred."
-                        } else {
-                            "Could not update channel-name preference."
-                        },
+                        settingsResultMessage(
+                            succeeded = repository.setPreferTvgName(target),
+                            success = if (target) "tvg-name preferred for channel labels." else "Provider display name preferred.",
+                            failure = "Could not update channel-name preference.",
+                        ),
                     )
                 }
             },
@@ -986,11 +1017,11 @@ private fun DisplayPreferencesSection(
             onCheckedChange = { target ->
                 scope.launch {
                     onMessage(
-                        if (repository.setCompactMediaRows(target)) {
-                            if (target) "Compact media rows enabled." else "Compact media rows disabled."
-                        } else {
-                            "Could not update display preference."
-                        },
+                        settingsResultMessage(
+                            succeeded = repository.setCompactMediaRows(target),
+                            success = if (target) "Compact media rows enabled." else "Compact media rows disabled.",
+                            failure = "Could not update display preference.",
+                        ),
                     )
                 }
             },
@@ -1002,7 +1033,7 @@ private fun DisplayPreferencesSection(
 private fun LiveOrganizationSettingsSection(
     source: SourceSummary?,
     repository: LiveOrganizationRepository,
-    onMessage: (String) -> Unit,
+    onMessage: (SettingsOperationMessage) -> Unit,
 ) {
     var providerManagerOpen by remember(source?.sourceId) { mutableStateOf(false) }
 
@@ -1042,7 +1073,7 @@ private fun LiveOrganizationSettingsSection(
 private fun ProviderLiveManagementDialog(
     source: SourceSummary,
     repository: LiveOrganizationRepository,
-    onMessage: (String) -> Unit,
+    onMessage: (SettingsOperationMessage) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -1156,7 +1187,7 @@ private fun ProviderLiveManagementDialog(
                                                             !channel.hidden,
                                                         )
                                                     ) {
-                                                        onMessage("Could not update Provider channel visibility.")
+                                                        onMessage(SettingsOperationMessage.error("Could not update Provider channel visibility."))
                                                     }
                                                 }
                                             },
@@ -1200,7 +1231,7 @@ private fun ProviderLiveManagementDialog(
                                                 !category.hidden,
                                             )
                                         ) {
-                                            onMessage("Could not update Provider category visibility.")
+                                            onMessage(SettingsOperationMessage.error("Could not update Provider category visibility."))
                                         }
                                     }
                                 },
@@ -1213,7 +1244,7 @@ private fun ProviderLiveManagementDialog(
                                                 index - 1,
                                             )
                                             if (!repository.setProviderCategoryOrder(source.sourceId, orderedIds)) {
-                                                onMessage("Could not update Provider category order.")
+                                                onMessage(SettingsOperationMessage.error("Could not update Provider category order."))
                                             }
                                         }
                                     }
@@ -1227,7 +1258,7 @@ private fun ProviderLiveManagementDialog(
                                                 index + 1,
                                             )
                                             if (!repository.setProviderCategoryOrder(source.sourceId, orderedIds)) {
-                                                onMessage("Could not update Provider category order.")
+                                                onMessage(SettingsOperationMessage.error("Could not update Provider category order."))
                                             }
                                         }
                                     }
@@ -1253,7 +1284,7 @@ private fun ProviderLiveManagementDialog(
                                                 !channel.hidden,
                                             )
                                         ) {
-                                            onMessage("Could not update Provider channel visibility.")
+                                            onMessage(SettingsOperationMessage.error("Could not update Provider channel visibility."))
                                         }
                                     }
                                 },
@@ -1271,7 +1302,7 @@ private fun ProviderLiveManagementDialog(
                                                     orderedIds,
                                                 )
                                             ) {
-                                                onMessage("Could not update Provider channel order.")
+                                                onMessage(SettingsOperationMessage.error("Could not update Provider channel order."))
                                             }
                                         }
                                     }
@@ -1290,7 +1321,7 @@ private fun ProviderLiveManagementDialog(
                                                     orderedIds,
                                                 )
                                             ) {
-                                                onMessage("Could not update Provider channel order.")
+                                                onMessage(SettingsOperationMessage.error("Could not update Provider channel order."))
                                             }
                                         }
                                     }
@@ -1319,9 +1350,9 @@ private fun ProviderLiveManagementDialog(
                             onClick = {
                                 scope.launch {
                                     if (repository.showAllProviderCategories(source.sourceId)) {
-                                        onMessage("All Provider categories are shown.")
+                                        onMessage(SettingsOperationMessage.success("All Provider categories are shown."))
                                     } else {
-                                        onMessage("Could not show all Provider categories.")
+                                        onMessage(SettingsOperationMessage.error("Could not show all Provider categories."))
                                     }
                                 }
                             },
@@ -1331,9 +1362,9 @@ private fun ProviderLiveManagementDialog(
                             onClick = {
                                 scope.launch {
                                     if (repository.resetProviderCategoryOrder(source.sourceId)) {
-                                        onMessage("Provider category order restored.")
+                                        onMessage(SettingsOperationMessage.success("Provider category order restored."))
                                     } else {
-                                        onMessage("Could not reset Provider category order.")
+                                        onMessage(SettingsOperationMessage.error("Could not reset Provider category order."))
                                     }
                                 }
                             },
@@ -1349,9 +1380,9 @@ private fun ProviderLiveManagementDialog(
                                             selectedCategory.categoryId,
                                         )
                                     ) {
-                                        onMessage("Provider channel order restored.")
+                                        onMessage(SettingsOperationMessage.success("Provider channel order restored."))
                                     } else {
-                                        onMessage("Could not reset Provider channel order.")
+                                        onMessage(SettingsOperationMessage.error("Could not reset Provider channel order."))
                                     }
                                 }
                             },
@@ -1485,7 +1516,7 @@ private fun ProviderManagementRow(
 @Composable
 private fun PlaybackSettingsSection(
     repository: PlaybackPreferencesRepository,
-    onMessage: (String) -> Unit,
+    onMessage: (SettingsOperationMessage) -> Unit,
 ) {
     val preferences by repository.preferences.collectAsState(initial = PlaybackPreferences())
     val scope = rememberCoroutineScope()
@@ -1525,7 +1556,7 @@ private fun PlaybackSettingsSection(
                             volumeCommitInProgress = false
                             if (!saved) {
                                 sliderVolume = preferences.playerVolume
-                                onMessage("Could not update player volume.")
+                                onMessage(SettingsOperationMessage.error("Could not update player volume."))
                             }
                         }
                     }
@@ -1545,11 +1576,11 @@ private fun PlaybackSettingsSection(
             onCheckedChange = { target ->
                 scope.launch {
                     onMessage(
-                        if (repository.setAutomaticPictureInPicture(target)) {
-                            if (target) "Auto-enter PiP enabled." else "Auto-enter PiP disabled."
-                        } else {
-                            "Could not update playback preference."
-                        },
+                        settingsResultMessage(
+                            succeeded = repository.setAutomaticPictureInPicture(target),
+                            success = if (target) "Auto-enter PiP enabled." else "Auto-enter PiP disabled.",
+                            failure = "Could not update playback preference.",
+                        ),
                     )
                 }
             },
@@ -1560,7 +1591,7 @@ private fun PlaybackSettingsSection(
 @Composable
 private fun DownloadSettingsSection(
     repository: DownloadPreferencesRepository,
-    onMessage: (String) -> Unit,
+    onMessage: (SettingsOperationMessage) -> Unit,
 ) {
     val preferences by repository.preferences.collectAsState(initial = DownloadPreferences())
     val scope = rememberCoroutineScope()
@@ -1583,11 +1614,11 @@ private fun DownloadSettingsSection(
             onCheckedChange = { target ->
                 scope.launch {
                     onMessage(
-                        if (repository.setUnmeteredNetworkOnly(target)) {
-                            if (target) "Wi-Fi-only downloads enabled." else "Wi-Fi-only downloads disabled."
-                        } else {
-                            "Could not update download network preference."
-                        },
+                        settingsResultMessage(
+                            succeeded = repository.setUnmeteredNetworkOnly(target),
+                            success = if (target) "Wi-Fi-only downloads enabled." else "Wi-Fi-only downloads disabled.",
+                            failure = "Could not update download network preference.",
+                        ),
                     )
                 }
             },
@@ -1612,11 +1643,11 @@ private fun DownloadSettingsSection(
                 onClick = {
                     scope.launch {
                         onMessage(
-                            if (repository.setDestinationRelativePath(destination)) {
-                                "Download destination updated for new downloads."
-                            } else {
-                                "Use a valid path under Download/, for example Download/OwnPlay Downloads/."
-                            },
+                            settingsResultMessage(
+                                succeeded = repository.setDestinationRelativePath(destination),
+                                success = "Download destination updated for new downloads.",
+                                failure = "Use a valid path under Download/, for example Download/OwnPlay Downloads/.",
+                            ),
                         )
                     }
                 },
@@ -1636,15 +1667,15 @@ private fun DownloadSettingsSection(
             onCheckedChange = { target ->
                 scope.launch {
                     onMessage(
-                        if (repository.setNotificationsEnabled(target)) {
-                            if (target) {
+                        settingsResultMessage(
+                            succeeded = repository.setNotificationsEnabled(target),
+                            success = if (target) {
                                 "Download result notifications enabled."
                             } else {
                                 "Download result notifications disabled."
-                            }
-                        } else {
-                            "Could not update download notification preference."
-                        },
+                            },
+                            failure = "Could not update download notification preference.",
+                        ),
                     )
                 }
             },
@@ -2015,13 +2046,15 @@ private fun SourceInputDialog(
 private fun mutationMessage(
     result: SourceMutationResult,
     success: String,
-): String = when (result) {
-    is SourceMutationResult.Success -> success
-    is SourceMutationResult.Rejected -> when (result.reason) {
-        SourceMutationRejection.INVALID_NAME -> "Enter a valid display name."
-        SourceMutationRejection.INVALID_CONNECTION -> "Enter a valid source connection."
-        SourceMutationRejection.INVALID_CREDENTIALS -> "Enter valid source credentials."
-        SourceMutationRejection.DUPLICATE_SOURCE -> "That source connection is already configured."
-        SourceMutationRejection.STORAGE_FAILURE -> "The source change could not be saved."
-    }
+): SettingsOperationMessage = when (result) {
+    is SourceMutationResult.Success -> SettingsOperationMessage.success(success)
+    is SourceMutationResult.Rejected -> SettingsOperationMessage.error(
+        when (result.reason) {
+            SourceMutationRejection.INVALID_NAME -> "Enter a valid display name."
+            SourceMutationRejection.INVALID_CONNECTION -> "Enter a valid source connection."
+            SourceMutationRejection.INVALID_CREDENTIALS -> "Enter valid source credentials."
+            SourceMutationRejection.DUPLICATE_SOURCE -> "That source connection is already configured."
+            SourceMutationRejection.STORAGE_FAILURE -> "The source change could not be saved."
+        },
+    )
 }
