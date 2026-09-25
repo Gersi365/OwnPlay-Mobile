@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -22,6 +23,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.ownplay.mobile.OwnPlayApplication
@@ -303,6 +307,17 @@ private fun DownloadRow(
                     OwnPlayColors.TextSecondary
                 },
             )
+            if (item.status == DownloadStatus.DOWNLOADING) {
+                item.totalBytes
+                    ?.takeIf { it > 0L }
+                    ?.let { totalBytes ->
+                        val progress = (item.bytesDownloaded.toFloat() / totalBytes.toFloat()).coerceIn(0f, 1f)
+                        LinearProgressIndicator(
+                            progress = { progress },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+            }
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -356,7 +371,10 @@ private fun DownloadRow(
             if (actionFailed) {
                 Text(
                     text = "The download action could not be completed.",
-                    color = OwnPlayColors.TextMuted,
+                    color = OwnPlayColors.Error,
+                    modifier = Modifier.semantics {
+                        liveRegion = LiveRegionMode.Polite
+                    },
                 )
             }
         }
