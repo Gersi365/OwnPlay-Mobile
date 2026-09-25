@@ -1368,19 +1368,16 @@ private fun LibraryPlaybackFullscreenPresentation(
                             )
                             TextButton(
                                 onClick = {
-                                    contentMode = PlaybackVideoContentMode.FIT
+                                    contentMode =
+                                        if (contentMode == PlaybackVideoContentMode.FIT) {
+                                            PlaybackVideoContentMode.FILL
+                                        } else {
+                                            PlaybackVideoContentMode.FIT
+                                        }
                                     registerInteraction()
                                 },
                             ) {
-                                Text(if (contentMode == PlaybackVideoContentMode.FIT) "Fit ✓" else "Fit")
-                            }
-                            TextButton(
-                                onClick = {
-                                    contentMode = PlaybackVideoContentMode.FILL
-                                    registerInteraction()
-                                },
-                            ) {
-                                Text(if (contentMode == PlaybackVideoContentMode.FILL) "Fill ✓" else "Fill")
+                                Text(if (contentMode == PlaybackVideoContentMode.FIT) "Fit ✓" else "Fill ✓")
                             }
                             TextButton(
                                 enabled = playbackState.readiness == PlaybackReadiness.PREPARED,
