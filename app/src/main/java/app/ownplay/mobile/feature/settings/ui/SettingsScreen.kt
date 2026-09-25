@@ -164,6 +164,7 @@ fun SettingsScreen(
             backupRestoreRepository = services.backupRestoreRepository,
             section = selectedSection,
             onBack = { selectedSectionName = null },
+            onOpenSection = { selectedSectionName = it.name },
             modifier = modifier,
         )
     }
@@ -249,6 +250,7 @@ private fun SettingsSourcesScreen(
     backupRestoreRepository: BackupRestoreRepository,
     section: SettingsSection,
     onBack: () -> Unit,
+    onOpenSection: (SettingsSection) -> Unit,
     modifier: Modifier,
 ) {
     val sourcesFlow = remember(repository) { repository.observeSources() }
@@ -460,7 +462,7 @@ private fun SettingsSourcesScreen(
                 BackupRestoreSection(
                     repository = backupRestoreRepository,
                     onMessage = { message = it },
-                    onReviewRestoredSources = { selectedSectionName = SettingsSection.SOURCES.name },
+                    onReviewRestoredSources = { onOpenSection(SettingsSection.SOURCES) },
                 )
             }
         }
