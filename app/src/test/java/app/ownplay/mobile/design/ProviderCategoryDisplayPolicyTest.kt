@@ -90,6 +90,16 @@ class ProviderCategoryDisplayPolicyTest {
         assertEquals("🇮🇹 Movies", presentation.label)
     }
 
+
+    @Test
+    fun earliestExplicitCountryCodeWinsOverLaterCategoryTextCode() {
+        val presentation = ProviderCategoryDisplayPolicy.present("[IT] FANTASIA / SCI-FI")
+
+        assertEquals("FANTASIA / SCI-FI", presentation.displayName)
+        assertEquals("IT", presentation.countryCode)
+        assertEquals("🇮🇹 FANTASIA / SCI-FI", presentation.label)
+    }
+
     @Test
     fun decoratedCountryNamePrefixIsRemoved() {
         val presentation = ProviderCategoryDisplayPolicy.present("(ITALIA) Cinema")
