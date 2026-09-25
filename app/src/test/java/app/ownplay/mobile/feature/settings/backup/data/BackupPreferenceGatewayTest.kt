@@ -38,7 +38,15 @@ class BackupPreferenceGatewayTest {
         assertTrue(snapshot.refreshWifiOnly["source-1"] == true)
         gateway.apply(
             globalSettings = app.ownplay.mobile.feature.settings.backup.domain.BackupGlobalSettings(
-                display = DisplayPreferences(compactMediaRows = true, showChannelLogos = false, preferTvgName = true, hideChannelPrefix = true),
+                display = DisplayPreferences(
+                    compactMediaRows = true,
+                    showChannelLogos = false,
+                    preferTvgName = true,
+                    hideChannelPrefix = true,
+                    showCategoryFlags = false,
+                    hideLiveCategoryPrefix = true,
+                    hideLibraryCategoryPrefix = true,
+                ),
                 playback = PlaybackPreferences(automaticPictureInPicture = false),
                 downloads = DownloadPreferences(unmeteredNetworkOnly = true),
             ),
@@ -52,6 +60,9 @@ class BackupPreferenceGatewayTest {
         assertFalse(fixture.display.state.value.showChannelLogos)
         assertTrue(fixture.display.state.value.preferTvgName)
         assertTrue(fixture.display.state.value.hideChannelPrefix)
+        assertFalse(fixture.display.state.value.showCategoryFlags)
+        assertTrue(fixture.display.state.value.hideLiveCategoryPrefix)
+        assertTrue(fixture.display.state.value.hideLibraryCategoryPrefix)
         assertFalse(fixture.playback.state.value.automaticPictureInPicture)
         assertTrue(fixture.download.state.value.unmeteredNetworkOnly)
         assertEquals(null, fixture.active.value)
@@ -72,7 +83,15 @@ class BackupPreferenceGatewayTest {
 
         gateway.apply(
             globalSettings = app.ownplay.mobile.feature.settings.backup.domain.BackupGlobalSettings(
-                display = DisplayPreferences(compactMediaRows = true, showChannelLogos = false, preferTvgName = true, hideChannelPrefix = true),
+                display = DisplayPreferences(
+                    compactMediaRows = true,
+                    showChannelLogos = false,
+                    preferTvgName = true,
+                    hideChannelPrefix = true,
+                    showCategoryFlags = false,
+                    hideLiveCategoryPrefix = true,
+                    hideLibraryCategoryPrefix = true,
+                ),
                 playback = PlaybackPreferences(automaticPictureInPicture = false),
                 downloads = DownloadPreferences(unmeteredNetworkOnly = true),
             ),
@@ -87,6 +106,9 @@ class BackupPreferenceGatewayTest {
         assertTrue(fixture.display.state.value.showChannelLogos)
         assertFalse(fixture.display.state.value.preferTvgName)
         assertTrue(fixture.display.state.value.hideChannelPrefix)
+        assertTrue(fixture.display.state.value.showCategoryFlags)
+        assertFalse(fixture.display.state.value.hideLiveCategoryPrefix)
+        assertFalse(fixture.display.state.value.hideLibraryCategoryPrefix)
         assertTrue(fixture.playback.state.value.automaticPictureInPicture)
         assertFalse(fixture.download.state.value.unmeteredNetworkOnly)
         assertEquals("source-1", fixture.active.value)
@@ -182,7 +204,9 @@ private class FakeDisplayRepository : DisplayPreferencesRepository {
     override suspend fun setShowChannelLogos(enabled: Boolean): Boolean = update { copy(showChannelLogos = enabled) }
     override suspend fun setPreferTvgName(enabled: Boolean): Boolean = update { copy(preferTvgName = enabled) }
     override suspend fun setHideChannelPrefix(enabled: Boolean): Boolean = update { copy(hideChannelPrefix = enabled) }
-    override suspend fun setHideCategoryPrefix(enabled: Boolean): Boolean = update { copy(hideCategoryPrefix = enabled) }
+    override suspend fun setShowCategoryFlags(enabled: Boolean): Boolean = update { copy(showCategoryFlags = enabled) }
+    override suspend fun setHideLiveCategoryPrefix(enabled: Boolean): Boolean = update { copy(hideLiveCategoryPrefix = enabled) }
+    override suspend fun setHideLibraryCategoryPrefix(enabled: Boolean): Boolean = update { copy(hideLibraryCategoryPrefix = enabled) }
     private fun update(block: DisplayPreferences.() -> DisplayPreferences): Boolean {
         state.value = state.value.block()
         return true

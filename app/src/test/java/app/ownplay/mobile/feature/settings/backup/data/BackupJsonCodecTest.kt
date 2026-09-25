@@ -1,10 +1,12 @@
 package app.ownplay.mobile.feature.settings.backup.data
 
 import app.ownplay.mobile.feature.settings.backup.domain.BackupFormatContract
+import app.ownplay.mobile.feature.settings.backup.domain.BackupGlobalSettings
 import app.ownplay.mobile.feature.settings.backup.domain.BackupSourceDefinition
 import app.ownplay.mobile.feature.settings.backup.domain.BackupValidationCode
 import app.ownplay.mobile.feature.settings.backup.domain.OwnPlayBackupEnvelope
 import app.ownplay.mobile.feature.settings.backup.domain.OwnPlayBackupPayload
+import app.ownplay.mobile.feature.settings.domain.DisplayPreferences
 import app.ownplay.mobile.sources.domain.SourceType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -29,6 +31,17 @@ class BackupJsonCodecTest {
                     ),
                 ),
                 activeSourceId = "source-1",
+                globalSettings = BackupGlobalSettings(
+                    display = DisplayPreferences(
+                        compactMediaRows = true,
+                        showChannelLogos = false,
+                        preferTvgName = true,
+                        hideChannelPrefix = false,
+                        showCategoryFlags = false,
+                        hideLiveCategoryPrefix = true,
+                        hideLibraryCategoryPrefix = false,
+                    ),
+                ),
             ),
         )
 
@@ -39,6 +52,9 @@ class BackupJsonCodecTest {
         assertTrue(raw.contains("\"format\":\"ownplay-backup\""))
         assertTrue(raw.contains("\"version\":1"))
         assertTrue(raw.contains("\"payload\""))
+        assertTrue(raw.contains("\"showCategoryFlags\":false"))
+        assertTrue(raw.contains("\"hideLiveCategoryPrefix\":true"))
+        assertTrue(raw.contains("\"hideLibraryCategoryPrefix\":false"))
         assertFalse(raw.contains("\"password\""))
         assertFalse(raw.contains("\"username\""))
         assertFalse(raw.contains("credentialReference"))
@@ -77,6 +93,36 @@ class BackupJsonCodecTest {
         assertEquals(0.5f, envelope.payload.globalSettings.playback.playerVolume)
         assertFalse(codec.encode(envelope).toString(Charsets.UTF_8).contains("rotateToFullscreen"))
     }
+
+    @Test
+    fun legacyHideCategoryPrefixAppliesToLiveAndLibrary() {
+        val raw =
+            """
+            {
+              "format": "ownplay-backup",
+              "version": 1,
+              "createdAt": "2026-09-21T08:30:00Z",
+              "payload": {
+                "sources": [],
+                "globalSettings": {
+                  "display": {
+                    "hideCategoryPrefix": true
+                  }
+                }
+              }
+            }
+            """.trimIndent()
+
+        val decoded = codec.decode(raw.toByteArray())
+
+        assertTrue(decoded is BackupJsonDecodeResult.Success)
+        val display = (decoded as BackupJsonDecodeResult.Success)
+            .envelope.payload.globalSettings.display
+        assertTrue(display.hideLiveCategoryPrefix)
+        assertTrue(display.hideLibraryCategoryPrefix)
+        assertTrue(display.showCategoryFlags)
+    }
+
     @Test
     fun decodeRejectsForbiddenSecretField() {
         val raw =

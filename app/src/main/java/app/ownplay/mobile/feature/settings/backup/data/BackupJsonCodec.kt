@@ -130,7 +130,9 @@ private fun BackupGlobalSettings.toJson(): JsonObject = buildJsonObject {
         put("showChannelLogos", display.showChannelLogos)
         put("preferTvgName", display.preferTvgName)
         put("hideChannelPrefix", display.hideChannelPrefix)
-        put("hideCategoryPrefix", display.hideCategoryPrefix)
+        put("showCategoryFlags", display.showCategoryFlags)
+        put("hideLiveCategoryPrefix", display.hideLiveCategoryPrefix)
+        put("hideLibraryCategoryPrefix", display.hideLibraryCategoryPrefix)
     }
     putJsonObject("playback") {
         put("automaticPictureInPicture", playback.automaticPictureInPicture)
@@ -256,6 +258,13 @@ private fun JsonObject.toGlobalSettings(path: String): BackupGlobalSettings {
     val playbackDefaults = PlaybackPreferences()
     val downloadDefaults = DownloadPreferences()
     val display = optionalObject("display", path)
+    val legacyHideCategoryPrefix = display?.get("hideCategoryPrefix")?.let {
+        display.optionalBoolean(
+            "hideCategoryPrefix",
+            "$path.display",
+            displayDefaults.hideLiveCategoryPrefix,
+        )
+    }
     val playback = optionalObject("playback", path)
     val downloads = optionalObject("downloads", path)
     return BackupGlobalSettings(
@@ -272,9 +281,19 @@ private fun JsonObject.toGlobalSettings(path: String): BackupGlobalSettings {
             hideChannelPrefix = display?.optionalBoolean(
                 "hideChannelPrefix", "$path.display", displayDefaults.hideChannelPrefix,
             ) ?: displayDefaults.hideChannelPrefix,
-            hideCategoryPrefix = display?.optionalBoolean(
-                "hideCategoryPrefix", "$path.display", displayDefaults.hideCategoryPrefix,
-            ) ?: displayDefaults.hideCategoryPrefix,
+            showCategoryFlags = display?.optionalBoolean(
+                "showCategoryFlags", "$path.display", displayDefaults.showCategoryFlags,
+            ) ?: displayDefaults.showCategoryFlags,
+            hideLiveCategoryPrefix = display?.optionalBoolean(
+                "hideLiveCategoryPrefix",
+                "$path.display",
+                legacyHideCategoryPrefix ?: displayDefaults.hideLiveCategoryPrefix,
+            ) ?: (legacyHideCategoryPrefix ?: displayDefaults.hideLiveCategoryPrefix),
+            hideLibraryCategoryPrefix = display?.optionalBoolean(
+                "hideLibraryCategoryPrefix",
+                "$path.display",
+                legacyHideCategoryPrefix ?: displayDefaults.hideLibraryCategoryPrefix,
+            ) ?: (legacyHideCategoryPrefix ?: displayDefaults.hideLibraryCategoryPrefix),
         ),
         playback = PlaybackPreferences(
             automaticPictureInPicture = playback?.optionalBoolean(
