@@ -219,6 +219,7 @@ internal fun LibraryCatalogContent(
                         Text(
                             text = "Library",
                             color = OwnPlayColors.TextPrimary,
+                            style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                         )
                         Text(
@@ -317,6 +318,13 @@ internal fun LibraryCatalogContent(
                     value = searchQuery,
                     onValueChange = onSearchQueryChange,
                     label = { Text("Movies and Series") },
+                    trailingIcon = {
+                        if (searchQuery.isNotBlank()) {
+                            TextButton(onClick = { onSearchQueryChange("") }) {
+                                Text("Clear")
+                            }
+                        }
+                    },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -468,6 +476,7 @@ private fun LibraryPageHeader(
         Text(
             text = title,
             color = OwnPlayColors.TextPrimary,
+            style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -551,16 +560,20 @@ private fun LibraryHomeContent(
         item {
             LibraryHomeNavigationCard(
                 title = "Movies",
-                subtitle = catalog.movieCategories.size.toString() + " provider categories • " +
-                    catalog.movies.size.toString() + " titles",
+                subtitle = libraryHomeCountSummary(
+                    categoryCount = catalog.movieCategories.size,
+                    itemCount = catalog.movies.size,
+                ),
                 onClick = onShowMovies,
             )
         }
         item {
             LibraryHomeNavigationCard(
                 title = "Series",
-                subtitle = catalog.seriesCategories.size.toString() + " provider categories • " +
-                    catalog.series.size.toString() + " titles",
+                subtitle = libraryHomeCountSummary(
+                    categoryCount = catalog.seriesCategories.size,
+                    itemCount = catalog.series.size,
+                ),
                 onClick = onShowSeries,
             )
         }
@@ -597,6 +610,19 @@ private fun LibraryHomeContent(
     }
 }
 
+private fun libraryHomeCountSummary(
+    categoryCount: Int,
+    itemCount: Int,
+): String {
+    val itemLabel = if (itemCount == 1) "1 title" else "$itemCount titles"
+    return if (categoryCount > 0) {
+        val categoryLabel = if (categoryCount == 1) "1 provider category" else "$categoryCount provider categories"
+        "$categoryLabel • $itemLabel"
+    } else {
+        itemLabel
+    }
+}
+
 @Composable
 private fun LibraryHomeNavigationCard(
     title: String,
@@ -604,7 +630,8 @@ private fun LibraryHomeNavigationCard(
     onClick: () -> Unit,
 ) {
     Surface(
-        color = OwnPlayColors.Surface,
+        color = OwnPlayColors.SurfaceRaised,
+        shape = OwnPlayShapes.Medium,
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
