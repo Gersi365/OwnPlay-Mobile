@@ -7,8 +7,11 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -17,6 +20,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -35,6 +39,12 @@ import kotlinx.coroutines.withContext
 
 private const val MAX_BACKUP_BYTES = 50_000_000
 
+private enum class BackupOperation(val status: String) {
+    EXPORTING("Exporting backup…"),
+    CHECKING_BACKUP("Checking backup…"),
+    RESTORING("Restoring backup…"),
+}
+
 @Composable
 internal fun BackupRestoreSection(
     repository: BackupRestoreRepository,
@@ -44,17 +54,20 @@ internal fun BackupRestoreSection(
     val scope = rememberCoroutineScope()
     var pendingBackup by remember { mutableStateOf<ByteArray?>(null) }
     var pendingPlan by remember { mutableStateOf<BackupRestorePlan?>(null) }
+    var operation by remember { mutableStateOf<BackupOperation?>(null) }
 
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json"),
     ) { uri ->
         if (uri != null) scope.launch {
-            when (val result = repository.exportBackup()) {
-                is BackupExportResult.Success -> onMessage(
-                    if (writeBackupFile(context, uri, result.bytes)) "Backup exported." else "Backup export failed.",
-                )
-                BackupExportResult.Failure -> onMessage("Backup export failed.")
+            operation = BackupOperation.EXPORTING
+            val message = when (val result = repository.exportBackup()) {
+                is BackupExportResult.Success ->
+                    if (writeBackupFile(context, uri, result.bytes)) "Backup exported." else "Backup export failed."
+                BackupExportResult.Failure -> "Backup export failed."
             }
+            operation = null
+            onMessage(message)
         }
     }
 
@@ -62,8 +75,10 @@ internal fun BackupRestoreSection(
         ActivityResultContracts.OpenDocument(),
     ) { uri ->
         if (uri != null) scope.launch {
+            operation = BackupOperation.CHECKING_BACKUP
             val backup = readBackupFile(context, uri)
             if (backup == null) {
+                operation = null
                 onMessage("Backup file could not be read.")
                 return@launch
             }
@@ -80,6 +95,7 @@ internal fun BackupRestoreSection(
                 )
                 BackupRestorePreview.StorageFailure -> onMessage("Restore preview could not read local state.")
             }
+            operation = null
         }
     }
 
@@ -99,15 +115,31 @@ internal fun BackupRestoreSection(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            TextButton(onClick = { exportLauncher.launch("ownplay-backup.json") }) {
+            TextButton(
+                enabled = operation == null,
+                onClick = { exportLauncher.launch("ownplay-backup.json") },
+            ) {
                 Text("Export backup")
             }
             TextButton(
+                enabled = operation == null,
                 onClick = {
                     importLauncher.launch(arrayOf("*/*"))
                 },
             ) {
                 Text("Restore from file")
+            }
+        }
+        operation?.let { activeOperation ->
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    strokeWidth = 2.dp,
+                )
+                Text(activeOperation.status, color = OwnPlayColors.TextMuted)
             }
         }
     }
@@ -116,16 +148,20 @@ internal fun BackupRestoreSection(
     if (plan != null && pendingBackup != null) {
         RestoreConfirmationDialog(
             plan = plan,
+            restoring = operation == BackupOperation.RESTORING,
             onDismiss = {
                 pendingBackup = null
                 pendingPlan = null
             },
             onConfirm = {
                 val backup = pendingBackup ?: return@RestoreConfirmationDialog
-                pendingBackup = null
-                pendingPlan = null
+                operation = BackupOperation.RESTORING
                 scope.launch {
-                    onMessage(restoreMessage(repository.restore(backup)))
+                    val message = restoreMessage(repository.restore(backup))
+                    operation = null
+                    pendingBackup = null
+                    pendingPlan = null
+                    onMessage(message)
                 }
             },
         )
@@ -135,13 +171,14 @@ internal fun BackupRestoreSection(
 @Composable
 private fun RestoreConfirmationDialog(
     plan: BackupRestorePlan,
+    restoring: Boolean,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
 ) {
     val merged = plan.sourceResolutions.count { it.action == BackupSourceRestoreAction.MERGE_EXISTING }
     val created = plan.sourceResolutions.count { it.action == BackupSourceRestoreAction.CREATE_DISABLED }
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!restoring) onDismiss() },
         title = { Text("Restore backup?") },
         text = {
             val summary = plan.summary
@@ -162,10 +199,26 @@ private fun RestoreConfirmationDialog(
                     "Provider cache, playback progress and downloaded files are not restored.",
                     color = OwnPlayColors.TextMuted,
                 )
+                if (restoring) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                        )
+                        Text("Restoring backup…", color = OwnPlayColors.TextMuted)
+                    }
+                }
             }
         },
-        confirmButton = { TextButton(onClick = onConfirm) { Text("Restore") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = {
+            TextButton(enabled = !restoring, onClick = onConfirm) { Text("Restore") }
+        },
+        dismissButton = {
+            TextButton(enabled = !restoring, onClick = onDismiss) { Text("Cancel") }
+        },
     )
 }
 
