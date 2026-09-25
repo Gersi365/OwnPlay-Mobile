@@ -14,7 +14,7 @@ import org.junit.Test
 class ManagedSourceRemovalDownloadCoordinatorTest {
 
     @Test
-    fun captureIncludesOnlyCompletedPublishedReferences() = runBlocking {
+    fun captureIncludesAllSourceDownloadIdsWithoutPublishedMediaDeletionPlan() = runBlocking {
         val downloadDao = FakeDownloadDao(
             rows = mapOf(
                 "download:complete" to download(
@@ -41,14 +41,10 @@ class ManagedSourceRemovalDownloadCoordinatorTest {
         val plan = coordinator.capture(app.ownplay.mobile.sources.domain.SourceId("source-a"))
 
         assertEquals(3, plan?.downloadIds?.size)
-        assertEquals(
-            listOf("content://media/external/downloads/1"),
-            plan?.publishedReferences,
-        )
     }
 
     @Test
-    fun finalizeRemovesCapturedPublishedMediaAfterPerDownloadCleanup() = runBlocking {
+    fun finalizePreservesCompletedPublishedMediaAfterPerDownloadCleanup() = runBlocking {
         val events = mutableListOf<String>()
         val coordinator = ManagedSourceRemovalDownloadCoordinator(
             downloadDao = FakeDownloadDao(),
@@ -59,7 +55,6 @@ class ManagedSourceRemovalDownloadCoordinatorTest {
         )
         val plan = SourceRemovalDownloadPlan(
             downloadIds = listOf(DownloadId("download:a")),
-            publishedReferences = listOf("content://media/external/downloads/9"),
         )
 
         coordinator.finalize(plan)
@@ -69,7 +64,6 @@ class ManagedSourceRemovalDownloadCoordinatorTest {
                 "discard:download:a",
                 "notify:download:a",
                 "destination:download:a",
-                "published:content://media/external/downloads/9",
             ),
             events,
         )
