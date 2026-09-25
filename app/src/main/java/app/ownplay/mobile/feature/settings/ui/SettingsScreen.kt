@@ -1930,7 +1930,13 @@ private fun SourceInputDialog(
                     }
                 }
                 errorMessage?.let { error ->
-                    Text(error, color = OwnPlayColors.Error)
+                    Text(
+                        text = error,
+                        color = OwnPlayColors.Error,
+                        modifier = Modifier.semantics {
+                            liveRegion = LiveRegionMode.Polite
+                        },
+                    )
                 }
             }
         },

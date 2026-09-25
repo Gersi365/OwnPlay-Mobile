@@ -19,6 +19,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.ownplay.mobile.design.OwnPlayColors
@@ -132,7 +135,13 @@ internal fun PlaybackTrackControlsOverlay(
                 }
             }
             issueMessage?.let { message ->
-                Text(text = message, color = OwnPlayColors.Error)
+                Text(
+                    text = message,
+                    color = OwnPlayColors.Error,
+                    modifier = Modifier.semantics {
+                        liveRegion = LiveRegionMode.Polite
+                    },
+                )
             }
         }
     }
