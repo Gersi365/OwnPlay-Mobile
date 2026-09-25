@@ -753,7 +753,9 @@ private class FakeDisplayRepository : DisplayPreferencesRepository {
     override suspend fun setShowChannelLogos(enabled: Boolean): Boolean = update { copy(showChannelLogos = enabled) }
     override suspend fun setPreferTvgName(enabled: Boolean): Boolean = update { copy(preferTvgName = enabled) }
     override suspend fun setHideChannelPrefix(enabled: Boolean): Boolean = update { copy(hideChannelPrefix = enabled) }
-    override suspend fun setHideCategoryPrefix(enabled: Boolean): Boolean = update { copy(hideCategoryPrefix = enabled) }
+    override suspend fun setShowCategoryFlags(enabled: Boolean): Boolean = update { copy(showCategoryFlags = enabled) }
+    override suspend fun setHideLiveCategoryPrefix(enabled: Boolean): Boolean = update { copy(hideLiveCategoryPrefix = enabled) }
+    override suspend fun setHideLibraryCategoryPrefix(enabled: Boolean): Boolean = update { copy(hideLibraryCategoryPrefix = enabled) }
 
     private fun update(block: DisplayPreferences.() -> DisplayPreferences): Boolean {
         state.value = state.value.block()
