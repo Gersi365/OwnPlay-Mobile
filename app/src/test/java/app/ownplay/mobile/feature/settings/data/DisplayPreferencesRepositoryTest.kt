@@ -19,13 +19,17 @@ class DisplayPreferencesRepositoryTest {
         assertTrue(repository.setShowChannelLogos(false))
         assertTrue(repository.setPreferTvgName(true))
         assertTrue(repository.setHideChannelPrefix(true))
-        assertTrue(repository.setHideCategoryPrefix(false))
+        assertTrue(repository.setShowCategoryFlags(false))
+        assertTrue(repository.setHideLiveCategoryPrefix(true))
+        assertTrue(repository.setHideLibraryCategoryPrefix(true))
         val current = repository.preferences.first()
         assertTrue(current.compactMediaRows)
         assertFalse(current.showChannelLogos)
         assertTrue(current.preferTvgName)
         assertTrue(current.hideChannelPrefix)
-        assertFalse(current.hideCategoryPrefix)
+        assertFalse(current.showCategoryFlags)
+        assertTrue(current.hideLiveCategoryPrefix)
+        assertTrue(current.hideLibraryCategoryPrefix)
     }
 
     @Test
@@ -37,12 +41,16 @@ class DisplayPreferencesRepositoryTest {
         assertFalse(repository.setShowChannelLogos(false))
         assertFalse(repository.setPreferTvgName(true))
         assertFalse(repository.setHideChannelPrefix(true))
-        assertFalse(repository.setHideCategoryPrefix(false))
+        assertFalse(repository.setShowCategoryFlags(false))
+        assertFalse(repository.setHideLiveCategoryPrefix(true))
+        assertFalse(repository.setHideLibraryCategoryPrefix(true))
         assertFalse(repository.preferences.first().compactMediaRows)
         assertTrue(repository.preferences.first().showChannelLogos)
         assertFalse(repository.preferences.first().preferTvgName)
         assertTrue(repository.preferences.first().hideChannelPrefix)
-        assertTrue(repository.preferences.first().hideCategoryPrefix)
+        assertTrue(repository.preferences.first().showCategoryFlags)
+        assertFalse(repository.preferences.first().hideLiveCategoryPrefix)
+        assertFalse(repository.preferences.first().hideLibraryCategoryPrefix)
     }
 }
 
@@ -56,7 +64,9 @@ private class FakeDisplayPreferencesStore(
     override suspend fun setShowChannelLogos(enabled: Boolean) = update { copy(showChannelLogos = enabled) }
     override suspend fun setPreferTvgName(enabled: Boolean) = update { copy(preferTvgName = enabled) }
     override suspend fun setHideChannelPrefix(enabled: Boolean) = update { copy(hideChannelPrefix = enabled) }
-    override suspend fun setHideCategoryPrefix(enabled: Boolean) = update { copy(hideCategoryPrefix = enabled) }
+    override suspend fun setShowCategoryFlags(enabled: Boolean) = update { copy(showCategoryFlags = enabled) }
+    override suspend fun setHideLiveCategoryPrefix(enabled: Boolean) = update { copy(hideLiveCategoryPrefix = enabled) }
+    override suspend fun setHideLibraryCategoryPrefix(enabled: Boolean) = update { copy(hideLibraryCategoryPrefix = enabled) }
 
     private fun update(block: DisplayPreferences.() -> DisplayPreferences) {
         if (failWrites) error("storage failed")

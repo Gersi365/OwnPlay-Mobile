@@ -19,7 +19,9 @@ internal interface DisplayPreferencesStore {
     suspend fun setShowChannelLogos(enabled: Boolean)
     suspend fun setPreferTvgName(enabled: Boolean)
     suspend fun setHideChannelPrefix(enabled: Boolean)
-    suspend fun setHideCategoryPrefix(enabled: Boolean)
+    suspend fun setShowCategoryFlags(enabled: Boolean)
+    suspend fun setHideLiveCategoryPrefix(enabled: Boolean)
+    suspend fun setHideLibraryCategoryPrefix(enabled: Boolean)
 }
 
 internal class DisplayPreferencesDataStore(
@@ -32,7 +34,13 @@ internal class DisplayPreferencesDataStore(
                 showChannelLogos = values[SHOW_CHANNEL_LOGOS] ?: true,
                 preferTvgName = values[PREFER_TVG_NAME] ?: false,
                 hideChannelPrefix = values[HIDE_CHANNEL_PREFIX] ?: true,
-                hideCategoryPrefix = values[HIDE_CATEGORY_PREFIX] ?: true,
+                showCategoryFlags = values[SHOW_CATEGORY_FLAGS] ?: true,
+                hideLiveCategoryPrefix = values[HIDE_LIVE_CATEGORY_PREFIX]
+                    ?: values[LEGACY_HIDE_CATEGORY_PREFIX]
+                    ?: false,
+                hideLibraryCategoryPrefix = values[HIDE_LIBRARY_CATEGORY_PREFIX]
+                    ?: values[LEGACY_HIDE_CATEGORY_PREFIX]
+                    ?: false,
             )
         }
 
@@ -60,9 +68,21 @@ internal class DisplayPreferencesDataStore(
         }
     }
 
-    override suspend fun setHideCategoryPrefix(enabled: Boolean) {
+    override suspend fun setShowCategoryFlags(enabled: Boolean) {
         context.rebuildDisplayPreferencesDataStore.edit { values ->
-            values[HIDE_CATEGORY_PREFIX] = enabled
+            values[SHOW_CATEGORY_FLAGS] = enabled
+        }
+    }
+
+    override suspend fun setHideLiveCategoryPrefix(enabled: Boolean) {
+        context.rebuildDisplayPreferencesDataStore.edit { values ->
+            values[HIDE_LIVE_CATEGORY_PREFIX] = enabled
+        }
+    }
+
+    override suspend fun setHideLibraryCategoryPrefix(enabled: Boolean) {
+        context.rebuildDisplayPreferencesDataStore.edit { values ->
+            values[HIDE_LIBRARY_CATEGORY_PREFIX] = enabled
         }
     }
 
@@ -71,7 +91,10 @@ internal class DisplayPreferencesDataStore(
         val SHOW_CHANNEL_LOGOS = booleanPreferencesKey("show_channel_logos")
         val PREFER_TVG_NAME = booleanPreferencesKey("prefer_tvg_name")
         val HIDE_CHANNEL_PREFIX = booleanPreferencesKey("hide_channel_prefix")
-        val HIDE_CATEGORY_PREFIX = booleanPreferencesKey("hide_category_prefix")
+        val SHOW_CATEGORY_FLAGS = booleanPreferencesKey("show_category_flags")
+        val HIDE_LIVE_CATEGORY_PREFIX = booleanPreferencesKey("hide_live_category_prefix")
+        val HIDE_LIBRARY_CATEGORY_PREFIX = booleanPreferencesKey("hide_library_category_prefix")
+        val LEGACY_HIDE_CATEGORY_PREFIX = booleanPreferencesKey("hide_category_prefix")
     }
 }
 
@@ -96,8 +119,16 @@ internal class DataStoreDisplayPreferencesRepository(
         store.setHideChannelPrefix(enabled)
     }
 
-    override suspend fun setHideCategoryPrefix(enabled: Boolean): Boolean = write {
-        store.setHideCategoryPrefix(enabled)
+    override suspend fun setShowCategoryFlags(enabled: Boolean): Boolean = write {
+        store.setShowCategoryFlags(enabled)
+    }
+
+    override suspend fun setHideLiveCategoryPrefix(enabled: Boolean): Boolean = write {
+        store.setHideLiveCategoryPrefix(enabled)
+    }
+
+    override suspend fun setHideLibraryCategoryPrefix(enabled: Boolean): Boolean = write {
+        store.setHideLibraryCategoryPrefix(enabled)
     }
 
     private suspend fun write(block: suspend () -> Unit): Boolean =

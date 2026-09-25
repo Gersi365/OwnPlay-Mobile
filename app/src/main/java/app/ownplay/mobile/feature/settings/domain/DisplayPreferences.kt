@@ -7,7 +7,9 @@ data class DisplayPreferences(
     val showChannelLogos: Boolean = true,
     val preferTvgName: Boolean = false,
     val hideChannelPrefix: Boolean = true,
-    val hideCategoryPrefix: Boolean = true,
+    val showCategoryFlags: Boolean = true,
+    val hideLiveCategoryPrefix: Boolean = false,
+    val hideLibraryCategoryPrefix: Boolean = false,
 )
 
 interface DisplayPreferencesRepository {
@@ -21,5 +23,9 @@ interface DisplayPreferencesRepository {
 
     suspend fun setHideChannelPrefix(enabled: Boolean): Boolean
 
-    suspend fun setHideCategoryPrefix(enabled: Boolean): Boolean
+    suspend fun setShowCategoryFlags(enabled: Boolean): Boolean
+
+    suspend fun setHideLiveCategoryPrefix(enabled: Boolean): Boolean
+
+    suspend fun setHideLibraryCategoryPrefix(enabled: Boolean): Boolean
 }
