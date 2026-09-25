@@ -88,7 +88,7 @@ internal fun BackupRestoreSection(
                     pendingPlan = preview.plan
                 }
                 is BackupRestorePreview.Conflicted -> onMessage(
-                    "Restore blocked by ${preview.plan.sourceResolutions.count { it.action == BackupSourceRestoreAction.CONFLICT }} source conflict(s).",
+                    "Restore blocked: ${preview.plan.sourceResolutions.count { it.action == BackupSourceRestoreAction.CONFLICT }} local source identity/connection conflict(s) with this backup. OwnPlay does not remap or merge sources automatically. Resolve the conflicting local source or backup, then retry.",
                 )
                 is BackupRestorePreview.Rejected -> onMessage(
                     backupRejectedMessage(preview.issues),
@@ -239,7 +239,8 @@ private fun restoreMessage(result: BackupRestoreResult): String = when (result) 
             append('.')
         }
     }
-    is BackupRestoreResult.Conflicted -> "Restore blocked by source conflicts."
+    is BackupRestoreResult.Conflicted ->
+        "Restore blocked by a local source identity/connection conflict with this backup. OwnPlay does not remap or merge sources automatically. Resolve the conflict, then retry."
     is BackupRestoreResult.Rejected -> backupRejectedMessage(result.issues)
     BackupRestoreResult.StorageFailure -> "Restore failed without completing durable state changes."
 }
