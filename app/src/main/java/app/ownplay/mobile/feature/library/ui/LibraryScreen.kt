@@ -97,6 +97,7 @@ fun LibraryScreen(
     onDownloadDetailsNavigationConsumed: () -> Unit = {},
     onReturnFromDownloadDetails: (() -> Unit)? = null,
     onOpenDownloads: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val application = context.applicationContext as OwnPlayApplication
@@ -117,6 +118,8 @@ fun LibraryScreen(
             title = "Library",
             message = "Add or select a source in Settings to browse Movies and Series.",
             modifier = modifier,
+            actionLabel = "Open Settings",
+            onAction = onOpenSettings,
         )
         return
     }
