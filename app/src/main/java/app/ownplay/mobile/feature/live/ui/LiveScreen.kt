@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -79,6 +80,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun LiveScreen(
     modifier: Modifier = Modifier,
+    onOpenSettings: () -> Unit = {},
 ) {
     val application = LocalContext.current.applicationContext as OwnPlayApplication
     val services = remember(application) { application.services }
@@ -97,6 +99,8 @@ fun LiveScreen(
             title = "Live",
             message = "Add or select a source in Settings to start watching live channels.",
             modifier = modifier,
+            actionLabel = "Open Settings",
+            onAction = onOpenSettings,
         )
         return
     }
@@ -447,7 +451,12 @@ private fun LiveSourceScreen(
                         modifier = Modifier.weight(1f),
                         verticalArrangement = Arrangement.spacedBy(2.dp),
                     ) {
-                        Text("Live", color = OwnPlayColors.TextPrimary, fontWeight = FontWeight.Bold)
+                        Text(
+                            "Live",
+                            color = OwnPlayColors.TextPrimary,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                        )
                         Text(
                             source.displayName,
                             color = OwnPlayColors.TextSecondary,
@@ -506,15 +515,21 @@ private fun LiveSourceScreen(
                                         fontWeight = FontWeight.SemiBold,
                                         modifier = Modifier.weight(1f),
                                     )
-                                    Surface(
-                                        shape = OwnPlayShapes.Small,
-                                        color = OwnPlayColors.Surface,
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
                                     ) {
-                                        Text(
-                                            text = count.toString(),
-                                            color = OwnPlayColors.TextSecondary,
-                                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
-                                        )
+                                        Surface(
+                                            shape = OwnPlayShapes.Small,
+                                            color = OwnPlayColors.Surface,
+                                        ) {
+                                            Text(
+                                                text = count.toString(),
+                                                color = OwnPlayColors.TextSecondary,
+                                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                                            )
+                                        }
+                                        Text("›", color = OwnPlayColors.TextMuted)
                                     }
                                 }
                             }
@@ -587,12 +602,24 @@ private fun LiveSourceScreen(
             LiveBrowsePage.SEARCH -> {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     TextButton(onClick = ::leaveSearch) { Text("Back") }
-                    Text("Search Live", color = OwnPlayColors.TextPrimary, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Search Live",
+                        color = OwnPlayColors.TextPrimary,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
                 }
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
                     label = { Text("Search channels") },
+                    trailingIcon = {
+                        if (searchQuery.isNotBlank()) {
+                            TextButton(onClick = { searchQuery = "" }) {
+                                Text("Clear")
+                            }
+                        }
+                    },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -638,12 +665,20 @@ private fun LiveSourceScreen(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         TextButton(onClick = { pageName = LiveBrowsePage.HOME.name }) { Text("Back") }
-                        Text("Favorites", color = OwnPlayColors.TextPrimary, fontWeight = FontWeight.Bold)
+                        Text(
+                            "Favorites",
+                            color = OwnPlayColors.TextPrimary,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
                     }
                     TextButton(onClick = { openSearch(LiveBrowsePage.FAVORITES) }) { Text("Search") }
                 }
                 if (favoriteChannelIdsOrdered.isEmpty()) {
-                    Text("No favorite channels yet.", color = OwnPlayColors.TextMuted)
+                    Text(
+                        "No favorite channels yet. Tap ☆ on a channel to save it here.",
+                        color = OwnPlayColors.TextMuted,
+                    )
                 } else {
                     LazyColumn(
                         state = favoritesListState,
