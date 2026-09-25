@@ -49,12 +49,14 @@ private enum class BackupOperation(val status: String) {
 internal fun BackupRestoreSection(
     repository: BackupRestoreRepository,
     onMessage: (SettingsOperationMessage) -> Unit,
+    onReviewRestoredSources: () -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var pendingBackup by remember { mutableStateOf<ByteArray?>(null) }
     var pendingPlan by remember { mutableStateOf<BackupRestorePlan?>(null) }
     var operation by remember { mutableStateOf<BackupOperation?>(null) }
+    var showReviewRestoredSources by remember { mutableStateOf(false) }
 
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json"),
@@ -130,10 +132,21 @@ internal fun BackupRestoreSection(
             TextButton(
                 enabled = operation == null,
                 onClick = {
+                    showReviewRestoredSources = false
                     importLauncher.launch(arrayOf("*/*"))
                 },
             ) {
                 Text("Restore from file")
+            }
+            if (showReviewRestoredSources) {
+                TextButton(
+                    onClick = {
+                        showReviewRestoredSources = false
+                        onReviewRestoredSources()
+                    },
+                ) {
+                    Text("Review restored sources")
+                }
             }
         }
         operation?.let { activeOperation ->
@@ -163,7 +176,10 @@ internal fun BackupRestoreSection(
                 val backup = pendingBackup ?: return@RestoreConfirmationDialog
                 operation = BackupOperation.RESTORING
                 scope.launch {
-                    val message = restoreMessage(repository.restore(backup))
+                    val result = repository.restore(backup)
+                    val message = restoreMessage(result)
+                    showReviewRestoredSources =
+                        result is BackupRestoreResult.Success && result.report.createdDisabledSources > 0
                     operation = null
                     pendingBackup = null
                     pendingPlan = null

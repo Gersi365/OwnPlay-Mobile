@@ -460,6 +460,7 @@ private fun SettingsSourcesScreen(
                 BackupRestoreSection(
                     repository = backupRestoreRepository,
                     onMessage = { message = it },
+                    onReviewRestoredSources = { selectedSectionName = SettingsSection.SOURCES.name },
                 )
             }
         }
