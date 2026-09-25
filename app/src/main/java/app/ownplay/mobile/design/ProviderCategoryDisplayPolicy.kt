@@ -68,12 +68,21 @@ object ProviderCategoryDisplayPolicy {
     }
 
     internal fun findCountryCode(rawName: String): String? {
+        var earliestExplicitIndex = Int.MAX_VALUE
+        var earliestExplicitCountryCode: String? = null
         COUNTRY_DEFINITIONS.forEach { country ->
-            if (containsUpperCode(rawName, country.iso2)) return country.iso2
-            country.iso3
-                ?.takeIf(String::isNotBlank)
-                ?.let { if (containsUpperCode(rawName, it)) return country.iso2 }
+            buildList {
+                add(country.iso2)
+                country.iso3?.takeIf(String::isNotBlank)?.let(::add)
+            }.forEach { code ->
+                val index = upperCodeMatchIndex(rawName, code)
+                if (index != null && index < earliestExplicitIndex) {
+                    earliestExplicitIndex = index
+                    earliestExplicitCountryCode = country.iso2
+                }
+            }
         }
+        earliestExplicitCountryCode?.let { return it }
 
         val normalized = normalize(rawName)
         COUNTRY_ALIASES.forEach { (alias, countryCode) ->
@@ -123,8 +132,11 @@ object ProviderCategoryDisplayPolicy {
         }.joinToString("")
     }
 
-    private fun containsUpperCode(raw: String, code: String): Boolean =
-        Regex("(?<![A-Za-z])${Regex.escape(code)}(?![A-Za-z])").containsMatchIn(raw)
+    private fun upperCodeMatchIndex(raw: String, code: String): Int? =
+        Regex("(?<![A-Za-z])${Regex.escape(code)}(?![A-Za-z])")
+            .find(raw)
+            ?.range
+            ?.first
 
     private fun containsPhrase(normalizedText: String, normalizedPhrase: String): Boolean =
         " $normalizedText ".contains(" $normalizedPhrase ")
