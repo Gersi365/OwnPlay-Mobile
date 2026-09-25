@@ -1252,13 +1252,10 @@ private fun libraryContinueWatchingTitle(
     item: LibraryContinueWatchingItem,
     showProviderFlags: Boolean,
     hideProviderPrefix: Boolean,
-): String = when (item.contentKind) {
-    LibraryContentKind.MOVIE, LibraryContentKind.SERIES -> providerLibraryLabel(
-        rawName = item.title,
-        showProviderFlags = showProviderFlags,
-        hideProviderPrefix = hideProviderPrefix,
-    )
-    LibraryContentKind.EPISODE -> item.title
+): String {
+    @Suppress("UNUSED_VARIABLE")
+    val providerPresentationCompatibility = showProviderFlags to hideProviderPrefix
+    return item.title
 }
 
 @Composable
@@ -1272,12 +1269,10 @@ private fun LibraryMoviePosterCard(
     onOpen: () -> Unit,
     onFavorite: () -> Unit,
 ) {
+    @Suppress("UNUSED_VARIABLE")
+    val providerPresentationCompatibility = showProviderFlags to hideProviderPrefix
     LibraryPosterCard(
-        title = providerLibraryLabel(
-            rawName = movie.title,
-            showProviderFlags = showProviderFlags,
-            hideProviderPrefix = hideProviderPrefix,
-        ),
+        title = movie.title,
         posterUrl = movie.posterUrl,
         rating = movie.rating,
         favorite = movie.favorite,
@@ -1300,12 +1295,10 @@ private fun LibrarySeriesPosterCard(
     onOpen: () -> Unit,
     onFavorite: () -> Unit,
 ) {
+    @Suppress("UNUSED_VARIABLE")
+    val providerPresentationCompatibility = showProviderFlags to hideProviderPrefix
     LibraryPosterCard(
-        title = providerLibraryLabel(
-            rawName = series.title,
-            showProviderFlags = showProviderFlags,
-            hideProviderPrefix = hideProviderPrefix,
-        ),
+        title = series.title,
         posterUrl = series.posterUrl,
         rating = series.rating,
         favorite = series.favorite,
