@@ -230,6 +230,7 @@ private fun SettingsSourcesScreen(
     val activeSource by activeSourceFlow.collectAsState(initial = null)
     val scope = rememberCoroutineScope()
     var busyIds by remember { mutableStateOf(emptySet<String>()) }
+    var refreshingIds by remember { mutableStateOf(emptySet<String>()) }
     var message by remember { mutableStateOf<String?>(null) }
     var addType by remember { mutableStateOf<SourceType?>(null) }
     var addSubmitting by remember { mutableStateOf(false) }
@@ -343,6 +344,7 @@ private fun SettingsSourcesScreen(
                         source = source,
                         isActive = activeSource?.sourceId == source.sourceId,
                         busy = source.sourceId.value in busyIds,
+                        refreshing = source.sourceId.value in refreshingIds,
                         onSetActive = {
                             runForSource(source) {
                                 if (repository.setActiveSource(source.sourceId)) {
@@ -354,10 +356,16 @@ private fun SettingsSourcesScreen(
                         },
                         onRefresh = {
                             runForSource(source) {
-                                when (val result = repository.refreshSource(source.sourceId)) {
-                                    SourceRefreshResult.Success -> "${source.displayName} refreshed."
-                                    is SourceRefreshResult.Failure ->
-                                        result.safeMessage ?: "${source.displayName} refresh failed."
+                                val sourceId = source.sourceId.value
+                                refreshingIds = refreshingIds + sourceId
+                                try {
+                                    when (val result = repository.refreshSource(source.sourceId)) {
+                                        SourceRefreshResult.Success -> "${source.displayName} refreshed."
+                                        is SourceRefreshResult.Failure ->
+                                            result.safeMessage ?: "${source.displayName} refresh failed."
+                                    }
+                                } finally {
+                                    refreshingIds = refreshingIds - sourceId
                                 }
                             }
                         },
@@ -573,6 +581,7 @@ private fun SourceSettingsCard(
     source: SourceSummary,
     isActive: Boolean,
     busy: Boolean,
+    refreshing: Boolean,
     onSetActive: () -> Unit,
     onRefresh: () -> Unit,
     onReconnect: () -> Unit,
@@ -655,6 +664,16 @@ private fun SourceSettingsCard(
                         )
                     }
                 }
+            }
+
+            if (refreshing) {
+                Text(
+                    text = "Refreshing…",
+                    color = OwnPlayColors.TextMuted,
+                    modifier = Modifier.semantics {
+                        liveRegion = LiveRegionMode.Polite
+                    },
+                )
             }
 
             if (authenticationRequired) {
