@@ -14,6 +14,18 @@ data class ProviderCategoryPresentation(
 }
 
 object ProviderCategoryDisplayPolicy {
+    fun label(
+        rawName: String,
+        hideRegionPrefix: Boolean,
+        showFlag: Boolean,
+    ): String {
+        val presentation = present(
+            rawName = rawName,
+            hideRegionPrefix = hideRegionPrefix || showFlag,
+        )
+        return if (showFlag) presentation.label else presentation.displayName
+    }
+
     fun present(
         rawName: String,
         hideRegionPrefix: Boolean = true,

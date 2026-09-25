@@ -91,7 +91,7 @@ class ProviderLivePersonalizationQaTest {
         assertTrue(repository.setProviderCategoryOrder(sourceId, listOf("b", "a", uncategorized)))
         val visibleCatalog = repository.observeProviderCatalog(sourceId).first()
         assertEquals(
-            listOf("a", "b"),
+            listOf("b", "a"),
             visibleCatalog.categories.map { it.categoryId },
         )
         assertEquals(
@@ -117,7 +117,7 @@ class ProviderLivePersonalizationQaTest {
 
         assertTrue(repository.setProviderChannelOrder(sourceId, "a", listOf("a2", "a1")))
         assertEquals(
-            listOf("a1", "a2"),
+            listOf("a2", "a1"),
             repository.observeProviderCatalog(sourceId).first().channels
                 .filter { it.providerCategoryId == "a" }
                 .map { it.channelId },

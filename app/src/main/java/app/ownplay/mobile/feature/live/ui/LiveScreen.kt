@@ -45,6 +45,8 @@ import app.ownplay.mobile.MainActivity
 import app.ownplay.mobile.OwnPlayApplication
 import app.ownplay.mobile.design.OwnPlayColors
 import app.ownplay.mobile.design.OwnPlayFeaturePlaceholder
+import app.ownplay.mobile.design.OwnPlayShapes
+import app.ownplay.mobile.design.ProviderCategoryDisplayPolicy
 import app.ownplay.mobile.feature.live.domain.LiveCatchUpCatalog
 import app.ownplay.mobile.feature.live.domain.LiveCatchUpPolicy
 import app.ownplay.mobile.feature.live.domain.LiveCatchUpProgram
@@ -132,6 +134,8 @@ fun LiveScreen(
             showChannelLogos = displayPreferences.showChannelLogos,
             preferTvgName = displayPreferences.preferTvgName,
             hideChannelPrefix = displayPreferences.hideChannelPrefix,
+            showCategoryFlags = displayPreferences.showCategoryFlags,
+            hideCategoryPrefix = displayPreferences.hideLiveCategoryPrefix,
             catalogLoadError = initialRefreshError,
             catalogLoading = initialRefreshInProgress,
             modifier = modifier,
@@ -162,6 +166,8 @@ private fun LiveSourceScreen(
     showChannelLogos: Boolean,
     preferTvgName: Boolean,
     hideChannelPrefix: Boolean,
+    showCategoryFlags: Boolean,
+    hideCategoryPrefix: Boolean,
     catalogLoadError: String?,
     catalogLoading: Boolean,
     modifier: Modifier,
@@ -209,8 +215,14 @@ private fun LiveSourceScreen(
     val channelById = remember(providerCatalog.channels) {
         providerCatalog.channels.associateBy(LiveOrganizationChannel::channelId)
     }
-    val categoryLabelById = remember(providerOptions) {
-        providerOptions.associate { category -> category.categoryId to category.displayName }
+    val categoryLabelById = remember(providerOptions, showCategoryFlags, hideCategoryPrefix) {
+        providerOptions.associate { category ->
+            category.categoryId to ProviderCategoryDisplayPolicy.label(
+                rawName = category.displayName,
+                hideRegionPrefix = hideCategoryPrefix,
+                showFlag = showCategoryFlags,
+            )
+        }
     }
     val categoryLabelByChannelId = remember(providerCatalog.channels, categoryLabelById) {
         providerCatalog.channels.associate { channel ->
@@ -258,6 +270,7 @@ private fun LiveSourceScreen(
                     channel = channel,
                     preferTvgName = preferTvgName,
                     hideChannelPrefix = hideChannelPrefix,
+                    showCountryFlag = showCategoryFlags,
                 )
             }
             ?: "Live channel"
@@ -473,7 +486,8 @@ private fun LiveSourceScreen(
                                 favoriteChannelIds = emptySet(),
                             ).size
                             Surface(
-                                color = OwnPlayColors.Surface,
+                                color = OwnPlayColors.SurfaceRaised,
+                                shape = OwnPlayShapes.Medium,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
@@ -487,12 +501,21 @@ private fun LiveSourceScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Text(
-                                        category.displayName,
+                                        categoryLabelById[category.categoryId] ?: category.displayName,
                                         color = OwnPlayColors.TextPrimary,
                                         fontWeight = FontWeight.SemiBold,
                                         modifier = Modifier.weight(1f),
                                     )
-                                    Text(count.toString(), color = OwnPlayColors.TextMuted)
+                                    Surface(
+                                        shape = OwnPlayShapes.Small,
+                                        color = OwnPlayColors.Surface,
+                                    ) {
+                                        Text(
+                                            text = count.toString(),
+                                            color = OwnPlayColors.TextSecondary,
+                                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -513,7 +536,10 @@ private fun LiveSourceScreen(
                         TextButton(onClick = { pageName = LiveBrowsePage.HOME.name }) { Text("Back") }
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                selectedCategory?.displayName ?: "Live",
+                                selectedCategory
+                                    ?.categoryId
+                                    ?.let(categoryLabelById::get)
+                                    ?: "Live",
                                 color = OwnPlayColors.TextPrimary,
                                 fontWeight = FontWeight.Bold,
                                 maxLines = 1,
@@ -772,6 +798,7 @@ private fun LiveSourceScreen(
                         channel = channel,
                         preferTvgName = preferTvgName,
                         hideChannelPrefix = hideChannelPrefix,
+                        showCountryFlag = showCategoryFlags,
                     )
                 } ?: "Live channel"
             },
@@ -894,6 +921,7 @@ private fun LiveChannelRow(
                         channel,
                         preferTvgName,
                         hideChannelPrefix,
+                        showCountryFlag = showCategoryFlags,
                     ),
                     color = OwnPlayColors.TextPrimary,
                     fontWeight = FontWeight.SemiBold,

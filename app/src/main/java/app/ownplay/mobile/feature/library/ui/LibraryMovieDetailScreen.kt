@@ -23,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.ownplay.mobile.design.OwnPlayColors
+import app.ownplay.mobile.design.ProviderCategoryDisplayPolicy
 import app.ownplay.mobile.downloads.domain.DownloadMediaKind
 import app.ownplay.mobile.downloads.domain.DownloadRepository
 import app.ownplay.mobile.downloads.domain.DownloadRequest
@@ -45,6 +46,8 @@ internal fun LibraryMovieDetailScreen(
     downloadRepository: DownloadRepository,
     artworkLoader: LibraryArtworkLoader,
     playbackSessionController: PlaybackSessionController,
+    showProviderFlags: Boolean,
+    hideProviderPrefix: Boolean,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -115,7 +118,11 @@ internal fun LibraryMovieDetailScreen(
             rating = cachedMovie.rating,
         )
         LibraryDetailHero(
-            title = cachedMovie.title,
+            title = ProviderCategoryDisplayPolicy.label(
+                rawName = cachedMovie.title,
+                hideRegionPrefix = hideProviderPrefix,
+                showFlag = showProviderFlags,
+            ),
             artworkUrl = metadata?.posterUrl ?: cachedMovie.posterUrl,
             artworkLoader = artworkLoader,
             metadataLine = LibraryMovieDetailPresentation.metadataLine(resolvedMetadata),

@@ -51,6 +51,7 @@ import androidx.compose.ui.window.Dialog
 import app.ownplay.mobile.MainActivity
 import app.ownplay.mobile.OwnPlayApplication
 import app.ownplay.mobile.design.OwnPlayColors
+import app.ownplay.mobile.design.ProviderCategoryDisplayPolicy
 import app.ownplay.mobile.downloads.domain.DownloadDetailsNavigation
 import app.ownplay.mobile.downloads.domain.DownloadId
 import app.ownplay.mobile.downloads.domain.DownloadRepository
@@ -189,6 +190,8 @@ fun LibraryScreen(
         onReturnFromExternalDetail = onReturnFromDownloadDetails,
         onOpenDownloads = onOpenDownloads,
         compactMediaRows = displayPreferences.compactMediaRows,
+        showCategoryFlags = displayPreferences.showCategoryFlags,
+        hideCategoryPrefix = displayPreferences.hideLibraryCategoryPrefix,
         catalogLoadError = initialRefreshError,
         catalogLoading = initialRefreshInProgress,
         modifier = modifier,
@@ -300,6 +303,8 @@ private fun LibrarySourceScreen(
     onReturnFromExternalDetail: (() -> Unit)?,
     onOpenDownloads: () -> Unit,
     compactMediaRows: Boolean,
+    showCategoryFlags: Boolean,
+    hideCategoryPrefix: Boolean,
     catalogLoadError: String?,
     catalogLoading: Boolean,
     modifier: Modifier,
@@ -362,6 +367,8 @@ private fun LibrarySourceScreen(
             downloadRepository = downloadRepository,
             artworkLoader = artworkLoader,
             playbackSessionController = playbackSessionController,
+            showProviderFlags = showCategoryFlags,
+            hideProviderPrefix = hideCategoryPrefix,
             onBack = ::closeMovieDetail,
             modifier = modifier,
         )
@@ -377,6 +384,8 @@ private fun LibrarySourceScreen(
             downloadRepository = downloadRepository,
             artworkLoader = artworkLoader,
             playbackSessionController = playbackSessionController,
+            showProviderFlags = showCategoryFlags,
+            hideProviderPrefix = hideCategoryPrefix,
             initialEpisodeId = selectedEpisodeId,
             onBack = ::closeSeriesDetail,
             modifier = modifier,
@@ -405,6 +414,8 @@ private fun LibrarySourceScreen(
         catalog = catalog,
         artworkLoader = artworkLoader,
         compactMediaRows = compactMediaRows,
+        showCategoryFlags = showCategoryFlags,
+        hideCategoryPrefix = hideCategoryPrefix,
         catalogLoadError = catalogLoadError,
         catalogLoading = catalogLoading,
         searchQuery = searchQuery,
@@ -547,6 +558,8 @@ private fun LibrarySeriesDetailScreen(
     downloadRepository: DownloadRepository,
     artworkLoader: LibraryArtworkLoader,
     playbackSessionController: PlaybackSessionController,
+    showProviderFlags: Boolean,
+    hideProviderPrefix: Boolean,
     initialEpisodeId: String? = null,
     onBack: () -> Unit,
     modifier: Modifier,
@@ -621,6 +634,13 @@ private fun LibrarySeriesDetailScreen(
     }
 
     val currentDetail = detail
+    val seriesDisplayTitle = currentDetail?.series?.title?.let { rawTitle ->
+        ProviderCategoryDisplayPolicy.label(
+            rawName = rawTitle,
+            hideRegionPrefix = hideProviderPrefix,
+            showFlag = showProviderFlags,
+        )
+    }
     val orderedSeasons = remember(currentDetail) {
         currentDetail?.seasons.orEmpty().sortedBy { it.seasonNumber }
     }
@@ -735,6 +755,7 @@ private fun LibrarySeriesDetailScreen(
                 item {
                     LibrarySeriesMetadata(
                         detail = currentDetail,
+                        displayTitle = seriesDisplayTitle ?: currentDetail.series.title,
                         metadata = seriesMetadata,
                         artworkLoader = artworkLoader,
                         onFavorite = {
@@ -821,7 +842,7 @@ private fun LibrarySeriesDetailScreen(
             LibrarySeriesDetailPage.SEASONS -> {
                 item {
                     Text(
-                        text = currentDetail.series.title,
+                        text = seriesDisplayTitle ?: currentDetail.series.title,
                         color = OwnPlayColors.TextPrimary,
                         fontWeight = FontWeight.Bold,
                     )
@@ -975,7 +996,7 @@ private fun LibrarySeriesDetailScreen(
                                 LibraryMovieDetailPresentation.runtimeLabel(episode.durationMs),
                             ).joinToString(" • "),
                             description = null,
-                            supportingLine = currentDetail.series.title,
+                            supportingLine = seriesDisplayTitle ?: currentDetail.series.title,
                             actions = {
                                 Button(
                                     modifier = Modifier.fillMaxWidth(),
@@ -1022,6 +1043,7 @@ private fun LibrarySeriesDetailScreen(
 @Composable
 private fun LibrarySeriesMetadata(
     detail: LibrarySeriesDetail,
+    displayTitle: String,
     metadata: LibrarySeriesDetailMetadata?,
     artworkLoader: LibraryArtworkLoader,
     onFavorite: () -> Unit,
@@ -1035,7 +1057,7 @@ private fun LibrarySeriesMetadata(
     ).joinToString(" • ").takeIf(String::isNotBlank)
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         LibraryDetailHero(
-            title = detail.series.title,
+            title = displayTitle,
             artworkUrl = metadata?.posterUrl ?: detail.series.posterUrl,
             artworkLoader = artworkLoader,
             metadataLine = metadataLine,

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -863,7 +864,7 @@ private fun DisplayPreferencesSection(
         )
         SettingsToggleRow(
             title = "Hide channel prefixes",
-            subtitle = "Hide only recognized prefixes; provider names stay unchanged.",
+            subtitle = "Use the same recognized country/region prefix rules as other provider labels.",
             checked = preferences.hideChannelPrefix,
             onCheckedChange = { target ->
                 scope.launch {
@@ -872,6 +873,54 @@ private fun DisplayPreferencesSection(
                             if (target) "OwnPlay channel prefixes hidden." else "Full channel names restored."
                         } else {
                             "Could not update display preference."
+                        },
+                    )
+                }
+            },
+        )
+        SettingsToggleRow(
+            title = "Country flags",
+            subtitle = "Convert recognized provider country prefixes to flags across Live and Library labels.",
+            checked = preferences.showCategoryFlags,
+            onCheckedChange = { target ->
+                scope.launch {
+                    onMessage(
+                        if (repository.setShowCategoryFlags(target)) {
+                            if (target) "Country flags enabled for provider labels." else "Country flags hidden."
+                        } else {
+                            "Could not update category-flag preference."
+                        },
+                    )
+                }
+            },
+        )
+        SettingsToggleRow(
+            title = "Hide Live category prefixes",
+            subtitle = "Remove only recognized region/country prefixes in Live; provider order and membership stay unchanged.",
+            checked = preferences.hideLiveCategoryPrefix,
+            onCheckedChange = { target ->
+                scope.launch {
+                    onMessage(
+                        if (repository.setHideLiveCategoryPrefix(target)) {
+                            if (target) "Live category prefixes hidden." else "Full Live category names restored."
+                        } else {
+                            "Could not update Live category-label preference."
+                        },
+                    )
+                }
+            },
+        )
+        SettingsToggleRow(
+            title = "Hide Library category prefixes",
+            subtitle = "Remove only recognized region/country prefixes in Movies and Series; provider categories stay intact.",
+            checked = preferences.hideLibraryCategoryPrefix,
+            onCheckedChange = { target ->
+                scope.launch {
+                    onMessage(
+                        if (repository.setHideLibraryCategoryPrefix(target)) {
+                            if (target) "Library category prefixes hidden." else "Full Library category names restored."
+                        } else {
+                            "Could not update Library category-label preference."
                         },
                     )
                 }
@@ -931,8 +980,8 @@ private fun LiveOrganizationSettingsSection(
                 )
             } else {
                 Text(
-                    "Provider identity, membership and order stay provider-controlled. " +
-                        "You can hide entries locally without changing provider order.",
+                    "Provider identity and membership stay provider-controlled. " +
+                        "You can hide and reorder Live entries locally; Reset order restores provider order.",
                     color = OwnPlayColors.TextSecondary,
                 )
                 TextButton(onClick = { providerManagerOpen = true }) {
@@ -998,9 +1047,9 @@ private fun ProviderLiveManagementDialog(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
                     if (selectedCategory == null) {
-                        "Provider names, grouping and order stay provider-controlled. Local controls affect visibility only."
+                        "Provider names and grouping stay provider-controlled. Local controls affect visibility and order only."
                     } else {
-                        "Channel identity, category membership and order stay provider-controlled. Local controls affect visibility only."
+                        "Channel identity and category membership stay provider-controlled. Local controls affect visibility and order only."
                     },
                     color = OwnPlayColors.TextMuted,
                 )
@@ -1084,10 +1133,10 @@ private fun ProviderLiveManagementDialog(
                             }
                         }
                     } else if (selectedCategory == null) {
-                        items(
+                        itemsIndexed(
                             items = management.categories,
-                            key = { category -> category.categoryId },
-                        ) { category ->
+                            key = { _, category -> category.categoryId },
+                        ) { index, category ->
                             ProviderManagementRow(
                                 title = category.displayName,
                                 hidden = category.hidden,
@@ -1103,14 +1152,42 @@ private fun ProviderLiveManagementDialog(
                                         }
                                     }
                                 },
+                                onMoveUp = if (index > 0) {
+                                    {
+                                        scope.launch {
+                                            val orderedIds = movedProviderIds(
+                                                management.categories.map { it.categoryId },
+                                                index,
+                                                index - 1,
+                                            )
+                                            if (!repository.setProviderCategoryOrder(source.sourceId, orderedIds)) {
+                                                onMessage("Could not update Provider category order.")
+                                            }
+                                        }
+                                    }
+                                } else null,
+                                onMoveDown = if (index < management.categories.lastIndex) {
+                                    {
+                                        scope.launch {
+                                            val orderedIds = movedProviderIds(
+                                                management.categories.map { it.categoryId },
+                                                index,
+                                                index + 1,
+                                            )
+                                            if (!repository.setProviderCategoryOrder(source.sourceId, orderedIds)) {
+                                                onMessage("Could not update Provider category order.")
+                                            }
+                                        }
+                                    }
+                                } else null,
                                 onOpen = { selectedCategoryId = category.categoryId },
                             )
                         }
                     } else {
-                        items(
+                        itemsIndexed(
                             items = channels,
-                            key = { channel -> channel.channelId },
-                        ) { channel ->
+                            key = { _, channel -> channel.channelId },
+                        ) { index, channel ->
                             ProviderManagementRow(
                                 title = channel.tvgName?.takeIf(String::isNotBlank) ?: channel.name,
                                 hidden = channel.hidden,
@@ -1127,6 +1204,44 @@ private fun ProviderLiveManagementDialog(
                                         }
                                     }
                                 },
+                                onMoveUp = if (index > 0) {
+                                    {
+                                        scope.launch {
+                                            val orderedIds = movedProviderIds(
+                                                channels.map { it.channelId },
+                                                index,
+                                                index - 1,
+                                            )
+                                            if (!repository.setProviderChannelOrder(
+                                                    source.sourceId,
+                                                    selectedCategory.categoryId,
+                                                    orderedIds,
+                                                )
+                                            ) {
+                                                onMessage("Could not update Provider channel order.")
+                                            }
+                                        }
+                                    }
+                                } else null,
+                                onMoveDown = if (index < channels.lastIndex) {
+                                    {
+                                        scope.launch {
+                                            val orderedIds = movedProviderIds(
+                                                channels.map { it.channelId },
+                                                index,
+                                                index + 1,
+                                            )
+                                            if (!repository.setProviderChannelOrder(
+                                                    source.sourceId,
+                                                    selectedCategory.categoryId,
+                                                    orderedIds,
+                                                )
+                                            ) {
+                                                onMessage("Could not update Provider channel order.")
+                                            }
+                                        }
+                                    }
+                                } else null,
                                 onOpen = null,
                             )
                         }
@@ -1158,8 +1273,36 @@ private fun ProviderLiveManagementDialog(
                                 }
                             },
                         ) { Text("Show all") }
+                        TextButton(
+                            enabled = management.categories.any { it.manualOrder != null },
+                            onClick = {
+                                scope.launch {
+                                    if (repository.resetProviderCategoryOrder(source.sourceId)) {
+                                        onMessage("Provider category order restored.")
+                                    } else {
+                                        onMessage("Could not reset Provider category order.")
+                                    }
+                                }
+                            },
+                        ) { Text("Reset order") }
                     } else {
                         TextButton(onClick = { selectedCategoryId = null }) { Text("Back") }
+                        TextButton(
+                            enabled = channels.any { it.manualOrder != null },
+                            onClick = {
+                                scope.launch {
+                                    if (repository.resetProviderChannelOrder(
+                                            source.sourceId,
+                                            selectedCategory.categoryId,
+                                        )
+                                    ) {
+                                        onMessage("Provider channel order restored.")
+                                    } else {
+                                        onMessage("Could not reset Provider channel order.")
+                                    }
+                                }
+                            },
+                        ) { Text("Reset order") }
                     }
                 }
             }
@@ -1169,11 +1312,25 @@ private fun ProviderLiveManagementDialog(
 }
 
 
+private fun movedProviderIds(
+    ids: List<String>,
+    fromIndex: Int,
+    toIndex: Int,
+): List<String> {
+    if (fromIndex !in ids.indices || toIndex !in ids.indices || fromIndex == toIndex) return ids
+    return ids.toMutableList().apply {
+        val moved = removeAt(fromIndex)
+        add(toIndex, moved)
+    }
+}
+
 @Composable
 private fun ProviderManagementRow(
     title: String,
     hidden: Boolean,
     onToggleHidden: () -> Unit,
+    onMoveUp: (() -> Unit)?,
+    onMoveDown: (() -> Unit)?,
     onOpen: (() -> Unit)?,
 ) {
     Surface(
@@ -1197,6 +1354,18 @@ private fun ProviderManagementRow(
                         contentDescription = if (hidden) "Show $title" else "Hide $title"
                     },
                 ) { Text(if (hidden) "Show" else "Hide") }
+                if (onMoveUp != null) {
+                    TextButton(
+                        onClick = onMoveUp,
+                        modifier = Modifier.semantics { contentDescription = "Move $title up" },
+                    ) { Text("Up") }
+                }
+                if (onMoveDown != null) {
+                    TextButton(
+                        onClick = onMoveDown,
+                        modifier = Modifier.semantics { contentDescription = "Move $title down" },
+                    ) { Text("Down") }
+                }
                 if (onOpen != null) {
                     TextButton(
                         onClick = onOpen,

@@ -40,6 +40,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.ownplay.mobile.design.OwnPlayColors
+import app.ownplay.mobile.design.OwnPlayShapes
+import app.ownplay.mobile.design.ProviderCategoryDisplayPolicy
 import app.ownplay.mobile.feature.library.data.LibraryArtworkLoader
 import app.ownplay.mobile.feature.library.domain.LibraryBrowsePolicy
 import app.ownplay.mobile.feature.library.domain.LibraryCatalogSnapshot
@@ -73,6 +75,8 @@ internal fun LibraryCatalogContent(
     catalog: LibraryCatalogSnapshot,
     artworkLoader: LibraryArtworkLoader,
     compactMediaRows: Boolean,
+    showCategoryFlags: Boolean,
+    hideCategoryPrefix: Boolean,
     catalogLoadError: String?,
     catalogLoading: Boolean,
     searchQuery: String,
@@ -106,6 +110,32 @@ internal fun LibraryCatalogContent(
 
     val movieCategory = catalog.movieCategories.firstOrNull { it.categoryId == movieCategoryId }
     val seriesCategory = catalog.seriesCategories.firstOrNull { it.categoryId == seriesCategoryId }
+    val movieCategoryLabelById = remember(
+        catalog.movieCategories,
+        showCategoryFlags,
+        hideCategoryPrefix,
+    ) {
+        catalog.movieCategories.associate { category ->
+            category.categoryId to ProviderCategoryDisplayPolicy.label(
+                rawName = category.displayName,
+                hideRegionPrefix = hideCategoryPrefix,
+                showFlag = showCategoryFlags,
+            )
+        }
+    }
+    val seriesCategoryLabelById = remember(
+        catalog.seriesCategories,
+        showCategoryFlags,
+        hideCategoryPrefix,
+    ) {
+        catalog.seriesCategories.associate { category ->
+            category.categoryId to ProviderCategoryDisplayPolicy.label(
+                rawName = category.displayName,
+                hideRegionPrefix = hideCategoryPrefix,
+                showFlag = showCategoryFlags,
+            )
+        }
+    }
     val hasMovieCategories = catalog.movieCategories.isNotEmpty()
     val hasSeriesCategories = catalog.seriesCategories.isNotEmpty()
 
@@ -239,7 +269,10 @@ internal fun LibraryCatalogContent(
             }
             LibraryPage.MOVIE_GRID -> {
                 LibraryPageHeader(
-                    title = movieCategory?.displayName ?: "Movies",
+                    title = movieCategory
+                        ?.categoryId
+                        ?.let(movieCategoryLabelById::get)
+                        ?: "Movies",
                     onBack = {
                         pageName = if (hasMovieCategories) {
                             LibraryPage.MOVIE_CATEGORIES.name
@@ -261,7 +294,10 @@ internal fun LibraryCatalogContent(
             }
             LibraryPage.SERIES_GRID -> {
                 LibraryPageHeader(
-                    title = seriesCategory?.displayName ?: "Series",
+                    title = seriesCategory
+                        ?.categoryId
+                        ?.let(seriesCategoryLabelById::get)
+                        ?: "Series",
                     onBack = {
                         pageName = if (hasSeriesCategories) {
                             LibraryPage.SERIES_CATEGORIES.name
@@ -318,6 +354,8 @@ internal fun LibraryCatalogContent(
                     catalogLoading = catalogLoading,
                     artworkLoader = artworkLoader,
                     compact = compactMediaRows,
+                    showProviderFlags = showCategoryFlags,
+                    hideProviderPrefix = hideCategoryPrefix,
                     listState = homeListState,
                     onOpenContinueWatching = onOpenContinueWatching,
                     onRemoveContinueWatching = onRemoveContinueWatching,
@@ -347,6 +385,8 @@ internal fun LibraryCatalogContent(
                     listState = continueWatchingListState,
                     artworkLoader = artworkLoader,
                     compact = compactMediaRows,
+                    showProviderFlags = showCategoryFlags,
+                    hideProviderPrefix = hideCategoryPrefix,
                     onOpen = onOpenContinueWatching,
                     onRemove = onRemoveContinueWatching,
                 )
@@ -355,6 +395,9 @@ internal fun LibraryCatalogContent(
                     listState = movieCategoryListState,
                     itemCount = { categoryId ->
                         catalog.movies.count { it.categoryId == categoryId }
+                    },
+                    categoryLabel = { category ->
+                        movieCategoryLabelById[category.categoryId] ?: category.displayName
                     },
                     emptyMessage = "No Movie categories are available from this source.",
                     onOpen = { category ->
@@ -367,6 +410,8 @@ internal fun LibraryCatalogContent(
                     gridState = movieGridState,
                     artworkLoader = artworkLoader,
                     compact = compactMediaRows,
+                    showProviderFlags = showCategoryFlags,
+                    hideProviderPrefix = hideCategoryPrefix,
                     onOpenMovie = onOpenMovie,
                     onToggleFavorite = onToggleFavorite,
                 )
@@ -375,6 +420,9 @@ internal fun LibraryCatalogContent(
                     listState = seriesCategoryListState,
                     itemCount = { categoryId ->
                         catalog.series.count { it.categoryId == categoryId }
+                    },
+                    categoryLabel = { category ->
+                        seriesCategoryLabelById[category.categoryId] ?: category.displayName
                     },
                     emptyMessage = "No Series categories are available from this source.",
                     onOpen = { category ->
@@ -387,6 +435,8 @@ internal fun LibraryCatalogContent(
                     gridState = seriesGridState,
                     artworkLoader = artworkLoader,
                     compact = compactMediaRows,
+                    showProviderFlags = showCategoryFlags,
+                    hideProviderPrefix = hideCategoryPrefix,
                     onOpenSeries = onOpenSeries,
                     onToggleFavorite = onToggleFavorite,
                 )
@@ -398,6 +448,8 @@ internal fun LibraryCatalogContent(
                     seriesGridState = favoriteSeriesGridState,
                     artworkLoader = artworkLoader,
                     compact = compactMediaRows,
+                    showProviderFlags = showCategoryFlags,
+                    hideProviderPrefix = hideCategoryPrefix,
                     onOpenMovie = onOpenMovie,
                     onOpenSeries = onOpenSeries,
                     onToggleFavorite = onToggleFavorite,
@@ -409,6 +461,8 @@ internal fun LibraryCatalogContent(
                     listState = searchListState,
                     artworkLoader = artworkLoader,
                     compact = compactMediaRows,
+                    showProviderFlags = showCategoryFlags,
+                    hideProviderPrefix = hideCategoryPrefix,
                     onOpenMovie = onOpenMovie,
                     onOpenSeries = onOpenSeries,
                     onToggleFavorite = onToggleFavorite,
@@ -474,6 +528,8 @@ private fun LibraryHomeContent(
     catalogLoading: Boolean,
     artworkLoader: LibraryArtworkLoader,
     compact: Boolean,
+    showProviderFlags: Boolean,
+    hideProviderPrefix: Boolean,
     listState: androidx.compose.foundation.lazy.LazyListState,
     onOpenContinueWatching: (LibraryContinueWatchingItem) -> Unit,
     onRemoveContinueWatching: (LibraryContinueWatchingItem) -> Unit,
@@ -499,6 +555,8 @@ private fun LibraryHomeContent(
                     items = continueWatching,
                     artworkLoader = artworkLoader,
                     compact = compact,
+                    showProviderFlags = showProviderFlags,
+                    hideProviderPrefix = hideProviderPrefix,
                     title = "Continue Watching",
                     onOpen = onOpenContinueWatching,
                     onRemove = onRemoveContinueWatching,
@@ -594,6 +652,7 @@ private fun LibraryCategoryList(
     categories: List<LibraryCategory>,
     listState: androidx.compose.foundation.lazy.LazyListState,
     itemCount: (String) -> Int,
+    categoryLabel: (LibraryCategory) -> String,
     emptyMessage: String,
     onOpen: (LibraryCategory) -> Unit,
 ) {
@@ -620,7 +679,8 @@ private fun LibraryCategoryList(
     ) {
         items(ordered, key = { it.categoryId }) { category ->
             Surface(
-                color = OwnPlayColors.Surface,
+                color = OwnPlayColors.SurfaceRaised,
+                shape = OwnPlayShapes.Medium,
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable { onOpen(category) },
@@ -631,15 +691,21 @@ private fun LibraryCategoryList(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = category.displayName,
+                        text = categoryLabel(category),
                         color = OwnPlayColors.TextPrimary,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.weight(1f),
                     )
-                    Text(
-                        text = itemCount(category.categoryId).toString(),
-                        color = OwnPlayColors.TextMuted,
-                    )
+                    Surface(
+                        shape = OwnPlayShapes.Small,
+                        color = OwnPlayColors.Surface,
+                    ) {
+                        Text(
+                            text = itemCount(category.categoryId).toString(),
+                            color = OwnPlayColors.TextSecondary,
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                        )
+                    }
                 }
             }
         }
@@ -652,6 +718,8 @@ private fun LibraryMovieGridContent(
     gridState: androidx.compose.foundation.lazy.grid.LazyGridState,
     artworkLoader: LibraryArtworkLoader,
     compact: Boolean,
+    showProviderFlags: Boolean,
+    hideProviderPrefix: Boolean,
     onOpenMovie: (String) -> Unit,
     onToggleFavorite: (LibraryContentKind, String, Boolean) -> Unit,
 ) {
@@ -676,6 +744,8 @@ private fun LibraryMovieGridContent(
                 movie = movie,
                 artworkLoader = artworkLoader,
                 compact = compact,
+                showProviderFlags = showProviderFlags,
+                hideProviderPrefix = hideProviderPrefix,
                 fillWidth = true,
                 onOpen = { onOpenMovie(movie.movieId) },
                 onFavorite = {
@@ -696,6 +766,8 @@ private fun LibrarySeriesGridContent(
     gridState: androidx.compose.foundation.lazy.grid.LazyGridState,
     artworkLoader: LibraryArtworkLoader,
     compact: Boolean,
+    showProviderFlags: Boolean,
+    hideProviderPrefix: Boolean,
     onOpenSeries: (String) -> Unit,
     onToggleFavorite: (LibraryContentKind, String, Boolean) -> Unit,
 ) {
@@ -720,6 +792,8 @@ private fun LibrarySeriesGridContent(
                 series = item,
                 artworkLoader = artworkLoader,
                 compact = compact,
+                showProviderFlags = showProviderFlags,
+                hideProviderPrefix = hideProviderPrefix,
                 fillWidth = true,
                 onOpen = { onOpenSeries(item.seriesId) },
                 onFavorite = {
@@ -742,6 +816,8 @@ private fun LibrarySearchContent(
     listState: androidx.compose.foundation.lazy.LazyListState,
     artworkLoader: LibraryArtworkLoader,
     compact: Boolean,
+    showProviderFlags: Boolean,
+    hideProviderPrefix: Boolean,
     onOpenMovie: (String) -> Unit,
     onOpenSeries: (String) -> Unit,
     onToggleFavorite: (LibraryContentKind, String, Boolean) -> Unit,
@@ -774,6 +850,8 @@ private fun LibrarySearchContent(
                     items = movies,
                     artworkLoader = artworkLoader,
                     compact = compact,
+                    showProviderFlags = showProviderFlags,
+                    hideProviderPrefix = hideProviderPrefix,
                     onOpenMovie = onOpenMovie,
                     onToggleFavorite = onToggleFavorite,
                 )
@@ -786,6 +864,8 @@ private fun LibrarySearchContent(
                     items = series,
                     artworkLoader = artworkLoader,
                     compact = compact,
+                    showProviderFlags = showProviderFlags,
+                    hideProviderPrefix = hideProviderPrefix,
                     onOpenSeries = onOpenSeries,
                     onToggleFavorite = onToggleFavorite,
                 )
@@ -803,6 +883,8 @@ private fun LibraryFavoritesContent(
     seriesGridState: androidx.compose.foundation.lazy.grid.LazyGridState,
     artworkLoader: LibraryArtworkLoader,
     compact: Boolean,
+    showProviderFlags: Boolean,
+    hideProviderPrefix: Boolean,
     onOpenMovie: (String) -> Unit,
     onOpenSeries: (String) -> Unit,
     onToggleFavorite: (LibraryContentKind, String, Boolean) -> Unit,
@@ -828,6 +910,8 @@ private fun LibraryFavoritesContent(
                             movie = movie,
                             artworkLoader = artworkLoader,
                             compact = compact,
+                            showProviderFlags = showProviderFlags,
+                            hideProviderPrefix = hideProviderPrefix,
                             fillWidth = true,
                             onOpen = { onOpenMovie(movie.movieId) },
                             onFavorite = {
@@ -863,6 +947,8 @@ private fun LibraryFavoritesContent(
                             series = item,
                             artworkLoader = artworkLoader,
                             compact = compact,
+                            showProviderFlags = showProviderFlags,
+                            hideProviderPrefix = hideProviderPrefix,
                             fillWidth = true,
                             onOpen = { onOpenSeries(item.seriesId) },
                             onFavorite = {
@@ -886,6 +972,8 @@ private fun LibraryContinueWatchingAllContent(
     listState: androidx.compose.foundation.lazy.LazyListState,
     artworkLoader: LibraryArtworkLoader,
     compact: Boolean,
+    showProviderFlags: Boolean,
+    hideProviderPrefix: Boolean,
     onOpen: (LibraryContinueWatchingItem) -> Unit,
     onRemove: (LibraryContinueWatchingItem) -> Unit,
 ) {
@@ -931,7 +1019,11 @@ private fun LibraryContinueWatchingAllContent(
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         Text(
-                            text = item.title,
+                            text = libraryContinueWatchingTitle(
+                                item = item,
+                                showProviderFlags = showProviderFlags,
+                                hideProviderPrefix = hideProviderPrefix,
+                            ),
                             color = OwnPlayColors.TextPrimary,
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 2,
@@ -939,7 +1031,11 @@ private fun LibraryContinueWatchingAllContent(
                         )
                         item.seriesTitle?.takeIf(String::isNotBlank)?.let { seriesTitle ->
                             Text(
-                                text = seriesTitle,
+                                text = providerLibraryLabel(
+                                    rawName = seriesTitle,
+                                    showProviderFlags = showProviderFlags,
+                                    hideProviderPrefix = hideProviderPrefix,
+                                ),
                                 color = OwnPlayColors.TextSecondary,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
@@ -967,6 +1063,8 @@ private fun LibraryContinueWatchingShelf(
     items: List<LibraryContinueWatchingItem>,
     artworkLoader: LibraryArtworkLoader,
     compact: Boolean,
+    showProviderFlags: Boolean,
+    hideProviderPrefix: Boolean,
     title: String,
     onOpen: (LibraryContinueWatchingItem) -> Unit,
     onRemove: (LibraryContinueWatchingItem) -> Unit,
@@ -996,7 +1094,11 @@ private fun LibraryContinueWatchingShelf(
                             expandPoster = true,
                         )
                         Text(
-                            text = item.title,
+                            text = libraryContinueWatchingTitle(
+                                item = item,
+                                showProviderFlags = showProviderFlags,
+                                hideProviderPrefix = hideProviderPrefix,
+                            ),
                             color = OwnPlayColors.TextPrimary,
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 2,
@@ -1004,7 +1106,11 @@ private fun LibraryContinueWatchingShelf(
                         )
                         item.seriesTitle?.takeIf(String::isNotBlank)?.let { seriesTitle ->
                             Text(
-                                text = seriesTitle,
+                                text = providerLibraryLabel(
+                                    rawName = seriesTitle,
+                                    showProviderFlags = showProviderFlags,
+                                    hideProviderPrefix = hideProviderPrefix,
+                                ),
                                 color = OwnPlayColors.TextSecondary,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
@@ -1033,6 +1139,8 @@ private fun LibraryMovieShelf(
     items: List<LibraryMovieSummary>,
     artworkLoader: LibraryArtworkLoader,
     compact: Boolean,
+    showProviderFlags: Boolean,
+    hideProviderPrefix: Boolean,
     onOpenMovie: (String) -> Unit,
     onToggleFavorite: (LibraryContentKind, String, Boolean) -> Unit,
     onViewAll: (() -> Unit)? = null,
@@ -1045,6 +1153,8 @@ private fun LibraryMovieShelf(
                     movie = movie,
                     artworkLoader = artworkLoader,
                     compact = compact,
+                    showProviderFlags = showProviderFlags,
+                    hideProviderPrefix = hideProviderPrefix,
                     onOpen = { onOpenMovie(movie.movieId) },
                     onFavorite = {
                         onToggleFavorite(
@@ -1065,6 +1175,8 @@ private fun LibrarySeriesShelf(
     items: List<LibrarySeriesSummary>,
     artworkLoader: LibraryArtworkLoader,
     compact: Boolean,
+    showProviderFlags: Boolean,
+    hideProviderPrefix: Boolean,
     onOpenSeries: (String) -> Unit,
     onToggleFavorite: (LibraryContentKind, String, Boolean) -> Unit,
     onViewAll: (() -> Unit)? = null,
@@ -1077,6 +1189,8 @@ private fun LibrarySeriesShelf(
                     series = item,
                     artworkLoader = artworkLoader,
                     compact = compact,
+                    showProviderFlags = showProviderFlags,
+                    hideProviderPrefix = hideProviderPrefix,
                     onOpen = { onOpenSeries(item.seriesId) },
                     onFavorite = {
                         onToggleFavorite(
@@ -1114,17 +1228,46 @@ private fun LibraryShelfHeader(
     }
 }
 
+private fun providerLibraryLabel(
+    rawName: String,
+    showProviderFlags: Boolean,
+    hideProviderPrefix: Boolean,
+): String = ProviderCategoryDisplayPolicy.label(
+    rawName = rawName,
+    hideRegionPrefix = hideProviderPrefix,
+    showFlag = showProviderFlags,
+)
+
+private fun libraryContinueWatchingTitle(
+    item: LibraryContinueWatchingItem,
+    showProviderFlags: Boolean,
+    hideProviderPrefix: Boolean,
+): String = when (item.contentKind) {
+    LibraryContentKind.MOVIE, LibraryContentKind.SERIES -> providerLibraryLabel(
+        rawName = item.title,
+        showProviderFlags = showProviderFlags,
+        hideProviderPrefix = hideProviderPrefix,
+    )
+    LibraryContentKind.EPISODE -> item.title
+}
+
 @Composable
 private fun LibraryMoviePosterCard(
     movie: LibraryMovieSummary,
     artworkLoader: LibraryArtworkLoader,
     compact: Boolean,
+    showProviderFlags: Boolean,
+    hideProviderPrefix: Boolean,
     fillWidth: Boolean = false,
     onOpen: () -> Unit,
     onFavorite: () -> Unit,
 ) {
     LibraryPosterCard(
-        title = movie.title,
+        title = providerLibraryLabel(
+            rawName = movie.title,
+            showProviderFlags = showProviderFlags,
+            hideProviderPrefix = hideProviderPrefix,
+        ),
         posterUrl = movie.posterUrl,
         rating = movie.rating,
         favorite = movie.favorite,
@@ -1141,12 +1284,18 @@ private fun LibrarySeriesPosterCard(
     series: LibrarySeriesSummary,
     artworkLoader: LibraryArtworkLoader,
     compact: Boolean,
+    showProviderFlags: Boolean,
+    hideProviderPrefix: Boolean,
     fillWidth: Boolean = false,
     onOpen: () -> Unit,
     onFavorite: () -> Unit,
 ) {
     LibraryPosterCard(
-        title = series.title,
+        title = providerLibraryLabel(
+            rawName = series.title,
+            showProviderFlags = showProviderFlags,
+            hideProviderPrefix = hideProviderPrefix,
+        ),
         posterUrl = series.posterUrl,
         rating = series.rating,
         favorite = series.favorite,

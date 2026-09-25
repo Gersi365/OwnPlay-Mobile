@@ -124,4 +124,26 @@ class ProviderCategoryDisplayPolicyTest {
         assertNull(presentation.countryCode)
         assertNull(presentation.flagEmoji)
     }
+    @Test
+    fun labelConvertsRecognizedProviderPrefixToCountryFlag() {
+        val label = ProviderCategoryDisplayPolicy.label(
+            rawName = "EUROPE | ALBANIA Sports",
+            hideRegionPrefix = false,
+            showFlag = true,
+        )
+
+        assertEquals("🇦🇱 Sports", label)
+    }
+
+    @Test
+    fun labelCanHidePrefixWithoutForcingFlag() {
+        val label = ProviderCategoryDisplayPolicy.label(
+            rawName = "EUROPE | ALBANIA Sports",
+            hideRegionPrefix = true,
+            showFlag = false,
+        )
+
+        assertEquals("Sports", label)
+    }
+
 }

@@ -318,8 +318,10 @@ class RoomLiveOrganizationRepository(
         }.withIndex()
             .sortedWith(
                 compareBy<IndexedValue<ProviderLiveManagementCategory>> {
-                    it.value.providerOrder
-                }.thenBy { it.index },
+                    it.value.manualOrder ?: Int.MAX_VALUE
+                }
+                    .thenBy { it.value.providerOrder }
+                    .thenBy { it.index },
             )
             .map(IndexedValue<ProviderLiveManagementCategory>::value)
 
@@ -348,6 +350,7 @@ class RoomLiveOrganizationRepository(
                 compareBy<IndexedValue<ProviderLiveManagementChannel>> {
                     categoryRank[it.value.categoryId] ?: Int.MAX_VALUE
                 }
+                    .thenBy { it.value.manualOrder ?: Int.MAX_VALUE }
                     .thenBy { it.value.providerOrder }
                     .thenBy { it.index },
             )

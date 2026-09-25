@@ -109,15 +109,15 @@ class LiveOrganizationRepositoryInstrumentedTest {
     }
 
     @Test
-    fun legacyManualCategoryOrderDoesNotOverrideProviderDisplayOrder() = runBlocking {
+    fun manualCategoryOrderOverridesProviderDisplayOrderUntilReset() = runBlocking {
         assertTrue(repository.setProviderCategoryOrder(sourceId, listOf("it-sports", "al-news")))
         assertTrue(repository.setProviderCategoryHidden(sourceId, "it-sports", true))
         assertTrue(repository.showAllProviderCategories(sourceId))
 
         val managed = repository.observeProviderManagement(sourceId).first()
-        assertEquals(listOf("al-news", "it-sports"), managed.categories.map { it.categoryId })
+        assertEquals(listOf("it-sports", "al-news"), managed.categories.map { it.categoryId })
         assertEquals(
-            listOf("al-news", "it-sports"),
+            listOf("it-sports", "al-news"),
             repository.observeProviderCatalog(sourceId).first().categories.map { it.categoryId },
         )
         assertTrue(managed.categories.none { it.hidden })
@@ -130,7 +130,7 @@ class LiveOrganizationRepositoryInstrumentedTest {
     }
 
     @Test
-    fun legacyManualOrderDoesNotOverrideLatestProviderOrder() = runBlocking {
+    fun manualOrderSurvivesProviderRefreshUntilReset() = runBlocking {
         assertTrue(repository.setProviderCategoryOrder(sourceId, listOf("it-sports", "al-news")))
         assertTrue(repository.setProviderChannelOrder(sourceId, "al-news", listOf("b", "a")))
 
@@ -151,11 +151,11 @@ class LiveOrganizationRepositoryInstrumentedTest {
 
         val afterRefresh = repository.observeProviderManagement(sourceId).first()
         assertEquals(
-            listOf("al-news", "it-sports"),
+            listOf("it-sports", "al-news"),
             afterRefresh.categories.map { it.categoryId },
         )
         assertEquals(
-            listOf("a", "b"),
+            listOf("b", "a"),
             afterRefresh.channels
                 .filter { it.categoryId == "al-news" }
                 .map { it.channelId },
@@ -205,17 +205,17 @@ class LiveOrganizationRepositoryInstrumentedTest {
     }
 
     @Test
-    fun legacyManualChannelOrderDoesNotOverrideProviderDisplayOrder() = runBlocking {
+    fun manualChannelOrderOverridesProviderDisplayOrderUntilReset() = runBlocking {
         assertTrue(repository.setProviderChannelOrder(sourceId, "al-news", listOf("b", "a")))
         assertTrue(repository.setFavorite(sourceId, "a", true))
         assertEquals(
-            listOf("a", "b"),
+            listOf("b", "a"),
             repository.observeProviderManagement(sourceId).first()
                 .channels.filter { it.categoryId == "al-news" }
                 .map { it.channelId },
         )
         assertEquals(
-            listOf("a", "b"),
+            listOf("b", "a"),
             repository.observeProviderCatalog(sourceId).first()
                 .channels.filter { it.providerCategoryId == "al-news" }
                 .map { it.channelId },

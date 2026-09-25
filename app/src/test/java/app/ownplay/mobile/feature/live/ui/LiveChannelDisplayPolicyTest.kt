@@ -86,4 +86,18 @@ class LiveChannelDisplayPolicyTest {
             ),
         )
     }
+
+    @Test
+    fun countryFlagUsesTheSharedProviderLabelPolicy() {
+        val prefixed = channel.copy(name = "EUROPE | ALBANIA | Top Channel", tvgName = null)
+        assertEquals(
+            "🇦🇱 Top Channel",
+            LiveChannelDisplayPolicy.displayName(
+                prefixed,
+                preferTvgName = false,
+                hideChannelPrefix = false,
+                showCountryFlag = true,
+            ),
+        )
+    }
 }
