@@ -83,14 +83,14 @@ bc579100519cf9eb9a9296f6ee2f91335bef589d36ba4cf29ff7aa81e4d08d8c  app/src/main/j
 63d38906e54772ffa762101cadf31324d08cd54158f619be6a24ebc30548477e  app/src/main/java/app/ownplay/mobile/feature/library/domain/LibraryModels.kt
 6c0b8bd05e89264a9246068a953911ca4792fb8d21127cf5b096c0fcef406db9  app/src/main/java/app/ownplay/mobile/feature/library/domain/LibrarySearchPolicy.kt
 04740046193cb380c7d425749f5893e592ab30731bcd54e8c8453e5427b7fac0  app/src/main/java/app/ownplay/mobile/feature/library/ui/LibraryArtwork.kt
-fc918dd4cfbba00f78762b7efd87c0cb4c15d80691c745cdc710b932bbaac241  app/src/main/java/app/ownplay/mobile/feature/library/ui/LibraryCastSection.kt
-6ecfa4242129926c6fa02fd30498495ed62607a7dda0af98ffa415b133f10cbe  app/src/main/java/app/ownplay/mobile/feature/library/ui/LibraryCatalogContent.kt
+3bc390955270fac276a3ac028fe38b8746b00e4146ac76e94d5b5229a49dfed7  app/src/main/java/app/ownplay/mobile/feature/library/ui/LibraryCastSection.kt
+6fa47a719f24ee6639878a8f28c78f065924e5acc44369fa3d0f58dac5b13325  app/src/main/java/app/ownplay/mobile/feature/library/ui/LibraryCatalogContent.kt
 a648e1e094c6cbc56c6bc5f53d963a3436ccb94c2ef504075c3bad8b46716fdc  app/src/main/java/app/ownplay/mobile/feature/library/ui/LibraryDetailHero.kt
 d465d1e6a4644531a3d95380279c2c3a6d8736c427e0e867b467a276bcc57804  app/src/main/java/app/ownplay/mobile/feature/library/ui/LibraryDownloadControls.kt
 4751c857cb9123abc86249d02651a9cd817fa08f2ceda62d9ed3899a8efd2ad3  app/src/main/java/app/ownplay/mobile/feature/library/ui/LibraryDownloadedMediaRow.kt
 e06442841d4fb425b6ec3d322529716a253b5f54b8418471a2f0394ee2b012ba  app/src/main/java/app/ownplay/mobile/feature/library/ui/LibraryMovieDetailPresentation.kt
 ce48bb622ae1d3088bfe6cd39f6eced33d7f1eb81a9d96c8fc90738ad59ac351  app/src/main/java/app/ownplay/mobile/feature/library/ui/LibraryMovieDetailScreen.kt
-27e4bc6779840c93bf3dd74482a0f0b04f234d7b3aa6ed425272b40d64584463  app/src/main/java/app/ownplay/mobile/feature/library/ui/LibraryScreen.kt
+9974ef6305aea1513ce070867d3e3ce3c884fe13f6d03b2136995bfe0b69f7f8  app/src/main/java/app/ownplay/mobile/feature/library/ui/LibraryScreen.kt
 602a07706fd13c3e3c97387cb428a6cea3273fd47441bab5da17a5d1f5bdd4b7  app/src/main/java/app/ownplay/mobile/feature/library/ui/LibrarySeriesDetailNavigationPolicy.kt
 430c0e300e0326dbbee66fe9cf7a7e7e537e2d236ecce02e302b30bf94194bf0  app/src/main/java/app/ownplay/mobile/feature/live/data/LiveOrganizationPersistence.kt
 c647e1e1d9344c093130b83087597dc732f74612257137a34e81e212b24d76da  app/src/main/java/app/ownplay/mobile/feature/live/data/LiveOrganizationRepositoryImpl.kt
@@ -138,7 +138,7 @@ b43aaca784469a9b5c5bf84f8955d87f56ef9c57e8a808f410908511cd22885d  app/src/main/j
 e8e74e6647b566a68a709bc9bf70c66db4db1743363176906aa1104aa126f2a1  app/src/main/java/app/ownplay/mobile/feature/settings/domain/DisplayPreferences.kt
 dd003be5e589363734946b6371bfbf5fa19d39c184b2247295af5ea6f42dcd45  app/src/main/java/app/ownplay/mobile/feature/settings/domain/SourceRefreshSettings.kt
 571fb859abaebc7aaf2e868b0fbca032176990b986fb8ed2d953f365fce1d8f4  app/src/main/java/app/ownplay/mobile/feature/settings/ui/BackupRestoreSettingsSection.kt
-f560ad06e343092d5e94f609c7d25b37089b079657c7ad7dab8529e77a687e23  app/src/main/java/app/ownplay/mobile/feature/settings/ui/SettingsScreen.kt
+86ab97e0a59db332bd2e802677bc59274a7ffe3ed01b6f4d2db8a921afc1afa4  app/src/main/java/app/ownplay/mobile/feature/settings/ui/SettingsScreen.kt
 b69c76474f77a2aa3634bda5a20d72b2295ba7db9697c032c5af9a7471083284  app/src/main/java/app/ownplay/mobile/sources/data/CatalogRefreshStore.kt
 93af432581f52e5d100954d5c80714750b35c9de97b6080846463cbb00b63cf3  app/src/main/java/app/ownplay/mobile/sources/data/M3uIdentityReconciliation.kt
 3edb1003cf0fd70de4e092100acb1728e773a1d9f8541c3a43f251d4ec8bf497  app/src/main/java/app/ownplay/mobile/sources/data/OkHttpProviderTransport.kt

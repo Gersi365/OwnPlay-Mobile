@@ -675,7 +675,7 @@ private fun LibraryCategoryList(
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         items(ordered, key = { it.categoryId }) { category ->
             Surface(
@@ -686,25 +686,35 @@ private fun LibraryCategoryList(
                     .clickable { onOpen(category) },
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 14.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
                         text = categoryLabel(category),
                         color = OwnPlayColors.TextPrimary,
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                     )
-                    Surface(
-                        shape = OwnPlayShapes.Small,
-                        color = OwnPlayColors.Surface,
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(
-                            text = itemCount(category.categoryId).toString(),
-                            color = OwnPlayColors.TextSecondary,
-                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
-                        )
+                        Surface(
+                            shape = OwnPlayShapes.Small,
+                            color = OwnPlayColors.Surface,
+                        ) {
+                            Text(
+                                text = itemCount(category.categoryId).toString(),
+                                color = OwnPlayColors.TextSecondary,
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                            )
+                        }
+                        Text("›", color = OwnPlayColors.TextMuted)
                     }
                 }
             }
@@ -988,388 +998,3 @@ private fun LibraryContinueWatchingAllContent(
 
     LazyColumn(
         state = listState,
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        items(
-            items = items.sortedByDescending(LibraryContinueWatchingItem::updatedAt),
-            key = { item -> "continue-all:" + item.contentKind.name + ":" + item.contentId },
-        ) { item ->
-            Surface(
-                color = OwnPlayColors.Surface,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onOpen(item) },
-            ) {
-                Row(
-                    modifier = Modifier.padding(if (compact) 8.dp else 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Box(modifier = Modifier.width(if (compact) 74.dp else 88.dp)) {
-                        LibraryArtwork(
-                            url = item.posterUrl,
-                            loader = artworkLoader,
-                            compact = compact,
-                            expandPoster = true,
-                        )
-                    }
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        Text(
-                            text = libraryContinueWatchingTitle(
-                                item = item,
-                                showProviderFlags = showProviderFlags,
-                                hideProviderPrefix = hideProviderPrefix,
-                            ),
-                            color = OwnPlayColors.TextPrimary,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        item.seriesTitle?.takeIf(String::isNotBlank)?.let { seriesTitle ->
-                            Text(
-                                text = providerLibraryLabel(
-                                    rawName = seriesTitle,
-                                    showProviderFlags = showProviderFlags,
-                                    hideProviderPrefix = hideProviderPrefix,
-                                ),
-                                color = OwnPlayColors.TextSecondary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                        LinearProgressIndicator(
-                            progress = {
-                                (item.positionMs.toFloat() / item.durationMs.toFloat())
-                                    .coerceIn(0f, 1f)
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                        TextButton(onClick = { onRemove(item) }) {
-                            Text("Remove")
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun LibraryContinueWatchingShelf(
-    items: List<LibraryContinueWatchingItem>,
-    artworkLoader: LibraryArtworkLoader,
-    compact: Boolean,
-    showProviderFlags: Boolean,
-    hideProviderPrefix: Boolean,
-    title: String,
-    onOpen: (LibraryContinueWatchingItem) -> Unit,
-    onRemove: (LibraryContinueWatchingItem) -> Unit,
-    onViewAll: (() -> Unit)? = null,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        LibraryShelfHeader(title = title, onViewAll = onViewAll)
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(
-                items = items,
-                key = { item -> "continue:" + item.contentKind.name + ":" + item.contentId },
-            ) { item ->
-                Surface(
-                    color = OwnPlayColors.Surface,
-                    modifier = Modifier
-                        .widthIn(min = if (compact) 150.dp else 180.dp, max = 230.dp)
-                        .clickable { onOpen(item) },
-                ) {
-                    Column(
-                        modifier = Modifier.padding(if (compact) 8.dp else 10.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        LibraryArtwork(
-                            url = item.posterUrl,
-                            loader = artworkLoader,
-                            compact = compact,
-                            expandPoster = true,
-                        )
-                        Text(
-                            text = libraryContinueWatchingTitle(
-                                item = item,
-                                showProviderFlags = showProviderFlags,
-                                hideProviderPrefix = hideProviderPrefix,
-                            ),
-                            color = OwnPlayColors.TextPrimary,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        item.seriesTitle?.takeIf(String::isNotBlank)?.let { seriesTitle ->
-                            Text(
-                                text = providerLibraryLabel(
-                                    rawName = seriesTitle,
-                                    showProviderFlags = showProviderFlags,
-                                    hideProviderPrefix = hideProviderPrefix,
-                                ),
-                                color = OwnPlayColors.TextSecondary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                        LinearProgressIndicator(
-                            progress = {
-                                (item.positionMs.toFloat() / item.durationMs.toFloat())
-                                    .coerceIn(0f, 1f)
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                        TextButton(onClick = { onRemove(item) }) {
-                            Text("Remove")
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun LibraryMovieShelf(
-    title: String,
-    items: List<LibraryMovieSummary>,
-    artworkLoader: LibraryArtworkLoader,
-    compact: Boolean,
-    showProviderFlags: Boolean,
-    hideProviderPrefix: Boolean,
-    onOpenMovie: (String) -> Unit,
-    onToggleFavorite: (LibraryContentKind, String, Boolean) -> Unit,
-    onViewAll: (() -> Unit)? = null,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        LibraryShelfHeader(title = title, onViewAll = onViewAll)
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(items, key = { it.movieId }) { movie ->
-                LibraryMoviePosterCard(
-                    movie = movie,
-                    artworkLoader = artworkLoader,
-                    compact = compact,
-                    showProviderFlags = showProviderFlags,
-                    hideProviderPrefix = hideProviderPrefix,
-                    onOpen = { onOpenMovie(movie.movieId) },
-                    onFavorite = {
-                        onToggleFavorite(
-                            LibraryContentKind.MOVIE,
-                            movie.movieId,
-                            !movie.favorite,
-                        )
-                    },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun LibrarySeriesShelf(
-    title: String,
-    items: List<LibrarySeriesSummary>,
-    artworkLoader: LibraryArtworkLoader,
-    compact: Boolean,
-    showProviderFlags: Boolean,
-    hideProviderPrefix: Boolean,
-    onOpenSeries: (String) -> Unit,
-    onToggleFavorite: (LibraryContentKind, String, Boolean) -> Unit,
-    onViewAll: (() -> Unit)? = null,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        LibraryShelfHeader(title = title, onViewAll = onViewAll)
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(items, key = { it.seriesId }) { item ->
-                LibrarySeriesPosterCard(
-                    series = item,
-                    artworkLoader = artworkLoader,
-                    compact = compact,
-                    showProviderFlags = showProviderFlags,
-                    hideProviderPrefix = hideProviderPrefix,
-                    onOpen = { onOpenSeries(item.seriesId) },
-                    onFavorite = {
-                        onToggleFavorite(
-                            LibraryContentKind.SERIES,
-                            item.seriesId,
-                            !item.favorite,
-                        )
-                    },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun LibraryShelfHeader(
-    title: String,
-    onViewAll: (() -> Unit)?,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = title,
-            color = OwnPlayColors.TextPrimary,
-            fontWeight = FontWeight.Bold,
-        )
-        if (onViewAll != null) {
-            TextButton(onClick = onViewAll) {
-                Text("View all")
-            }
-        }
-    }
-}
-
-private fun providerLibraryLabel(
-    rawName: String,
-    showProviderFlags: Boolean,
-    hideProviderPrefix: Boolean,
-): String = ProviderCategoryDisplayPolicy.label(
-    rawName = rawName,
-    hideRegionPrefix = hideProviderPrefix,
-    showFlag = showProviderFlags,
-)
-
-private fun libraryContinueWatchingTitle(
-    item: LibraryContinueWatchingItem,
-    showProviderFlags: Boolean,
-    hideProviderPrefix: Boolean,
-): String = when (item.contentKind) {
-    LibraryContentKind.MOVIE, LibraryContentKind.SERIES -> providerLibraryLabel(
-        rawName = item.title,
-        showProviderFlags = showProviderFlags,
-        hideProviderPrefix = hideProviderPrefix,
-    )
-    LibraryContentKind.EPISODE -> item.title
-}
-
-@Composable
-private fun LibraryMoviePosterCard(
-    movie: LibraryMovieSummary,
-    artworkLoader: LibraryArtworkLoader,
-    compact: Boolean,
-    showProviderFlags: Boolean,
-    hideProviderPrefix: Boolean,
-    fillWidth: Boolean = false,
-    onOpen: () -> Unit,
-    onFavorite: () -> Unit,
-) {
-    LibraryPosterCard(
-        title = providerLibraryLabel(
-            rawName = movie.title,
-            showProviderFlags = showProviderFlags,
-            hideProviderPrefix = hideProviderPrefix,
-        ),
-        posterUrl = movie.posterUrl,
-        rating = movie.rating,
-        favorite = movie.favorite,
-        artworkLoader = artworkLoader,
-        compact = compact,
-        fillWidth = fillWidth,
-        onOpen = onOpen,
-        onFavorite = onFavorite,
-    )
-}
-
-@Composable
-private fun LibrarySeriesPosterCard(
-    series: LibrarySeriesSummary,
-    artworkLoader: LibraryArtworkLoader,
-    compact: Boolean,
-    showProviderFlags: Boolean,
-    hideProviderPrefix: Boolean,
-    fillWidth: Boolean = false,
-    onOpen: () -> Unit,
-    onFavorite: () -> Unit,
-) {
-    LibraryPosterCard(
-        title = providerLibraryLabel(
-            rawName = series.title,
-            showProviderFlags = showProviderFlags,
-            hideProviderPrefix = hideProviderPrefix,
-        ),
-        posterUrl = series.posterUrl,
-        rating = series.rating,
-        favorite = series.favorite,
-        artworkLoader = artworkLoader,
-        compact = compact,
-        fillWidth = fillWidth,
-        onOpen = onOpen,
-        onFavorite = onFavorite,
-    )
-}
-
-@Composable
-private fun LibraryPosterCard(
-    title: String,
-    posterUrl: String?,
-    rating: String?,
-    favorite: Boolean,
-    artworkLoader: LibraryArtworkLoader,
-    compact: Boolean,
-    fillWidth: Boolean,
-    onOpen: () -> Unit,
-    onFavorite: () -> Unit,
-) {
-    val cardModifier = if (fillWidth) {
-        Modifier.fillMaxWidth()
-    } else {
-        Modifier.width(if (compact) 112.dp else 132.dp)
-    }
-    Surface(
-        color = OwnPlayColors.Surface,
-        modifier = cardModifier.clickable(onClick = onOpen),
-    ) {
-        Column(
-            modifier = Modifier.padding(if (compact) 4.dp else 6.dp),
-            horizontalAlignment = Alignment.Start,
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Box(modifier = Modifier.fillMaxWidth()) {
-                LibraryArtwork(
-                    url = posterUrl,
-                    loader = artworkLoader,
-                    compact = compact,
-                    expandPoster = true,
-                )
-                Text(
-                    text = if (favorite) "★" else "☆",
-                    color = if (favorite) OwnPlayColors.Accent else OwnPlayColors.TextPrimary,
-                    style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .semantics {
-                            contentDescription = if (favorite) "Remove favorite" else "Add favorite"
-                        }
-                        .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
-                        .clickable(onClick = onFavorite)
-                        .padding(8.dp),
-                )
-            }
-            Text(
-                text = title,
-                color = OwnPlayColors.TextPrimary,
-                fontWeight = FontWeight.SemiBold,
-                style = MaterialTheme.typography.bodySmall,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            rating?.takeIf(String::isNotBlank)?.let {
-                Text(
-                    text = "Rating " + it,
-                    color = OwnPlayColors.TextSecondary,
-                    style = MaterialTheme.typography.labelSmall,
-                    maxLines = 1,
-                )
-            }
-        }
-    }
-}
