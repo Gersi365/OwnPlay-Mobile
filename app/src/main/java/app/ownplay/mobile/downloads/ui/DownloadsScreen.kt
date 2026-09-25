@@ -54,6 +54,7 @@ fun DownloadsScreen(
     onPlaybackStarted: () -> Unit = {},
     onOpenDetails: (DownloadDetailsNavigation) -> Unit = {},
     onOpenSettings: () -> Unit = {},
+    onOpenLibrary: () -> Unit = {},
 ) {
     val application = LocalContext.current.applicationContext as OwnPlayApplication
     val services = remember(application) { application.services }
@@ -101,6 +102,7 @@ fun DownloadsScreen(
         playbackSessionController = services.playbackSessionController,
         onPlaybackStarted = onPlaybackStarted,
         onOpenDetails = onOpenDetails,
+        onOpenLibrary = onOpenLibrary,
         modifier = modifier,
     )
 }
@@ -113,6 +115,7 @@ private fun DownloadCatalog(
     playbackSessionController: PlaybackSessionController,
     onPlaybackStarted: () -> Unit,
     onOpenDetails: (DownloadDetailsNavigation) -> Unit,
+    onOpenLibrary: () -> Unit,
     modifier: Modifier,
 ) {
     val movies = downloads.filter { it.mediaKind == DownloadMediaKind.MOVIE }
@@ -152,10 +155,17 @@ private fun DownloadCatalog(
 
         if (downloads.isEmpty()) {
             item {
-                Text(
-                    text = "No downloads yet. Start a Movie or Episode download from Library.",
-                    color = OwnPlayColors.TextMuted,
-                )
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        text = "No downloads yet. Start a Movie or Episode download from Library.",
+                        color = OwnPlayColors.TextMuted,
+                    )
+                    TextButton(onClick = onOpenLibrary) {
+                        Text("Browse Library")
+                    }
+                }
             }
         }
 

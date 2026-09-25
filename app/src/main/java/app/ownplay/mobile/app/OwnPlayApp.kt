@@ -207,6 +207,11 @@ fun OwnPlayApp(
                         openSourcesRequested = true
                         selectedName = AppDestination.SETTINGS.name
                     },
+                    onOpenLibrary = {
+                        returnToDownloadsAfterDetail = false
+                        internalDownloadDetailsNavigation = null
+                        selectedName = AppDestination.LIBRARY.name
+                    },
                 )
                 AppDestination.SETTINGS -> SettingsScreen(
                     modifier = modifier,
