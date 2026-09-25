@@ -591,6 +591,8 @@ private fun SourceSettingsCard(
     var menuExpanded by remember(source.sourceId) { mutableStateOf(false) }
     val authenticationRequired =
         source.refreshFailureCategory == SourceRefreshFailureCategory.AUTHENTICATION
+    val nonAuthenticationRefreshFailure =
+        source.enabled && source.refreshFailureCategory != null && !authenticationRequired
     val statusLabel = when {
         authenticationRequired -> "Authentication required"
         !source.enabled -> "Credentials required"
@@ -674,6 +676,17 @@ private fun SourceSettingsCard(
                         liveRegion = LiveRegionMode.Polite
                     },
                 )
+            }
+
+            if (nonAuthenticationRefreshFailure && !refreshing) {
+                Text(
+                    text = "Last refresh failed · Showing cached catalog",
+                    color = OwnPlayColors.Error,
+                    modifier = Modifier.semantics {
+                        liveRegion = LiveRegionMode.Polite
+                    },
+                )
+                TextButton(enabled = !busy, onClick = onRefresh) { Text("Retry") }
             }
 
             if (authenticationRequired) {
