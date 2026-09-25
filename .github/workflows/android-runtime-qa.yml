@@ -63,20 +63,10 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
           script: |
-            bash -c '
-              set -o pipefail
-              read -r manifest_sha _ < <(sha256sum SOURCE_TREE_SHA256.txt)
-              {
-                echo "source_manifest_sha256=$manifest_sha"
-                echo "execution_commit=$GITHUB_SHA"
-                echo "device_serial=$(adb get-serialno)"
-                echo "android_sdk=$(adb shell getprop ro.build.version.sdk | tr -d "\r")"
-                echo "android_release=$(adb shell getprop ro.build.version.release | tr -d "\r")"
-                echo "device_model=$(adb shell getprop ro.product.model | tr -d "\r")"
-                echo "device_abi=$(adb shell getprop ro.product.cpu.abi | tr -d "\r")"
-              } | tee runtime-device-metadata.txt
-              bash tools/run-android-instrumentation-qa.sh 2>&1 | tee runtime-qa.log
-            '
+            sha256sum SOURCE_TREE_SHA256.txt > runtime-source-manifest.sha256
+            adb devices -l > runtime-adb-devices.txt
+            adb shell getprop > runtime-device-properties.txt
+            bash tools/run-android-instrumentation-qa.sh
 
       - name: Upload runtime QA evidence
         if: always()
@@ -84,8 +74,9 @@ jobs:
         with:
           name: OwnPlay-Mobile-runtime-QA
           path: |
-            runtime-qa.log
-            runtime-device-metadata.txt
+            runtime-source-manifest.sha256
+            runtime-adb-devices.txt
+            runtime-device-properties.txt
             app/build/outputs/androidTest-results/**
             app/build/reports/androidTests/**
           if-no-files-found: warn
