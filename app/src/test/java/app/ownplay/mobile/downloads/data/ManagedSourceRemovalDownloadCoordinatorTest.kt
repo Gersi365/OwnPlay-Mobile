@@ -12,6 +12,68 @@ import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class ManagedSourceRemovalDownloadCoordinatorTest {
+
+    @Test
+    fun captureIncludesOnlyCompletedPublishedReferences() = runBlocking {
+        val downloadDao = FakeDownloadDao(
+            rows = mapOf(
+                "download:complete" to download(
+                    "download:complete",
+                    DownloadStatus.COMPLETED,
+                    localReference = "content://media/external/downloads/1",
+                ),
+                "download:queued" to download(
+                    "download:queued",
+                    DownloadStatus.QUEUED,
+                    localReference = "content://media/external/downloads/2",
+                ),
+                "download:missing-ref" to download(
+                    "download:missing-ref",
+                    DownloadStatus.COMPLETED,
+                ),
+            ),
+        )
+        val coordinator = coordinator(
+            downloadDao = downloadDao,
+            scheduler = RecordingScheduler(),
+        )
+
+        val plan = coordinator.capture(app.ownplay.mobile.sources.domain.SourceId("source-a"))
+
+        assertEquals(3, plan?.downloadIds?.size)
+        assertEquals(
+            listOf("content://media/external/downloads/1"),
+            plan?.publishedReferences,
+        )
+    }
+
+    @Test
+    fun finalizeRemovesCapturedPublishedMediaAfterPerDownloadCleanup() = runBlocking {
+        val events = mutableListOf<String>()
+        val coordinator = ManagedSourceRemovalDownloadCoordinator(
+            downloadDao = FakeDownloadDao(),
+            scheduler = RecordingScheduler(),
+            storage = RecordingStorage(events),
+            notifications = RecordingNotifications(events),
+            destinationAssignments = RecordingDestinationAssignments(events),
+        )
+        val plan = SourceRemovalDownloadPlan(
+            downloadIds = listOf(DownloadId("download:a")),
+            publishedReferences = listOf("content://media/external/downloads/9"),
+        )
+
+        coordinator.finalize(plan)
+
+        assertEquals(
+            listOf(
+                "discard:download:a",
+                "notify:download:a",
+                "destination:download:a",
+                "published:content://media/external/downloads/9",
+            ),
+            events,
+        )
+    }
     @Test
     fun quiesceAttemptsEveryDownloadAndReportsPartialFailure() = runBlocking {
         val scheduler = RecordingScheduler(failCancelFor = setOf("download:a"))
@@ -95,6 +157,7 @@ class ManagedSourceRemovalDownloadCoordinatorTest {
     private fun download(
         downloadId: String,
         status: DownloadStatus,
+        localReference: String? = null,
     ) = DownloadEntity(
         downloadId = downloadId,
         sourceId = "source-a",
@@ -105,7 +168,7 @@ class ManagedSourceRemovalDownloadCoordinatorTest {
         state = status.name,
         bytesDownloaded = 0L,
         totalBytes = null,
-        localReference = null,
+        localReference = localReference,
         integrityMetadata = null,
         failureReason = null,
         createdAt = 1L,
@@ -152,7 +215,10 @@ private class RecordingStorage(
         return true
     }
 
-    override suspend fun removePublished(localReference: String): Boolean = error("unused")
+    override suspend fun removePublished(localReference: String): Boolean {
+        events += "published:$localReference"
+        return true
+    }
 }
 
 private class RecordingNotifications(

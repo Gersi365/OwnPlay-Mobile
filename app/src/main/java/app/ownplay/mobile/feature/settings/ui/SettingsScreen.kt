@@ -1713,12 +1713,21 @@ private fun M3uSourceDialog(
 ) {
     var name by remember { mutableStateOf("") }
     var playlist by remember { mutableStateOf("") }
+    var epg by remember { mutableStateOf("") }
     SourceInputDialog(
         title = "Add M3U source",
         submitting = submitting,
         errorMessage = errorMessage,
         onDismiss = onDismiss,
-        onConfirm = { onSubmit(SourceInput.M3u(name, playlist, null)) },
+        onConfirm = {
+            onSubmit(
+                SourceInput.M3u(
+                    displayName = name,
+                    playlistUrl = playlist,
+                    epgUrl = epg.trim().takeIf(String::isNotBlank),
+                ),
+            )
+        },
     ) {
         OutlinedTextField(
             name,
@@ -1734,9 +1743,12 @@ private fun M3uSourceDialog(
             label = { Text("Playlist URL") },
             singleLine = true,
         )
-        Text(
-            "M3U XMLTV/EPG URL import is not exposed because this build does not consume it.",
-            color = OwnPlayColors.TextMuted,
+        OutlinedTextField(
+            epg,
+            { epg = it },
+            enabled = !submitting,
+            label = { Text("XMLTV / EPG URL (optional)") },
+            singleLine = true,
         )
     }
 }
@@ -1775,19 +1787,27 @@ private fun ReconnectSourceDialog(
 
         SourceType.M3U -> {
             var playlist by remember(source.sourceId) { mutableStateOf(source.connectionLabel) }
+            var epg by remember(source.sourceId) { mutableStateOf("") }
             SourceInputDialog(
                 title = "Reconnect M3U source",
                 onDismiss = onDismiss,
                 onConfirm = {
-                    onSubmit(SourceReconnectInput.M3u(playlist, null))
+                    onSubmit(
+                        SourceReconnectInput.M3u(
+                            playlistUrl = playlist,
+                            epgUrl = epg.trim().takeIf(String::isNotBlank),
+                        ),
+                    )
                 },
                 confirmLabel = "Reconnect",
             ) {
-                Text("Private playlist parameters are never restored from backup. Enter the full playlist URL again if required.")
+                Text("Private playlist/EPG parameters are never restored from backup. Enter the full URLs again if required.")
                 OutlinedTextField(playlist, { playlist = it }, label = { Text("Playlist URL") }, singleLine = true)
-                Text(
-                    "M3U XMLTV/EPG URL import is not exposed because this build does not consume it.",
-                    color = OwnPlayColors.TextMuted,
+                OutlinedTextField(
+                    epg,
+                    { epg = it },
+                    label = { Text("XMLTV / EPG URL (optional)") },
+                    singleLine = true,
                 )
             }
         }

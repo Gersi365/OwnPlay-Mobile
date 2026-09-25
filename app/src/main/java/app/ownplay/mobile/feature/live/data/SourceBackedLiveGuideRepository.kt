@@ -8,6 +8,7 @@ import app.ownplay.mobile.feature.live.domain.LiveGuidePolicy
 import app.ownplay.mobile.feature.live.domain.LiveGuideRepository
 import app.ownplay.mobile.feature.live.domain.LiveNowNext
 import app.ownplay.mobile.feature.live.domain.LiveProgram
+import app.ownplay.mobile.sources.data.m3u.M3uXmltvClient
 import app.ownplay.mobile.sources.data.xtream.XtreamClient
 import app.ownplay.mobile.sources.data.xtream.XtreamConnection
 import app.ownplay.mobile.sources.domain.SourceId
@@ -20,6 +21,7 @@ class SourceBackedLiveGuideRepository(
     private val liveOrganizationDao: LiveOrganizationDao,
     private val credentialStore: CredentialStore,
     private val xtreamClient: XtreamClient,
+    private val m3uXmltvClient: M3uXmltvClient,
     private val nowMillis: () -> Long = System::currentTimeMillis,
 ) : LiveGuideRepository {
     private data class CacheEntry(val loadedAtMs: Long, val programs: List<LiveProgram>)
@@ -36,19 +38,7 @@ class SourceBackedLiveGuideRepository(
             ?.let { return LiveGuidePolicy.nowNext(it.programs, nowMs / 1_000L) }
 
         val programs = try {
-            val channel = liveOrganizationDao.getAvailableChannel(sourceId.value, channelId)
-                ?: return LiveNowNext()
-            val source = sourceDao.get(sourceId.value) ?: return LiveNowNext()
-            if (!source.enabled || source.type != SourceType.XTREAM.name) return LiveNowNext()
-            val streamId = channel.providerStreamId?.takeIf(String::isNotBlank) ?: return LiveNowNext()
-            val secret = credentialStore.get(sourceId) as? SourceSecret.Xtream ?: return LiveNowNext()
-            xtreamClient.shortEpg(
-                connection = XtreamConnection(source.baseLocator, secret.username, secret.password),
-                streamId = streamId,
-                limit = 4,
-            ).map { entry ->
-                LiveProgram(entry.title.trim(), entry.startEpochSeconds, entry.endEpochSeconds)
-            }
+            loadPrograms(sourceId, channelId, shortOnly = true)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
@@ -67,27 +57,8 @@ class SourceBackedLiveGuideRepository(
             ?.let { return it.programs }
 
         val programs = try {
-            val channel = liveOrganizationDao.getAvailableChannel(sourceId.value, channelId)
-                ?: return emptyList()
-            val source = sourceDao.get(sourceId.value) ?: return emptyList()
-            if (!source.enabled || source.type != SourceType.XTREAM.name) return emptyList()
-            val streamId = channel.providerStreamId?.takeIf(String::isNotBlank) ?: return emptyList()
-            val secret = credentialStore.get(sourceId) as? SourceSecret.Xtream ?: return emptyList()
-            val connection = XtreamConnection(source.baseLocator, secret.username, secret.password)
-            val providerPrograms = xtreamClient.epgTable(
-                connection = connection,
-                streamId = streamId,
-            ).ifEmpty {
-                xtreamClient.shortEpg(
-                    connection = connection,
-                    streamId = streamId,
-                    limit = 20,
-                )
-            }
             LiveGuidePolicy.normalizeSchedule(
-                providerPrograms.map { entry ->
-                    LiveProgram(entry.title, entry.startEpochSeconds, entry.endEpochSeconds)
-                },
+                loadPrograms(sourceId, channelId, shortOnly = false),
             )
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -96,6 +67,55 @@ class SourceBackedLiveGuideRepository(
         }
         scheduleCache[cacheKey] = CacheEntry(nowMs, programs)
         return programs
+    }
+
+    private suspend fun loadPrograms(
+        sourceId: SourceId,
+        channelId: String,
+        shortOnly: Boolean,
+    ): List<LiveProgram> {
+        val channel = liveOrganizationDao.getAvailableChannel(sourceId.value, channelId)
+            ?: return emptyList()
+        val source = sourceDao.get(sourceId.value) ?: return emptyList()
+        if (!source.enabled) return emptyList()
+        val sourceType = runCatching { SourceType.valueOf(source.type) }.getOrNull()
+            ?: return emptyList()
+
+        return when (sourceType) {
+            SourceType.XTREAM -> {
+                val streamId = channel.providerStreamId?.takeIf(String::isNotBlank)
+                    ?: return emptyList()
+                val secret = credentialStore.get(sourceId) as? SourceSecret.Xtream
+                    ?: return emptyList()
+                val connection = XtreamConnection(source.baseLocator, secret.username, secret.password)
+                val providerPrograms = if (shortOnly) {
+                    xtreamClient.shortEpg(connection = connection, streamId = streamId, limit = 4)
+                } else {
+                    xtreamClient.epgTable(connection = connection, streamId = streamId).ifEmpty {
+                        xtreamClient.shortEpg(connection = connection, streamId = streamId, limit = 20)
+                    }
+                }
+                providerPrograms.map { entry ->
+                    LiveProgram(entry.title.trim(), entry.startEpochSeconds, entry.endEpochSeconds)
+                }
+            }
+
+            SourceType.M3U -> {
+                val secret = credentialStore.get(sourceId) as? SourceSecret.M3uRemote
+                    ?: return emptyList()
+                val epgUrl = secret.epgUrl?.trim()?.takeIf(String::isNotBlank)
+                    ?: return emptyList()
+                val tvgId = channel.tvgId?.trim()?.takeIf(String::isNotBlank)
+                    ?: return emptyList()
+                m3uXmltvClient.fetch(epgUrl).programsFor(tvgId).map { entry ->
+                    LiveProgram(
+                        title = entry.title,
+                        startEpochSeconds = entry.startEpochSeconds,
+                        endEpochSeconds = entry.endEpochSeconds,
+                    )
+                }
+            }
+        }
     }
 
     private companion object {

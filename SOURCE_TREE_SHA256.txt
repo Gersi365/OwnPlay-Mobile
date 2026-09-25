@@ -28,7 +28,7 @@ e6b60a09590304b847f7f7dc5e83214df4237410cf9f4f135813a9e1473f1dc2  app/src/main/j
 78137a816b25a4d0ca0126a5e6b8148ec6838c97b2210eb1839d76bd3268db0c  app/src/main/java/app/ownplay/mobile/app/AppDestination.kt
 47ffc571c16538405497453298d7b7e4475feb9d6575d91eb1e066e87360b68d  app/src/main/java/app/ownplay/mobile/app/OwnPlayApp.kt
 809ae2a61262949caca1bfaf7872579a0f111d2c9567db8c70d407d9cdea70e1  app/src/main/java/app/ownplay/mobile/app/OwnPlayBottomBar.kt
-09dbad1a84bd93239eec8ecb0e1524ffd7b1a8193b304bc352b9687d91b3beb4  app/src/main/java/app/ownplay/mobile/core/OwnPlayServices.kt
+8930787b2c9d33f7885dddd8590ae99151d28266934920e44c3862026ec74333  app/src/main/java/app/ownplay/mobile/core/OwnPlayServices.kt
 35f611b24b5f291f11e6526ec40cf4061c022d5e17b982c4082f08cb17a1a0fa  app/src/main/java/app/ownplay/mobile/data/db/BackupDao.kt
 a033e576ee285d63df4283ae7f5260b73650205d0cb251f6f326aa7a11d653c5  app/src/main/java/app/ownplay/mobile/data/db/Daos.kt
 9852e059049fbc3878e9b0586ae299555895fe0a2fde3921910624fb291af671  app/src/main/java/app/ownplay/mobile/data/db/Entities.kt
@@ -47,7 +47,7 @@ fb267b17be794f0a825a1d95f11ca05405310ef2694c39a8299f332e63f503c9  app/src/main/j
 80acad6feb0a0725f95bd118a93f45130be76e7c698499f37f70cb5301b9195b  app/src/main/java/app/ownplay/mobile/design/OwnPlayTheme.kt
 7760e6d678e9c76fa851b9e042ab068fc4613ded905d6f99af833979afdb4762  app/src/main/java/app/ownplay/mobile/design/ProviderCategoryDisplayPolicy.kt
 4c1f89857b4ead478220d755908c55a9fbceb903734a2a689840bf6217750930  app/src/main/java/app/ownplay/mobile/downloads/data/AndroidDownloadedMediaVerifier.kt
-b922afa236be1168e256738efb09c12392af42b326fb58496db621b788e912be  app/src/main/java/app/ownplay/mobile/downloads/data/DownloadAwareSourceRepository.kt
+2e9fe4c86f0b040cdb6edd93e384d57bfbe05a1805e5b54de1646760917d28e9  app/src/main/java/app/ownplay/mobile/downloads/data/DownloadAwareSourceRepository.kt
 28a688acd8fae60dc059504f8941bf5fd3a19ddbebf094b078573e96164c157a  app/src/main/java/app/ownplay/mobile/downloads/data/DownloadExecutionModels.kt
 06a34b09dee74da3db39f3ca4fde57305286d1a16adda54ab75dcf2fba99d87c  app/src/main/java/app/ownplay/mobile/downloads/data/DownloadExecutor.kt
 47d49f447b797f6c85ae6b9d482c9e48a1b939178793f723b59e54f990b83e3d  app/src/main/java/app/ownplay/mobile/downloads/data/DownloadNotifications.kt
@@ -95,8 +95,8 @@ ce48bb622ae1d3088bfe6cd39f6eced33d7f1eb81a9d96c8fc90738ad59ac351  app/src/main/j
 430c0e300e0326dbbee66fe9cf7a7e7e537e2d236ecce02e302b30bf94194bf0  app/src/main/java/app/ownplay/mobile/feature/live/data/LiveOrganizationPersistence.kt
 c647e1e1d9344c093130b83087597dc732f74612257137a34e81e212b24d76da  app/src/main/java/app/ownplay/mobile/feature/live/data/LiveOrganizationRepositoryImpl.kt
 c00dc15d08f2837de04a36907f015fabaacdc2e133fa0dab06cd1ad4c8fa5e38  app/src/main/java/app/ownplay/mobile/feature/live/data/RoomLiveCatchUpPlaybackProgressStore.kt
-b6a86a7e56361c8334834a1c6dcc40b5b59e6d44350d87eab73fc1998f2b5b3f  app/src/main/java/app/ownplay/mobile/feature/live/data/SourceBackedLiveCatchUpRepository.kt
-4132885e1e07c611b46f22453d9c9976805fbe0ed86dcd404ca7433171cafaaa  app/src/main/java/app/ownplay/mobile/feature/live/data/SourceBackedLiveGuideRepository.kt
+69d709b33cd1ee6b1d4fdef6d40c27e92ac0d74c6c75a201ed491e238b9f9665  app/src/main/java/app/ownplay/mobile/feature/live/data/SourceBackedLiveCatchUpRepository.kt
+46a2c6d52e2995e56837fc771729044c06708b5f102fa6f2e39ce60895b59f59  app/src/main/java/app/ownplay/mobile/feature/live/data/SourceBackedLiveGuideRepository.kt
 2b97917250690d1be0d370bab6fdc133b9005b1e42d4a3e08f9cd3f313a07d61  app/src/main/java/app/ownplay/mobile/feature/live/domain/LiveCatchUpModels.kt
 bf6b5c86c6d0f4ac761c8a46c5d99b946624056dbffacb4bc70becc7ab910d71  app/src/main/java/app/ownplay/mobile/feature/live/domain/LiveGuideModels.kt
 03ff6e1e81c935ad6ccf6b78c6d5c4246f8ffd12d539de2a39937f85b9ad69c9  app/src/main/java/app/ownplay/mobile/feature/live/domain/LiveGuidePolicy.kt
@@ -111,7 +111,7 @@ bc272f30a3d962a84cb2a5504c3fb64821d0e0630ab871574f7f714a757c0b9a  app/src/main/j
 d5205656afe373f38be9b711f29e02d83038ba144b8ec6c789fac90454f3995e  app/src/main/java/app/ownplay/mobile/feature/playback/data/Media3PlaybackEngine.kt
 f5a652ea9309c99a8d8227f7e47f6822714b3276c9f1c5c1a7621bcf2f298637  app/src/main/java/app/ownplay/mobile/feature/playback/data/PlaybackPictureInPictureActionReceiver.kt
 006b1e2a2c88a031f9786ebab0937689f632fedd687ff0b11e6aa580c344d7fd  app/src/main/java/app/ownplay/mobile/feature/playback/data/PlaybackPreferencesRepositoryImpl.kt
-fd0ebabb1f8aa9695a534460ef0e0643534c8ee16de9095ee0e335e9295e4e4a  app/src/main/java/app/ownplay/mobile/feature/playback/data/SourceBackedCatchUpPlaybackMediaResolver.kt
+453897e703762398b2ac7d99667829527d375134385f8c99e1c769b627fcaabb  app/src/main/java/app/ownplay/mobile/feature/playback/data/SourceBackedCatchUpPlaybackMediaResolver.kt
 b6f9d34b80d192b6073a8acadf4d7a03e90219bd52386c8eb77e32a98568ee40  app/src/main/java/app/ownplay/mobile/feature/playback/data/SourceBackedLivePlaybackSourceResolver.kt
 86b7857ed48f29b19d78a3e67b095f5c2dc4770293f076b220d10c4dd77eb8d1  app/src/main/java/app/ownplay/mobile/feature/playback/data/XtreamPlaybackFormatPolicy.kt
 7f744b35c428d887a86a44b118fb791f0aa6b4022c06e7dcfadb784f0d5a2a0a  app/src/main/java/app/ownplay/mobile/feature/playback/domain/LiveFullscreenOrientationEntryPolicy.kt
@@ -138,7 +138,7 @@ b43aaca784469a9b5c5bf84f8955d87f56ef9c57e8a808f410908511cd22885d  app/src/main/j
 e8e74e6647b566a68a709bc9bf70c66db4db1743363176906aa1104aa126f2a1  app/src/main/java/app/ownplay/mobile/feature/settings/domain/DisplayPreferences.kt
 dd003be5e589363734946b6371bfbf5fa19d39c184b2247295af5ea6f42dcd45  app/src/main/java/app/ownplay/mobile/feature/settings/domain/SourceRefreshSettings.kt
 571fb859abaebc7aaf2e868b0fbca032176990b986fb8ed2d953f365fce1d8f4  app/src/main/java/app/ownplay/mobile/feature/settings/ui/BackupRestoreSettingsSection.kt
-ab9566b22d0eb7ff45dc4b6d7958caa0a17585670d352113c43f1cfd9a05e49e  app/src/main/java/app/ownplay/mobile/feature/settings/ui/SettingsScreen.kt
+f560ad06e343092d5e94f609c7d25b37089b079657c7ad7dab8529e77a687e23  app/src/main/java/app/ownplay/mobile/feature/settings/ui/SettingsScreen.kt
 b69c76474f77a2aa3634bda5a20d72b2295ba7db9697c032c5af9a7471083284  app/src/main/java/app/ownplay/mobile/sources/data/CatalogRefreshStore.kt
 93af432581f52e5d100954d5c80714750b35c9de97b6080846463cbb00b63cf3  app/src/main/java/app/ownplay/mobile/sources/data/M3uIdentityReconciliation.kt
 3edb1003cf0fd70de4e092100acb1728e773a1d9f8541c3a43f251d4ec8bf497  app/src/main/java/app/ownplay/mobile/sources/data/OkHttpProviderTransport.kt
@@ -149,9 +149,11 @@ e717dd3913b0aae74067e21ab39f9e474b4383242ad400ffa71e4621784fb44e  app/src/main/j
 535ac2d4393557e03cef21716ac3871c5d54aa844bc820ae7682205232f2ba3f  app/src/main/java/app/ownplay/mobile/sources/data/SourceLocatorPolicy.kt
 279b2beeadb2aab81dec144e9836e9fc888f5b750e8f8d9ba53d0db7da1c9f74  app/src/main/java/app/ownplay/mobile/sources/data/SourceRepositoryImpl.kt
 0a18abebd82bc4f9d983ed8da4480f639db69659c9fc619b69b55740b15d5494  app/src/main/java/app/ownplay/mobile/sources/data/StableIdentity.kt
+93369710eb600c445956ee11ae48b85335de2b9976fe52f95fc5ff8c6718aa1b  app/src/main/java/app/ownplay/mobile/sources/data/m3u/M3uCatchUp.kt
 e03cfe9c6c7de21bd4a37fdd966f2d298285c04fd7bbaf9a74f9c10a71da3722  app/src/main/java/app/ownplay/mobile/sources/data/m3u/M3uClient.kt
-adb547a526771ab7a9841e49d9ce097bfb74ba996e755c6d408fedd2e68897ac  app/src/main/java/app/ownplay/mobile/sources/data/m3u/M3uModels.kt
-998182d1e502807bb4bf5ad9346b7211c2bb2659a818250c611163fa236da3ad  app/src/main/java/app/ownplay/mobile/sources/data/m3u/M3uParser.kt
+9b45c4bf62f7ca3ec85ef3db7079048eb069ceaec969954281c6f5a4e453e893  app/src/main/java/app/ownplay/mobile/sources/data/m3u/M3uModels.kt
+e1fc145ecf6f18bf0b41c74d066a0bdcc4e27bafa525970e6f1bbc040aa141c8  app/src/main/java/app/ownplay/mobile/sources/data/m3u/M3uParser.kt
+0489f0701db4f355483bfaa2299f4170715e96355fa372a9181fa845e0d395a8  app/src/main/java/app/ownplay/mobile/sources/data/m3u/M3uXmltv.kt
 cec865d37747abdfd9e043b419431a0274701eee2021bb155664ea5aaeb39881  app/src/main/java/app/ownplay/mobile/sources/data/xtream/XtreamClient.kt
 8e25c9baeb95fc65aaaa1c8cfdebad201c41fc401f028db681664add331d0c5f  app/src/main/java/app/ownplay/mobile/sources/data/xtream/XtreamEpgTextPolicy.kt
 59c19507b4f59ccd06851962dc239fbba2927f2bdaf278b6a27fe2b16c150172  app/src/main/java/app/ownplay/mobile/sources/data/xtream/XtreamLiveCategoryAttribution.kt
@@ -187,7 +189,7 @@ e2b80cdc32413992b41b3251d5c024e4974323ec2a8cc549a331cbb835a56cde  app/src/test/j
 89be3a40c2107455b9806a6ec7cb703dfc31d3d3e3382c24e11b1ae90f8275c6  app/src/test/java/app/ownplay/mobile/downloads/data/DownloadQueueCoordinatorTest.kt
 ce9d96b2223b56561091a6fedc4119367f86d52fec9fb28155f3bcd0a7722763  app/src/test/java/app/ownplay/mobile/downloads/data/DownloadTestStore.kt
 3b8575467513e53d86246cdc82c47aa4fc32832faf9d515ff6b7fdc4026bfa84  app/src/test/java/app/ownplay/mobile/downloads/data/DownloadedMediaVerifierTest.kt
-ceb05a4435cfd0673c3b98ab7e437f80f3702220d4a9073676032761edd4f02a  app/src/test/java/app/ownplay/mobile/downloads/data/ManagedSourceRemovalDownloadCoordinatorTest.kt
+f89cf158cb090920a33570f57d1ed7a1d865c291f3c6fee62b6c49ef0503b93f  app/src/test/java/app/ownplay/mobile/downloads/data/ManagedSourceRemovalDownloadCoordinatorTest.kt
 48aa206d3c52246b17f3bd4edccef972392453031d59c5151a2f6fa9681ba86a  app/src/test/java/app/ownplay/mobile/downloads/data/ResolvedDownloadMediaTest.kt
 f03bd19ce18a3202e758ff4222b5dfd325c42a4f6272e6b829d00603f4772c63  app/src/test/java/app/ownplay/mobile/downloads/data/WorkManagedDownloadRepositoryTest.kt
 357e7f5ad63f44fab353a4b596171d7c4387754f8bd9d71fd47eaac3f78a96a5  app/src/test/java/app/ownplay/mobile/downloads/domain/DownloadActionHandlerTest.kt
@@ -250,7 +252,9 @@ b7598acd28f1f2eb05c961cedb77cb422605e86807c9058c339ae66f73fb9566  app/src/test/j
 ec8671c6c45ee04fb501f35520d8ca1c30d7da8a1dc99a24091f055ce80deebf  app/src/test/java/app/ownplay/mobile/sources/data/SourceRepositoryImplTest.kt
 596cdcbc5b67af40c6c74cd82e098fe869c23f0221e4ecc490251b72857dec06  app/src/test/java/app/ownplay/mobile/sources/data/StableIdentityTest.kt
 61792547144519a623400e317e9cac1a9f8dd95e953d0c20d6cef781c8414936  app/src/test/java/app/ownplay/mobile/sources/data/XtreamLiveCategoryRecoveryTest.kt
-0e9a1fb4c3927c2ce97dd6e03cb3e06c804eb51f0643c56f286fb6236684c70d  app/src/test/java/app/ownplay/mobile/sources/data/m3u/M3uParserTest.kt
+1af7343e7c771fb97c8eab5d3d990efda38102a0b5238401eb5779a12fd6deb7  app/src/test/java/app/ownplay/mobile/sources/data/m3u/M3uCatchUpTest.kt
+45d14ed795dc32d57eff3fa2b79d90f5a090a36dd2a5cef72468c450aa9f2fb6  app/src/test/java/app/ownplay/mobile/sources/data/m3u/M3uParserTest.kt
+1dbba86e07fc7eff2f25eaff05e752f45aeace6fec1fde9238a1eb37ff2e9376  app/src/test/java/app/ownplay/mobile/sources/data/m3u/M3uXmltvTest.kt
 ca92805c3a7a0325adb7373ded089ac99c2558640685285489b55e34b3e93b25  app/src/test/java/app/ownplay/mobile/sources/data/xtream/XtreamEpgTextPolicyTest.kt
 73a92b29514237167136c4d9884fff26be5e013c77bc80f3f774b484a5395d38  app/src/test/java/app/ownplay/mobile/sources/data/xtream/XtreamLiveStreamIdentityTest.kt
 1fbb294d89f8973c1102cf266c60793d8e89a05d6c7d8ad51272deef200bc8c1  app/src/test/java/app/ownplay/mobile/sources/data/xtream/XtreamPayloadParserTest.kt
