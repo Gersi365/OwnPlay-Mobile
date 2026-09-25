@@ -533,6 +533,7 @@ private fun SettingsSourcesScreen(
     reconnectSource?.let { source ->
         ReconnectSourceDialog(
             source = source,
+            submitting = source.sourceId.value in busyIds,
             onDismiss = { reconnectSource = null },
             onSubmit = { input ->
                 runForSource(source) {
@@ -1859,6 +1860,7 @@ private fun M3uSourceDialog(
 @Composable
 private fun ReconnectSourceDialog(
     source: SourceSummary,
+    submitting: Boolean,
     onDismiss: () -> Unit,
     onSubmit: (SourceReconnectInput) -> Unit,
 ) {
@@ -1869,6 +1871,7 @@ private fun ReconnectSourceDialog(
             var password by remember(source.sourceId) { mutableStateOf("") }
             SourceInputDialog(
                 title = "Reconnect Xtream source",
+                submitting = submitting,
                 onDismiss = onDismiss,
                 onConfirm = {
                     onSubmit(SourceReconnectInput.Xtream(server, username, password))
@@ -1876,11 +1879,24 @@ private fun ReconnectSourceDialog(
                 confirmLabel = "Reconnect",
             ) {
                 Text("Saved credentials are never redisplayed. Enter them again to enable this restored source.")
-                OutlinedTextField(server, { server = it }, label = { Text("Server URL") }, singleLine = true)
-                OutlinedTextField(username, { username = it }, label = { Text("Username") }, singleLine = true)
+                OutlinedTextField(
+                    server,
+                    { server = it },
+                    enabled = !submitting,
+                    label = { Text("Server URL") },
+                    singleLine = true,
+                )
+                OutlinedTextField(
+                    username,
+                    { username = it },
+                    enabled = !submitting,
+                    label = { Text("Username") },
+                    singleLine = true,
+                )
                 OutlinedTextField(
                     password,
                     { password = it },
+                    enabled = !submitting,
                     label = { Text("Password") },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
@@ -1892,6 +1908,7 @@ private fun ReconnectSourceDialog(
             var playlist by remember(source.sourceId) { mutableStateOf(source.connectionLabel) }
             SourceInputDialog(
                 title = "Reconnect M3U source",
+                submitting = submitting,
                 onDismiss = onDismiss,
                 onConfirm = {
                     onSubmit(
@@ -1904,7 +1921,13 @@ private fun ReconnectSourceDialog(
                 confirmLabel = "Reconnect",
             ) {
                 Text("Private playlist parameters are never restored from backup. Enter the playlist URL again if required.")
-                OutlinedTextField(playlist, { playlist = it }, label = { Text("Playlist URL") }, singleLine = true)
+                OutlinedTextField(
+                    playlist,
+                    { playlist = it },
+                    enabled = !submitting,
+                    label = { Text("Playlist URL") },
+                    singleLine = true,
+                )
                 Text(
                     "XMLTV / EPG is not used by this build.",
                     color = OwnPlayColors.TextSecondary,
