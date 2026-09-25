@@ -66,6 +66,7 @@ fun OwnPlayApp(
         mutableStateOf<DownloadDetailsNavigation?>(null)
     }
     var returnToDownloadsAfterDetail by rememberSaveable { mutableStateOf(false) }
+    var openSourcesRequested by rememberSaveable { mutableStateOf(false) }
     val activeDownloadDetailsNavigation =
         internalDownloadDetailsNavigation ?: downloadDetailsNavigation
 
@@ -159,12 +160,14 @@ fun OwnPlayApp(
                 AppDestination.LIVE -> LiveScreen(
                     modifier = modifier,
                     onOpenSettings = {
+                        openSourcesRequested = true
                         selectedName = AppDestination.SETTINGS.name
                     },
                 )
                 AppDestination.LIBRARY -> LibraryScreen(
                     modifier = modifier,
                     onOpenSettings = {
+                        openSourcesRequested = true
                         selectedName = AppDestination.SETTINGS.name
                     },
                     openDownloadDetails = activeDownloadDetailsNavigation,
@@ -200,11 +203,22 @@ fun OwnPlayApp(
                         returnToDownloadsAfterDetail = true
                         selectedName = AppDestination.LIBRARY.name
                     },
+                    onOpenSettings = {
+                        openSourcesRequested = true
+                        selectedName = AppDestination.SETTINGS.name
+                    },
                 )
                 AppDestination.SETTINGS -> SettingsScreen(
                     modifier = modifier,
-                    openSources = sourceSettingsNavigation != null,
-                    onOpenSourcesConsumed = onSourceSettingsNavigationConsumed,
+                    openSources = sourceSettingsNavigation != null || openSourcesRequested,
+                    onOpenSourcesConsumed = {
+                        if (openSourcesRequested) {
+                            openSourcesRequested = false
+                        }
+                        if (sourceSettingsNavigation != null) {
+                            onSourceSettingsNavigationConsumed()
+                        }
+                    },
                 )
             }
         }

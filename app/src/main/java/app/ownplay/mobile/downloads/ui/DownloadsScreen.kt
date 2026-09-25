@@ -49,6 +49,7 @@ fun DownloadsScreen(
     modifier: Modifier = Modifier,
     onPlaybackStarted: () -> Unit = {},
     onOpenDetails: (DownloadDetailsNavigation) -> Unit = {},
+    onOpenSettings: () -> Unit = {},
 ) {
     val application = LocalContext.current.applicationContext as OwnPlayApplication
     val services = remember(application) { application.services }
@@ -63,6 +64,8 @@ fun DownloadsScreen(
             title = "Downloads",
             message = "Add or select a source in Settings to manage offline media.",
             modifier = modifier,
+            actionLabel = "Open Settings",
+            onAction = onOpenSettings,
         )
         return
     }
