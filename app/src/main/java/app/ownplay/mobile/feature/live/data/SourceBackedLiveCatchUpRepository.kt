@@ -19,7 +19,7 @@ import app.ownplay.mobile.sources.domain.SourceId
 import app.ownplay.mobile.sources.domain.SourceType
 import kotlinx.coroutines.CancellationException
 
-class SourceBackedLiveCatchUpRepository(
+class SourceBackedLiveCatchUpRepository internal constructor(
     private val sourceDao: SourceDao,
     private val liveOrganizationDao: LiveOrganizationDao,
     private val libraryDao: LibraryDao,
