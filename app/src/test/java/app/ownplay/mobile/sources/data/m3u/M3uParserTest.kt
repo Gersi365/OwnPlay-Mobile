@@ -50,6 +50,22 @@ class M3uParserTest {
     }
 
     @Test
+    fun `parses provider catch up metadata`() {
+        val result = M3uParser.parse(
+            """
+            #EXTM3U
+            #EXTINF:-1 tvg-id="news.al" catchup="default" catchup-days="7" catchup-source="https://archive.example.com/{utc}/{duration}.ts",News
+            https://stream.example.com/live.ts
+            """.trimIndent(),
+        )
+
+        val entry = result.entries.single()
+        assertEquals("default", entry.catchUpMode)
+        assertEquals(7, entry.catchUpDays)
+        assertEquals("https://archive.example.com/{utc}/{duration}.ts", entry.catchUpSource)
+    }
+
+    @Test
     fun `skips stream schemes without configured playback modules`() {
         val result = M3uParser.parse(
             """

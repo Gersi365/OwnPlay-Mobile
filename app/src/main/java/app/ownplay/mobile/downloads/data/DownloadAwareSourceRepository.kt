@@ -8,6 +8,7 @@ import app.ownplay.mobile.sources.domain.SourceRepository
 
 internal data class SourceRemovalDownloadPlan(
     val downloadIds: List<DownloadId>,
+    val publishedReferences: List<String> = emptyList(),
 )
 
 internal interface SourceRemovalDownloadCoordinator {
@@ -26,8 +27,16 @@ internal class ManagedSourceRemovalDownloadCoordinator(
 ) : SourceRemovalDownloadCoordinator {
     override suspend fun capture(sourceId: SourceId): SourceRemovalDownloadPlan? =
         runCatching {
+            val downloadIds = downloadDao.getIdsForSource(sourceId.value).map(::DownloadId)
+            val publishedReferences = downloadIds.mapNotNull { downloadId ->
+                val row = downloadDao.get(downloadId.value) ?: return@mapNotNull null
+                row.localReference
+                    ?.takeIf(String::isNotBlank)
+                    ?.takeIf { row.state == DownloadStatus.COMPLETED.name }
+            }.distinct()
             SourceRemovalDownloadPlan(
-                downloadIds = downloadDao.getIdsForSource(sourceId.value).map(::DownloadId),
+                downloadIds = downloadIds,
+                publishedReferences = publishedReferences,
             )
         }.getOrNull()
 
@@ -61,6 +70,9 @@ internal class ManagedSourceRemovalDownloadCoordinator(
             runCatching { storage.discardPending(downloadId) }
             runCatching { notifications.cancelAll(downloadId) }
             runCatching { destinationAssignments.remove(downloadId) }
+        }
+        plan.publishedReferences.forEach { localReference ->
+            runCatching { storage.removePublished(localReference) }
         }
     }
 }

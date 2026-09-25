@@ -71,8 +71,10 @@ import app.ownplay.mobile.sources.data.OkHttpProviderTransport
 import app.ownplay.mobile.sources.data.ProviderTransport
 import app.ownplay.mobile.sources.data.RoomCatalogRefreshStore
 import app.ownplay.mobile.sources.data.SourceRepositoryImpl
+import app.ownplay.mobile.sources.data.m3u.M3uCatchUpResolver
 import app.ownplay.mobile.sources.data.m3u.M3uClient
 import app.ownplay.mobile.sources.data.m3u.OkHttpM3uClient
+import app.ownplay.mobile.sources.data.m3u.OkHttpM3uXmltvClient
 import app.ownplay.mobile.sources.data.xtream.OkHttpXtreamClient
 import app.ownplay.mobile.sources.data.xtream.XtreamClient
 import app.ownplay.mobile.sources.domain.SourceRepository
@@ -117,6 +119,8 @@ class OwnPlayServices private constructor(
             val credentialStore = KeystoreCredentialStore(applicationContext)
             val transport = OkHttpProviderTransport()
             val m3uClient = OkHttpM3uClient(transport)
+            val m3uXmltvClient = OkHttpM3uXmltvClient(transport)
+            val m3uCatchUpResolver = M3uCatchUpResolver(m3uClient)
             val xtreamClient = OkHttpXtreamClient(transport)
             val sourceDao = database.sourceDao()
             val refreshStateDao = database.refreshStateDao()
@@ -142,6 +146,7 @@ class OwnPlayServices private constructor(
                 liveOrganizationDao = liveOrganizationDao,
                 credentialStore = credentialStore,
                 xtreamClient = xtreamClient,
+                m3uXmltvClient = m3uXmltvClient,
             )
             val liveCatchUpRepository = SourceBackedLiveCatchUpRepository(
                 sourceDao = sourceDao,
@@ -149,6 +154,8 @@ class OwnPlayServices private constructor(
                 libraryDao = libraryDao,
                 credentialStore = credentialStore,
                 xtreamClient = xtreamClient,
+                m3uXmltvClient = m3uXmltvClient,
+                m3uCatchUpResolver = m3uCatchUpResolver,
             )
             val libraryDetailRefresher = SourceBackedLibrarySeriesDetailRefresher(
                 sourceDao = sourceDao,
@@ -287,6 +294,7 @@ class OwnPlayServices private constructor(
                 liveOrganizationDao = liveOrganizationDao,
                 credentialStore = credentialStore,
                 xtreamClient = xtreamClient,
+                m3uCatchUpResolver = m3uCatchUpResolver,
             )
             val catchUpProgressStore = RoomLiveCatchUpPlaybackProgressStore(libraryDao)
             val playbackEngine = Media3PlaybackEngine(applicationContext)

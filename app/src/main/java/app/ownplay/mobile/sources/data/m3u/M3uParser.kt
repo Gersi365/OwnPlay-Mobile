@@ -36,7 +36,7 @@ object M3uParser {
                 line.startsWith("#") -> Unit
 
                 pending != null -> {
-                    val metadata = pending
+                    val metadata = pending ?: return@forEach
                     if (isSupportedStreamLocator(line)) {
                         entries += M3uEntry(
                             name = metadata.name,
@@ -45,6 +45,9 @@ object M3uParser {
                             tvgName = metadata.attributes["tvg-name"].normalizedOrNull(),
                             logoUrl = metadata.attributes["tvg-logo"].normalizedOrNull(),
                             streamUrl = line,
+                            catchUpMode = metadata.attributes["catchup"].normalizedOrNull(),
+                            catchUpDays = metadata.attributes["catchup-days"].normalizedPositiveIntOrNull(),
+                            catchUpSource = metadata.attributes["catchup-source"].normalizedOrNull(),
                         )
                     } else {
                         skipped += 1
@@ -110,6 +113,9 @@ object M3uParser {
 
     private fun String?.normalizedOrNull(): String? =
         this?.trim()?.takeIf(String::isNotBlank)
+
+    private fun String?.normalizedPositiveIntOrNull(): Int? =
+        this?.trim()?.toIntOrNull()?.takeIf { it > 0 }
 
     private data class PendingEntry(
         val name: String,
