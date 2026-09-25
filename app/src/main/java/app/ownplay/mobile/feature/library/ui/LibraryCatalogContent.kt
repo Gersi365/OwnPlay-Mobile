@@ -41,7 +41,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.ownplay.mobile.design.OwnPlayColors
 import app.ownplay.mobile.design.OwnPlayShapes
-import app.ownplay.mobile.design.ProviderCategoryDisplayPolicy
 import app.ownplay.mobile.feature.library.data.LibraryArtworkLoader
 import app.ownplay.mobile.feature.library.domain.LibraryBrowsePolicy
 import app.ownplay.mobile.feature.library.domain.LibraryCatalogSnapshot
@@ -110,30 +109,14 @@ internal fun LibraryCatalogContent(
 
     val movieCategory = catalog.movieCategories.firstOrNull { it.categoryId == movieCategoryId }
     val seriesCategory = catalog.seriesCategories.firstOrNull { it.categoryId == seriesCategoryId }
-    val movieCategoryLabelById = remember(
-        catalog.movieCategories,
-        showCategoryFlags,
-        hideCategoryPrefix,
-    ) {
+    val movieCategoryLabelById = remember(catalog.movieCategories) {
         catalog.movieCategories.associate { category ->
-            category.categoryId to ProviderCategoryDisplayPolicy.label(
-                rawName = category.displayName,
-                hideRegionPrefix = hideCategoryPrefix,
-                showFlag = showCategoryFlags,
-            )
+            category.categoryId to category.displayName
         }
     }
-    val seriesCategoryLabelById = remember(
-        catalog.seriesCategories,
-        showCategoryFlags,
-        hideCategoryPrefix,
-    ) {
+    val seriesCategoryLabelById = remember(catalog.seriesCategories) {
         catalog.seriesCategories.associate { category ->
-            category.categoryId to ProviderCategoryDisplayPolicy.label(
-                rawName = category.displayName,
-                hideRegionPrefix = hideCategoryPrefix,
-                showFlag = showCategoryFlags,
-            )
+            category.categoryId to category.displayName
         }
     }
     val hasMovieCategories = catalog.movieCategories.isNotEmpty()
@@ -1242,11 +1225,11 @@ private fun providerLibraryLabel(
     rawName: String,
     showProviderFlags: Boolean,
     hideProviderPrefix: Boolean,
-): String = ProviderCategoryDisplayPolicy.label(
-    rawName = rawName,
-    hideRegionPrefix = hideProviderPrefix,
-    showFlag = showProviderFlags,
-)
+): String {
+    @Suppress("UNUSED_VARIABLE")
+    val providerPresentationCompatibility = showProviderFlags to hideProviderPrefix
+    return rawName
+}
 
 private fun libraryContinueWatchingTitle(
     item: LibraryContinueWatchingItem,
