@@ -156,9 +156,17 @@ fun OwnPlayApp(
             key = "destination:" + selected.name,
         ) {
             when (selected) {
-                AppDestination.LIVE -> LiveScreen(modifier)
+                AppDestination.LIVE -> LiveScreen(
+                    modifier = modifier,
+                    onOpenSettings = {
+                        selectedName = AppDestination.SETTINGS.name
+                    },
+                )
                 AppDestination.LIBRARY -> LibraryScreen(
                     modifier = modifier,
+                    onOpenSettings = {
+                        selectedName = AppDestination.SETTINGS.name
+                    },
                     openDownloadDetails = activeDownloadDetailsNavigation,
                     onDownloadDetailsNavigationConsumed = {
                         if (internalDownloadDetailsNavigation != null) {
