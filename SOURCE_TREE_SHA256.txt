@@ -120,7 +120,7 @@ d5016772756affe0a03af001660edcfc188cbbc476f52e9691461a3273b8c1fc  app/src/main/j
 9b12cd75c9ac6d182a875b5d06a3b512e17bdb335d1be50e42aedbb763830eec  app/src/main/java/app/ownplay/mobile/feature/playback/domain/PlaybackSessionController.kt
 86978d5aeb38d1cf3fc513d3ceb20ef661da565a78f28eb2bf19870a61e9bad0  app/src/main/java/app/ownplay/mobile/feature/playback/domain/PlaybackSessionModels.kt
 090817bef93595913cb78f0a26e6e00124a8ffc0f3a94463a40af69f0b0c28e1  app/src/main/java/app/ownplay/mobile/feature/playback/ui/FullscreenPlaybackWindow.kt
-8f3dcec8218c54a71212a8ff33ecfe3602c3146d4316b31d028090fb68f54eb8  app/src/main/java/app/ownplay/mobile/feature/playback/ui/PlaybackTrackControlsOverlay.kt
+e4e633b642048bde9b10369407ef51bde4fa1205e649d6a79f731d1f5b5869a0  app/src/main/java/app/ownplay/mobile/feature/playback/ui/PlaybackTrackControlsOverlay.kt
 0f438156be0c746bbe3b63c3c2f66e1f0edb86e5c397ad2c3531f537ec8a5c38  app/src/main/java/app/ownplay/mobile/feature/playback/ui/PlaybackVideoSurface.kt
 5608a45b529cfe9e0614a370a3bcf746ef5fe49658bc44b64d90df7ba38b8ba0  app/src/main/java/app/ownplay/mobile/feature/settings/backup/data/BackupJsonCodec.kt
 3d52d0291984abd86ed891651e7283061207c39b654ca1d7b1f4c45ada9838cc  app/src/main/java/app/ownplay/mobile/feature/settings/backup/data/BackupPreferenceGateway.kt
