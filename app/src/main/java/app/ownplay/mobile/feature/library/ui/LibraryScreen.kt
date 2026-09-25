@@ -53,7 +53,6 @@ import app.ownplay.mobile.MainActivity
 import app.ownplay.mobile.OwnPlayApplication
 import app.ownplay.mobile.design.OwnPlayColors
 import app.ownplay.mobile.design.OwnPlayShapes
-import app.ownplay.mobile.design.ProviderCategoryDisplayPolicy
 import app.ownplay.mobile.downloads.domain.DownloadDetailsNavigation
 import app.ownplay.mobile.downloads.domain.DownloadId
 import app.ownplay.mobile.downloads.domain.DownloadRepository
@@ -566,6 +565,9 @@ private fun LibrarySeriesDetailScreen(
     onBack: () -> Unit,
     modifier: Modifier,
 ) {
+    @Suppress("UNUSED_VARIABLE")
+    val providerPresentationCompatibility = showProviderFlags to hideProviderPrefix
+
     val detailFlow = remember(repository, source.sourceId, seriesId) {
         repository.observeSeriesDetail(source.sourceId, seriesId)
     }
@@ -636,13 +638,7 @@ private fun LibrarySeriesDetailScreen(
     }
 
     val currentDetail = detail
-    val seriesDisplayTitle = currentDetail?.series?.title?.let { rawTitle ->
-        ProviderCategoryDisplayPolicy.label(
-            rawName = rawTitle,
-            hideRegionPrefix = hideProviderPrefix,
-            showFlag = showProviderFlags,
-        )
-    }
+    val seriesDisplayTitle = currentDetail?.series?.title
     val orderedSeasons = remember(currentDetail) {
         currentDetail?.seasons.orEmpty().sortedBy { it.seasonNumber }
     }
