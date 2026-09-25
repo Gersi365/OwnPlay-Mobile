@@ -22,6 +22,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -160,6 +161,7 @@ private fun SettingsHomeScreen(
                 Text(
                     "Settings",
                     color = OwnPlayColors.TextPrimary,
+                    style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                 )
                 Text(
@@ -1027,6 +1029,9 @@ private fun ProviderLiveManagementDialog(
         management.channels.filter { it.categoryId == category.categoryId }
     }.orEmpty()
     val globalManagementMode = searchQuery.isNotBlank() || filter != ProviderManagementFilter.ALL
+    val channelCountByCategory = remember(management.channels) {
+        management.channels.groupingBy { it.categoryId }.eachCount()
+    }
     val globalChannels = management.channels.filter { channel ->
         val label = channel.localName
             ?: channel.tvgName?.takeIf(String::isNotBlank)
@@ -1058,7 +1063,14 @@ private fun ProviderLiveManagementDialog(
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    label = { Text("Search channels") },
+                    label = { Text("Search all provider channels") },
+                    trailingIcon = {
+                        if (searchQuery.isNotBlank()) {
+                            TextButton(onClick = { searchQuery = "" }) {
+                                Text("Clear")
+                            }
+                        }
+                    },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -1068,9 +1080,10 @@ private fun ProviderLiveManagementDialog(
                 ) {
                     ProviderManagementFilter.entries.forEach { option ->
                         TextButton(
-                            enabled = option != filter,
                             onClick = { filterName = option.name },
-                        ) { Text(option.label) }
+                        ) {
+                            Text(if (option == filter) option.label + " ✓" else option.label)
+                        }
                     }
                 }
                 LazyColumn(
@@ -1141,6 +1154,10 @@ private fun ProviderLiveManagementDialog(
                         ) { index, category ->
                             ProviderManagementRow(
                                 title = category.displayName,
+                                subtitle = (channelCountByCategory[category.categoryId] ?: 0).let { count ->
+                                    if (count == 1) "1 channel" else "$count channels"
+                                },
+                                position = index + 1,
                                 hidden = category.hidden,
                                 onToggleHidden = {
                                     scope.launch {
@@ -1192,6 +1209,7 @@ private fun ProviderLiveManagementDialog(
                         ) { index, channel ->
                             ProviderManagementRow(
                                 title = channel.tvgName?.takeIf(String::isNotBlank) ?: channel.name,
+                                position = index + 1,
                                 hidden = channel.hidden,
                                 onToggleHidden = {
                                     scope.launch {
@@ -1329,6 +1347,8 @@ private fun movedProviderIds(
 @Composable
 private fun ProviderManagementRow(
     title: String,
+    subtitle: String? = null,
+    position: Int? = null,
     hidden: Boolean,
     onToggleHidden: () -> Unit,
     onMoveUp: (() -> Unit)?,
@@ -1351,12 +1371,36 @@ private fun ProviderManagementRow(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(
-                    text = title,
-                    color = if (hidden) OwnPlayColors.TextMuted else OwnPlayColors.TextPrimary,
-                    fontWeight = FontWeight.SemiBold,
+                if (position != null) {
+                    Surface(
+                        shape = OwnPlayShapes.Small,
+                        color = OwnPlayColors.SurfaceRaised,
+                    ) {
+                        Text(
+                            text = position.toString(),
+                            color = OwnPlayColors.TextSecondary,
+                            style = MaterialTheme.typography.labelMedium,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        )
+                    }
+                }
+                Column(
                     modifier = Modifier.weight(1f),
-                )
+                    verticalArrangement = Arrangement.spacedBy(1.dp),
+                ) {
+                    Text(
+                        text = title,
+                        color = if (hidden) OwnPlayColors.TextMuted else OwnPlayColors.TextPrimary,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    subtitle?.takeIf(String::isNotBlank)?.let { value ->
+                        Text(
+                            text = value,
+                            color = OwnPlayColors.TextMuted,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
                 TextButton(
                     onClick = onToggleHidden,
                     modifier = Modifier
@@ -1378,7 +1422,7 @@ private fun ProviderManagementRow(
                             .heightIn(min = 34.dp)
                             .semantics { contentDescription = "Move $title up" },
                         contentPadding = compactButtonPadding,
-                    ) { Text("↑ Up") }
+                    ) { Text("↑") }
                 }
                 if (onMoveDown != null) {
                     TextButton(
@@ -1387,7 +1431,7 @@ private fun ProviderManagementRow(
                             .heightIn(min = 34.dp)
                             .semantics { contentDescription = "Move $title down" },
                         contentPadding = compactButtonPadding,
-                    ) { Text("↓ Down") }
+                    ) { Text("↓") }
                 }
                 if (onOpen != null) {
                     TextButton(
