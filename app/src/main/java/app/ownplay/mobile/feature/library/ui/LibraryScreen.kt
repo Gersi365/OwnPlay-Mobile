@@ -998,3 +998,599 @@ private fun LibrarySeriesDetailScreen(
                                 LibraryMovieDetailPresentation.runtimeLabel(episode.durationMs),
                             ).joinToString(" • "),
                             description = null,
+                            supportingLine = seriesDisplayTitle ?: currentDetail.series.title,
+                            actions = {
+                                Button(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    onClick = {
+                                        scope.launch {
+                                            playbackSessionController.activateLibraryMedia(
+                                                PlaybackTarget.Episode(
+                                                    sourceId = source.sourceId,
+                                                    episodeId = episode.episodeId,
+                                                    seriesId = currentDetail.series.seriesId,
+                                                ),
+                                            )
+                                        }
+                                    },
+                                ) {
+                                    Text(if (resumeAvailable) "Resume episode" else "Play episode")
+                                }
+                            },                        )
+                    }
+                    item(key = "episode-download:${episode.episodeId}") {
+                        LibraryDownloadActions(
+                            request = DownloadRequest(
+                                source.sourceId,
+                                DownloadMediaKind.EPISODE,
+                                episode.episodeId,
+                                episode.title,
+                            ),
+                            item = episodeDownloads[episode.episodeId],
+                            repository = downloadRepository,
+                            playbackSessionController = playbackSessionController,
+                            offlineResumeAvailable = hasOfflineResumeProgress(
+                                catalog.continueWatching,
+                                DownloadMediaKind.EPISODE,
+                                episode.episodeId,
+                            ),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LibrarySeriesMetadata(
+    detail: LibrarySeriesDetail,
+    displayTitle: String,
+    metadata: LibrarySeriesDetailMetadata?,
+    artworkLoader: LibraryArtworkLoader,
+    onFavorite: () -> Unit,
+) {
+    val metadataLine = listOfNotNull(
+        metadata?.year?.takeIf(String::isNotBlank),
+        metadata?.genre?.takeIf(String::isNotBlank),
+        (metadata?.rating ?: detail.series.rating)
+            ?.takeIf(String::isNotBlank)
+            ?.let { "★ $it" },
+    ).joinToString(" • ").takeIf(String::isNotBlank)
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        LibraryDetailHero(
+            title = displayTitle,
+            artworkUrl = metadata?.posterUrl ?: detail.series.posterUrl,
+            artworkLoader = artworkLoader,
+            metadataLine = metadataLine,
+            description = metadata?.plot ?: detail.series.description,
+            actions = {
+                FilledTonalButton(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = onFavorite,
+                ) {
+                    Text(if (detail.series.favorite) "Favorited" else "Favorite")
+                }
+            },
+        )
+
+        metadata?.cast?.let { cast ->
+            LibraryCastSection(cast = cast)
+        }
+    }
+}
+
+@Composable
+private fun LibraryMovieRow(
+    movie: LibraryMovieSummary,
+    categoryName: String?,
+    artworkLoader: LibraryArtworkLoader,
+    compact: Boolean,
+    onPlay: () -> Unit,
+    onDetails: () -> Unit,
+    onFavorite: () -> Unit,
+) {
+    LibraryMediaRow(
+        title = movie.title,
+        posterUrl = movie.posterUrl,
+        categoryName = categoryName,
+        rating = movie.rating,
+        favorite = movie.favorite,
+        artworkLoader = artworkLoader,
+        compact = compact,
+        primaryActionLabel = "Play",
+        onPrimaryAction = onPlay,
+        onFavorite = onFavorite,
+        secondaryActionLabel = "Details",
+        onSecondaryAction = onDetails,
+    )
+}
+
+@Composable
+private fun LibrarySeriesRow(
+    series: LibrarySeriesSummary,
+    categoryName: String?,
+    artworkLoader: LibraryArtworkLoader,
+    compact: Boolean,
+    onOpen: () -> Unit,
+    onFavorite: () -> Unit,
+) {
+    LibraryMediaRow(
+        title = series.title,
+        posterUrl = series.posterUrl,
+        categoryName = categoryName,
+        rating = series.rating,
+        favorite = series.favorite,
+        artworkLoader = artworkLoader,
+        compact = compact,
+        primaryActionLabel = "Open",
+        onPrimaryAction = onOpen,
+        onFavorite = onFavorite,
+    )
+}
+
+@Composable
+private fun LibraryMediaRow(
+    title: String,
+    posterUrl: String?,
+    categoryName: String?,
+    rating: String?,
+    favorite: Boolean,
+    artworkLoader: LibraryArtworkLoader,
+    compact: Boolean,
+    primaryActionLabel: String,
+    onPrimaryAction: () -> Unit,
+    onFavorite: () -> Unit,
+    secondaryActionLabel: String? = null,
+    onSecondaryAction: (() -> Unit)? = null,
+) {
+    Surface(
+        color = OwnPlayColors.Surface,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(
+                horizontal = if (compact) 10.dp else 12.dp,
+                vertical = if (compact) 6.dp else 8.dp,
+            ),
+            horizontalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 8.dp),
+        ) {
+            LibraryArtwork(
+                url = posterUrl,
+                loader = artworkLoader,
+                compact = compact,
+            )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    text = title,
+                    color = OwnPlayColors.TextPrimary,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                val metadata = listOfNotNull(
+                    categoryName,
+                    rating?.takeIf(String::isNotBlank)?.let { "Rating $it" },
+                ).joinToString(" • ")
+                if (metadata.isNotBlank()) {
+                    Text(text = metadata, color = OwnPlayColors.TextSecondary)
+                }
+                Row {
+                    TextButton(onClick = onPrimaryAction) {
+                        Text(primaryActionLabel)
+                    }
+                    if (secondaryActionLabel != null && onSecondaryAction != null) {
+                        TextButton(onClick = onSecondaryAction) {
+                            Text(secondaryActionLabel)
+                        }
+                    }
+                    TextButton(
+                        onClick = onFavorite,
+                        modifier = Modifier.semantics {
+                            contentDescription = if (favorite) "Remove favorite" else "Add favorite"
+                        },
+                    ) {
+                        Text(if (favorite) "★" else "☆")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun LibraryPlaybackFullscreenPresentation(
+    target: PlaybackTarget.Library,
+    seriesDetail: LibrarySeriesDetail?,
+    autoplayCancelled: Boolean,
+    playbackState: PlaybackSessionState,
+    playbackSessionController: PlaybackSessionController,
+    playbackEngine: Media3PlaybackEngine,
+    onPictureInPicture: () -> Unit,
+    onRetry: () -> Unit,
+    onAutoplayCancel: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val mediaKey = libraryPlaybackMediaKey(target)
+    val title = when (target) {
+        is PlaybackTarget.Movie -> "Movie playback"
+        is PlaybackTarget.Episode -> "Episode playback"
+    }
+
+    var contentMode by remember(mediaKey) { mutableStateOf(PlaybackVideoContentMode.FIT) }
+    var controlsVisible by remember(mediaKey) { mutableStateOf(true) }
+    var panelOpen by remember { mutableStateOf(false) }
+    var interactionRevision by remember { mutableIntStateOf(0) }
+    var positionMs by remember(mediaKey) { mutableLongStateOf(0L) }
+    var durationMs by remember(mediaKey) { mutableLongStateOf(0L) }
+    var dragging by remember { mutableStateOf(false) }
+    var dragFraction by remember { mutableFloatStateOf(0f) }
+    var seekFeedbackDeltaMs by remember { mutableLongStateOf(0L) }
+    val scope = rememberCoroutineScope()
+    val nextEpisode = remember(seriesDetail, target) {
+        val episodeTarget = target as? PlaybackTarget.Episode
+        if (
+            episodeTarget?.seriesId != null &&
+            seriesDetail?.series?.seriesId == episodeTarget.seriesId
+        ) {
+            LibraryEpisodeAutoplayPolicy.nextEpisode(seriesDetail, episodeTarget.episodeId)
+        } else {
+            null
+        }
+    }
+    val remainingMs = (durationMs - positionMs).coerceAtLeast(0L)
+    val autoplayCountdownSeconds =
+        if (
+            target is PlaybackTarget.Episode &&
+            nextEpisode != null &&
+            !autoplayCancelled &&
+            durationMs > 0L &&
+            !playbackState.endedNaturally
+        ) {
+            LibraryEpisodeAutoplayPolicy.countdownSeconds(remainingMs)
+        } else {
+            null
+        }
+
+    fun registerInteraction() {
+        controlsVisible = true
+        interactionRevision += 1
+    }
+
+    fun seekRelative(deltaMs: Long) {
+        val snapshot = playbackSessionController.positionSnapshot() ?: return
+        val duration = snapshot.durationMs?.takeIf { it > 0L } ?: return
+        val requested = (snapshot.positionMs + deltaMs).coerceIn(0L, duration)
+        if (playbackSessionController.seekTo(requested)) {
+            positionMs = requested
+            durationMs = duration
+            seekFeedbackDeltaMs =
+                if (seekFeedbackDeltaMs == 0L || (seekFeedbackDeltaMs > 0L) == (deltaMs > 0L)) {
+                    seekFeedbackDeltaMs + deltaMs
+                } else {
+                    deltaMs
+                }
+        }
+    }
+
+    LaunchedEffect(mediaKey, playbackState.readiness, playbackState.playWhenReady) {
+        while (true) {
+            val snapshot = playbackSessionController.positionSnapshot()
+            if (!dragging && snapshot != null) {
+                positionMs = snapshot.positionMs
+                durationMs = snapshot.durationMs ?: 0L
+            }
+            delay(500L)
+        }
+    }
+
+    LaunchedEffect(seekFeedbackDeltaMs) {
+        if (seekFeedbackDeltaMs != 0L) {
+            delay(900L)
+            seekFeedbackDeltaMs = 0L
+        }
+    }
+
+    LaunchedEffect(
+        playbackState.playWhenReady,
+        controlsVisible,
+        panelOpen,
+        interactionRevision,
+    ) {
+        if (playbackState.playWhenReady && controlsVisible && !panelOpen) {
+            delay(3_000L)
+            controlsVisible = false
+        } else if (!playbackState.playWhenReady) {
+            controlsVisible = true
+        }
+    }
+
+    BackHandler {
+        playbackSessionController.checkpointProgress()
+        onDismiss()
+    }
+
+    FullscreenPlaybackWindow(
+        onDismissRequest = {
+            playbackSessionController.checkpointProgress()
+            onDismiss()
+        },
+    ) {
+        Surface(
+            color = OwnPlayColors.Background,
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(mediaKey) {
+                        detectTapGestures(
+                            onTap = { registerInteraction() },
+                            onDoubleTap = { offset ->
+                                if (offset.x < size.width / 2f) {
+                                    seekRelative(-10_000L)
+                                } else {
+                                    seekRelative(10_000L)
+                                }
+                            },
+                        )
+                    },
+            ) {
+                PlaybackVideoSurface(
+                    playbackEngine = playbackEngine,
+                    contentMode = contentMode,
+                    showFullscreenControls = false,
+                    modifier = Modifier.fillMaxSize(),
+                )
+
+                if (controlsVisible || !playbackState.playWhenReady) {
+                    Surface(
+                        color = Color.Black.copy(alpha = 0.58f),
+                        shape = OwnPlayShapes.Medium,
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(12.dp)
+                            .fillMaxWidth(),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 10.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = title,
+                                color = OwnPlayColors.TextPrimary,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.weight(1f),
+                            )
+                            TextButton(
+                                onClick = {
+                                    contentMode = PlaybackVideoContentMode.FIT
+                                    registerInteraction()
+                                },
+                            ) {
+                                Text(if (contentMode == PlaybackVideoContentMode.FIT) "Fit ✓" else "Fit")
+                            }
+                            TextButton(
+                                onClick = {
+                                    contentMode = PlaybackVideoContentMode.FILL
+                                    registerInteraction()
+                                },
+                            ) {
+                                Text(if (contentMode == PlaybackVideoContentMode.FILL) "Fill ✓" else "Fill")
+                            }
+                            TextButton(
+                                enabled = playbackState.readiness == PlaybackReadiness.PREPARED,
+                                onClick = {
+                                    registerInteraction()
+                                    onPictureInPicture()
+                                },
+                            ) { Text("PiP") }
+                            TextButton(
+                                onClick = {
+                                    playbackSessionController.checkpointProgress()
+                                    onDismiss()
+                                },
+                            ) { Text("Back") }
+                        }
+                    }
+
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth(),
+                    ) {
+                        if (durationMs > 0L) {
+                            val shownPosition = if (dragging) {
+                                (dragFraction * durationMs).toLong()
+                            } else {
+                                positionMs.coerceIn(0L, durationMs)
+                            }
+                            Slider(
+                                value = shownPosition.toFloat() / durationMs.toFloat(),
+                                onValueChange = { value ->
+                                    dragging = true
+                                    dragFraction = value.coerceIn(0f, 1f)
+                                    registerInteraction()
+                                },
+                                onValueChangeFinished = {
+                                    val requested = (dragFraction * durationMs).toLong()
+                                    playbackSessionController.seekTo(requested)
+                                    positionMs = requested
+                                    dragging = false
+                                    registerInteraction()
+                                },
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                            )
+                            Text(
+                                text = "${formatPlaybackDuration(shownPosition)} / ${formatPlaybackDuration(durationMs)}",
+                                color = OwnPlayColors.TextSecondary,
+                                modifier = Modifier.padding(horizontal = 20.dp),
+                            )
+                        }
+
+                        PlaybackTrackControlsOverlay(
+                            state = playbackState,
+                            controller = playbackSessionController,
+                            showTransportControls = false,
+                            showSpeedControl = true,
+                            onInteraction = ::registerInteraction,
+                            onPanelVisibilityChanged = { open ->
+                                panelOpen = open
+                                if (!open) registerInteraction()
+                            },
+                        )
+                    }
+                }
+
+                if (
+                    (controlsVisible || !playbackState.playWhenReady) &&
+                    playbackState.readiness == PlaybackReadiness.PREPARED
+                ) {
+                    FilledTonalButton(
+                        onClick = {
+                            registerInteraction()
+                            if (playbackState.playWhenReady) {
+                                playbackSessionController.pause()
+                            } else {
+                                playbackSessionController.play()
+                            }
+                        },
+                        modifier = Modifier.align(Alignment.Center),
+                    ) {
+                        Text(if (playbackState.playWhenReady) "Pause" else "Play")
+                    }
+                }
+
+                if (autoplayCountdownSeconds != null) {
+                    Surface(
+                        color = OwnPlayColors.Surface,
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .padding(20.dp),
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Text(
+                                text = "Next episode in ${autoplayCountdownSeconds} sec",
+                                color = OwnPlayColors.TextPrimary,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                TextButton(
+                                    onClick = {
+                                        val episodeTarget = target as? PlaybackTarget.Episode
+                                        if (episodeTarget != null && nextEpisode != null) {
+                                            scope.launch {
+                                                playbackSessionController.activateLibraryMedia(
+                                                    PlaybackTarget.Episode(
+                                                        sourceId = episodeTarget.sourceId,
+                                                        episodeId = nextEpisode.episodeId,
+                                                        seriesId = episodeTarget.seriesId,
+                                                    ),
+                                                )
+                                            }
+                                        }
+                                    },
+                                ) { Text("Play now") }
+                                TextButton(onClick = onAutoplayCancel) {
+                                    Text("Cancel")
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (playbackState.readiness == PlaybackReadiness.PREPARING) {
+                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                }
+
+                if (playbackState.readiness == PlaybackReadiness.UNAVAILABLE) {
+                    Column(
+                        modifier = Modifier.align(Alignment.Center),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            text = if (target.offlineDownloadId != null) {
+                                "Offline playback is unavailable. The downloaded file may be missing or damaged."
+                            } else {
+                                "Playback is unavailable for this item."
+                            },
+                            color = OwnPlayColors.Error,
+                        )
+                        TextButton(onClick = onRetry) { Text("Retry") }
+                        TextButton(onClick = onDismiss) { Text("Back to details") }
+                    }
+                }
+
+                if (seekFeedbackDeltaMs != 0L) {
+                    val seconds = kotlin.math.abs(seekFeedbackDeltaMs / 1_000L)
+                    Text(
+                        text = if (seekFeedbackDeltaMs < 0L) "−${seconds} sec" else "+${seconds} sec",
+                        color = OwnPlayColors.TextPrimary,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.align(Alignment.Center),
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun LibrarySeriesMetadataLoadResult.toRefreshResult(): LibraryDetailRefreshResult =
+    when (this) {
+        is LibrarySeriesMetadataLoadResult.Loaded -> LibraryDetailRefreshResult.REFRESHED
+        LibrarySeriesMetadataLoadResult.Unavailable -> LibraryDetailRefreshResult.UNAVAILABLE
+        LibrarySeriesMetadataLoadResult.UnsupportedSource ->
+            LibraryDetailRefreshResult.UNSUPPORTED_SOURCE
+        LibrarySeriesMetadataLoadResult.Failed -> LibraryDetailRefreshResult.FAILED
+    }
+
+private sealed interface LibraryExternalOpenTarget {
+    val sourceId: SourceId
+
+    data class Movie(
+        override val sourceId: SourceId,
+        val movieId: String,
+    ) : LibraryExternalOpenTarget
+
+    data class Episode(
+        override val sourceId: SourceId,
+        val seriesId: String,
+        val episodeId: String,
+    ) : LibraryExternalOpenTarget
+}
+
+private fun libraryPlaybackMediaKey(target: PlaybackTarget.Library): String =
+    when (target) {
+        is PlaybackTarget.Movie ->
+            "movie:${target.movieId}:${target.offlineDownloadId.orEmpty()}"
+        is PlaybackTarget.Episode ->
+            "episode:${target.episodeId}:${target.offlineDownloadId.orEmpty()}:${target.seriesId.orEmpty()}"
+    }
+
+private fun formatPlaybackDuration(milliseconds: Long): String {
+    val totalSeconds = milliseconds.coerceAtLeast(0L) / 1_000L
+    val hours = totalSeconds / 3_600L
+    val minutes = (totalSeconds % 3_600L) / 60L
+    val seconds = totalSeconds % 60L
+    return if (hours > 0L) {
+        "%d:%02d:%02d".format(hours, minutes, seconds)
+    } else {
+        "%d:%02d".format(minutes, seconds)
+    }
+}
+
+private tailrec fun Context.findMainActivity(): MainActivity? = when (this) {
+    is MainActivity -> this
+    is ContextWrapper -> baseContext.findMainActivity()
+    else -> null
+}
