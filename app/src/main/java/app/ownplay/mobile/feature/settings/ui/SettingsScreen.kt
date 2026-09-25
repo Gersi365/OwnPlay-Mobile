@@ -1741,6 +1741,10 @@ private fun XtreamSourceDialog(
         errorMessage = errorMessage,
         onDismiss = onDismiss,
         onConfirm = { onSubmit(SourceInput.Xtream(name, server, username, password)) },
+        confirmEnabled = name.isNotBlank() &&
+            server.isNotBlank() &&
+            username.isNotBlank() &&
+            password.isNotBlank(),
     ) {
         OutlinedTextField(
             name,
@@ -1797,6 +1801,7 @@ private fun M3uSourceDialog(
                 ),
             )
         },
+        confirmEnabled = name.isNotBlank() && playlist.isNotBlank(),
     ) {
         OutlinedTextField(
             name,
@@ -1899,6 +1904,7 @@ private fun SourceInputDialog(
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
     confirmLabel: String = "Save",
+    confirmEnabled: Boolean = true,
     submitting: Boolean = false,
     errorMessage: String? = null,
     content: @Composable () -> Unit,
@@ -1930,7 +1936,7 @@ private fun SourceInputDialog(
         },
         confirmButton = {
             TextButton(
-                enabled = !submitting,
+                enabled = confirmEnabled && !submitting,
                 onClick = onConfirm,
             ) {
                 Text(if (submitting) "Saving…" else confirmLabel)
