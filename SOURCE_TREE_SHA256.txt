@@ -138,7 +138,7 @@ b43aaca784469a9b5c5bf84f8955d87f56ef9c57e8a808f410908511cd22885d  app/src/main/j
 e8e74e6647b566a68a709bc9bf70c66db4db1743363176906aa1104aa126f2a1  app/src/main/java/app/ownplay/mobile/feature/settings/domain/DisplayPreferences.kt
 dd003be5e589363734946b6371bfbf5fa19d39c184b2247295af5ea6f42dcd45  app/src/main/java/app/ownplay/mobile/feature/settings/domain/SourceRefreshSettings.kt
 571fb859abaebc7aaf2e868b0fbca032176990b986fb8ed2d953f365fce1d8f4  app/src/main/java/app/ownplay/mobile/feature/settings/ui/BackupRestoreSettingsSection.kt
-b12b91524a92f2535318241d49a0cc82bd9e80adb4ce029473770cef4d3a2cc3  app/src/main/java/app/ownplay/mobile/feature/settings/ui/SettingsScreen.kt
+8039dfa6e9cc1a38d5d969438b7f3084fa30e82bd63f46bab41d52fe3616ddaf  app/src/main/java/app/ownplay/mobile/feature/settings/ui/SettingsScreen.kt
 b69c76474f77a2aa3634bda5a20d72b2295ba7db9697c032c5af9a7471083284  app/src/main/java/app/ownplay/mobile/sources/data/CatalogRefreshStore.kt
 93af432581f52e5d100954d5c80714750b35c9de97b6080846463cbb00b63cf3  app/src/main/java/app/ownplay/mobile/sources/data/M3uIdentityReconciliation.kt
 3edb1003cf0fd70de4e092100acb1728e773a1d9f8541c3a43f251d4ec8bf497  app/src/main/java/app/ownplay/mobile/sources/data/OkHttpProviderTransport.kt
