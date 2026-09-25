@@ -27,7 +27,7 @@ cb48bf09a11f5fb576cddb0431c8f5ed0a60157a9ec942adffc13907cbe083f2  app/src/main/a
 e6b60a09590304b847f7f7dc5e83214df4237410cf9f4f135813a9e1473f1dc2  app/src/main/java/app/ownplay/mobile/OwnPlayApplication.kt
 78137a816b25a4d0ca0126a5e6b8148ec6838c97b2210eb1839d76bd3268db0c  app/src/main/java/app/ownplay/mobile/app/AppDestination.kt
 a1a2a45ba2d3c98e50406cc502d68c9a794d34ef14d582415fd72a30a3bbbd64  app/src/main/java/app/ownplay/mobile/app/OwnPlayApp.kt
-809ae2a61262949caca1bfaf7872579a0f111d2c9567db8c70d407d9cdea70e1  app/src/main/java/app/ownplay/mobile/app/OwnPlayBottomBar.kt
+1bea3412201d605d82d43ec5897f68da75849212c6d25f1ebb960928af6a713a  app/src/main/java/app/ownplay/mobile/app/OwnPlayBottomBar.kt
 8930787b2c9d33f7885dddd8590ae99151d28266934920e44c3862026ec74333  app/src/main/java/app/ownplay/mobile/core/OwnPlayServices.kt
 35f611b24b5f291f11e6526ec40cf4061c022d5e17b982c4082f08cb17a1a0fa  app/src/main/java/app/ownplay/mobile/data/db/BackupDao.kt
 a033e576ee285d63df4283ae7f5260b73650205d0cb251f6f326aa7a11d653c5  app/src/main/java/app/ownplay/mobile/data/db/Daos.kt
