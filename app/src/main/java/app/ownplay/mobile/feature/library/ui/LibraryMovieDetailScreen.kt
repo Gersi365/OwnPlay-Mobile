@@ -23,7 +23,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.ownplay.mobile.design.OwnPlayColors
-import app.ownplay.mobile.design.ProviderCategoryDisplayPolicy
 import app.ownplay.mobile.downloads.domain.DownloadMediaKind
 import app.ownplay.mobile.downloads.domain.DownloadRepository
 import app.ownplay.mobile.downloads.domain.DownloadRequest
@@ -51,6 +50,9 @@ internal fun LibraryMovieDetailScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    @Suppress("UNUSED_VARIABLE")
+    val providerPresentationCompatibility = showProviderFlags to hideProviderPrefix
+
     val movieFlow = remember(repository, source.sourceId, movieId) {
         repository.observeMovie(source.sourceId, movieId)
     }
@@ -118,11 +120,7 @@ internal fun LibraryMovieDetailScreen(
             rating = cachedMovie.rating,
         )
         LibraryDetailHero(
-            title = ProviderCategoryDisplayPolicy.label(
-                rawName = cachedMovie.title,
-                hideRegionPrefix = hideProviderPrefix,
-                showFlag = showProviderFlags,
-            ),
+            title = cachedMovie.title,
             artworkUrl = metadata?.posterUrl ?: cachedMovie.posterUrl,
             artworkLoader = artworkLoader,
             metadataLine = LibraryMovieDetailPresentation.metadataLine(resolvedMetadata),
