@@ -21,6 +21,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -1142,15 +1143,15 @@ private fun ProviderLiveManagementDialog(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(2.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     ProviderManagementFilter.entries.forEach { option ->
-                        TextButton(
+                        FilterChip(
+                            selected = option == filter,
                             onClick = { filterName = option.name },
-                        ) {
-                            Text(if (option == filter) option.label + " ✓" else option.label)
-                        }
+                            label = { Text(option.label) },
+                        )
                     }
                 }
                 LazyColumn(
