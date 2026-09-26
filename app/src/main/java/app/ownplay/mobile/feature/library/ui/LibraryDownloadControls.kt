@@ -8,6 +8,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -17,11 +20,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import app.ownplay.mobile.OwnPlayApplication
 import app.ownplay.mobile.design.OwnPlayColors
+import app.ownplay.mobile.design.OwnPlayShapes
 import app.ownplay.mobile.downloads.domain.DownloadActionHandler
 import app.ownplay.mobile.downloads.domain.DownloadItem
 import app.ownplay.mobile.downloads.domain.DownloadNotificationPermissionPromptPolicy
@@ -119,22 +124,36 @@ internal fun LibraryDownloadActions(
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         item?.let { Text(downloadStatusLabel(it), color = OwnPlayColors.TextSecondary) }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (action != null) {
-                TextButton(enabled = !busy, onClick = { dispatch(action) }) {
-                    Text(
-                        when {
-                            busy -> "Working…"
-                            action == DownloadUserAction.RETRY && item?.status == DownloadStatus.MISSING ->
-                                "Download again"
-                            else -> downloadActionLabel(action, offlineResumeAvailable)
-                        },
-                    )
-                }
+        if (action != null) {
+            FilledTonalButton(
+                enabled = !busy,
+                onClick = { dispatch(action) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp),
+                shape = OwnPlayShapes.Medium,
+            ) {
+                Text(
+                    when {
+                        busy -> "Working…"
+                        action == DownloadUserAction.RETRY && item?.status == DownloadStatus.MISSING ->
+                            "Download again"
+                        else -> downloadActionLabel(action, offlineResumeAvailable)
+                    },
+                )
             }
-            if (DownloadUserActionPolicy.canRemove(item?.status)) {
-                TextButton(enabled = !busy, onClick = { dispatch(DownloadUserAction.REMOVE) }) {
-                    Text("Remove")
+        }
+        if (DownloadUserActionPolicy.canRemove(item?.status)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                TextButton(
+                    enabled = !busy,
+                    onClick = { dispatch(DownloadUserAction.REMOVE) },
+                    modifier = Modifier.heightIn(min = 48.dp),
+                ) {
+                    Text("Remove", color = OwnPlayColors.Error)
                 }
             }
         }
