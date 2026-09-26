@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -143,6 +144,7 @@ private fun DownloadCatalog(
             Text(
                 text = "Downloads",
                 color = OwnPlayColors.TextPrimary,
+                style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
             )
         }
@@ -296,7 +298,7 @@ private fun DownloadRow(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = OwnPlayShapes.Medium,
-        color = OwnPlayColors.Surface,
+        color = OwnPlayColors.SurfaceRaised,
     ) {
         Column(
             modifier = Modifier.padding(14.dp),
@@ -396,7 +398,8 @@ private fun DownloadSectionTitle(title: String) {
     Text(
         text = title,
         color = OwnPlayColors.TextPrimary,
-        fontWeight = FontWeight.Bold,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.SemiBold,
         modifier = Modifier.padding(top = 8.dp),
     )
 }
