@@ -476,7 +476,7 @@ private fun LibraryPageHeader(
         Text(
             text = title,
             color = OwnPlayColors.TextPrimary,
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,

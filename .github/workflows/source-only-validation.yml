@@ -1,9 +1,7 @@
 name: OwnPlay Source Only Validation
 
 on:
-  push:
-    branches:
-      - execution/source-only-d89e5e4
+  workflow_dispatch:
 
 permissions:
   contents: read
