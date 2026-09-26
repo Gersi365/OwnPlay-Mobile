@@ -292,7 +292,12 @@ private fun SettingsSourcesScreen(
         item {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 TextButton(onClick = onBack) { Text("Back to Settings") }
-                Text(section.title, color = OwnPlayColors.TextPrimary, fontWeight = FontWeight.Bold)
+                Text(
+                    section.title,
+                    color = OwnPlayColors.TextPrimary,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                )
                 Text(section.summary, color = OwnPlayColors.TextMuted)
             }
         }
