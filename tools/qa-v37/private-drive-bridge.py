@@ -149,30 +149,75 @@ def download(target):
     print("OWNPLAY_PRIVATE_INGRESS_PASS")
     print("INPUT_SHA256=" + INPUT_SHA)
 
-def multipart(name, mime, content):
-    # Fixed metadata: no caller-supplied destination or remote URL.
+def resumable(name, mime, private_file):
+    """Upload with Drive resumable protocol. No third-party hosts, no retries.
+
+    Only a completed, raw-byte-readback-matched file is eligible as an output.
+    A partial/ambiguous upload stops; do not blindly retry and create duplicates.
+    """
+    file_path = secure_file(private_file)
+    size = file_path.stat().st_size
+    digest = sha_of_file(file_path)
     meta = json.dumps({"name": name, "mimeType": mime, "parents": [OUTPUT_PARENT]},
                       separators=(",", ":")).encode("utf-8")
-    boundary = "ownplay-v37-private-upload"
-    b = boundary.encode("ascii")
-    body = (b"--" + b + b"\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" +
-            meta + b"\r\n--" + b + b"\r\nContent-Type: " + mime.encode("ascii") +
-            b"\r\n\r\n" + content + b"\r\n--" + b + b"--\r\n")
-    with call("POST", "/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id,name,mimeType,size,parents,trashed",
-              body, "multipart/related; boundary=" + boundary) as response:
-        result = json.load(response)
-    remote_id = result.get("id")
-    if (not isinstance(remote_id, str) or not remote_id or result.get("trashed") or
-        result.get("name") != name or result.get("mimeType") != mime or
-        result.get("parents") != [OUTPUT_PARENT] or int(result.get("size", -1)) != len(content)):
+    headers = {"Authorization": "Bearer " + TOKEN,
+               "Content-Type": "application/json; charset=UTF-8",
+               "X-Upload-Content-Type": mime,
+               "X-Upload-Content-Length": str(size)}
+    init_url = HOST + "/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true&fields=id,name,mimeType,size,parents,trashed"
+    req = urllib.request.Request(init_url, data=meta, headers=headers, method="POST")
+    try:
+        with OPENER.open(req, timeout=120) as response:
+            location = response.headers.get("Location", "")
+    except urllib.error.HTTPError as err:
+        raise ValueError("Drive resumable initialization refused, HTTP " + str(err.code)) from None
+    parsed = urllib.parse.urlsplit(location)
+    if (parsed.scheme != "https" or parsed.netloc != "www.googleapis.com" or
+        parsed.path != "/upload/drive/v3/files" or parsed.fragment or
+        not any(k == "upload_id" and v for k, v in urllib.parse.parse_qsl(parsed.query, keep_blank_values=True))):
+        raise ValueError("unsafe Drive resumable session location refused")
+    final = None
+    sent = 0
+    block_size = 1024 * 1024  # 256 KiB-aligned chunks
+    with file_path.open("rb") as source:
+        while sent < size:
+            chunk = source.read(block_size)
+            end = sent + len(chunk) - 1
+            if not chunk or end >= size:
+                raise ValueError("local upload input changed")
+            put = urllib.request.Request(location, data=chunk,
+                 headers={"Authorization": "Bearer " + TOKEN,
+                          "Content-Type": mime,
+                          "Content-Length": str(len(chunk)),
+                          "Content-Range": "bytes " + str(sent) + "-" + str(end) + "/" + str(size)},
+                 method="PUT")
+            try:
+                with OPENER.open(put, timeout=120) as response:
+                    if end != size - 1 or response.status not in (200, 201):
+                        raise ValueError("unexpected early completion from Drive")
+                    final = json.load(response)
+            except urllib.error.HTTPError as err:
+                if err.code != 308 or end == size - 1:
+                    raise ValueError("Drive resumable chunk refused, HTTP " + str(err.code)) from None
+                accepted = err.headers.get("Range", "")
+                if accepted != "bytes=0-" + str(end):
+                    raise ValueError("Drive upload acknowledgement offset mismatch")
+            sent = end + 1
+    if sent != size or not isinstance(final, dict):
+        raise ValueError("Drive upload not completed")
+    remote_id = final.get("id")
+    if (not isinstance(remote_id, str) or not remote_id or final.get("trashed") or
+        final.get("name") != name or final.get("mimeType") != mime or
+        final.get("parents") != [OUTPUT_PARENT] or int(final.get("size", -1)) != size):
         raise ValueError("Drive upload metadata mismatch; do not retry blindly")
     remote_meta = metadata(remote_id)
     if (remote_meta.get("id") != remote_id or remote_meta.get("parents") != [OUTPUT_PARENT] or
-        remote_meta.get("name") != name or remote_meta.get("mimeType") != mime):
-        raise ValueError("Drive readback metadata mismatch")
-    size, digest = read_content(remote_id, upper_bound=len(content))
-    if size != len(content) or digest != hashlib.sha256(content).hexdigest():
-        raise ValueError("Drive raw byte readback mismatch; do not promote")
+        remote_meta.get("name") != name or remote_meta.get("mimeType") != mime or
+        int(remote_meta.get("size", -1)) != size):
+        raise ValueError("Drive raw-readback metadata mismatch")
+    remote_size, remote_digest = read_content(remote_id, upper_bound=size)
+    if remote_size != size or remote_digest != digest:
+        raise ValueError("Drive raw-readback content mismatch; do not promote")
     return remote_id
 
 def upload(apk, verification_file):
@@ -183,18 +228,18 @@ def upload(apk, verification_file):
     # Evidence must be nonsecret and generated by the protected signing step.
     if len(report) > 8192 or not report.startswith(b"OWNPLAY_QA_V37_SIGNED_VERIFIED\n"):
         raise ValueError("invalid nonsecret signature report")
-    signed = apk.read_bytes()
-    if len(signed) < INPUT_SIZE or len(signed) > INPUT_SIZE + 131072:
+    signed_size = apk.stat().st_size
+    if signed_size < INPUT_SIZE or signed_size > INPUT_SIZE + 131072:
         raise ValueError("unexpected signed APK size")
-    apk_sha = hashlib.sha256(signed).hexdigest()
+    apk_sha = sha_of_file(apk)
     expected_line = ("SIGNED_APK_SHA256=" + apk_sha).encode("ascii")
     if expected_line not in report.splitlines():
         raise ValueError("signature report SHA-256 does not match signed input")
-    apk_id = multipart(OUTPUT_NAME, INPUT_MIME, signed)
+    apk_id = resumable(OUTPUT_NAME, INPUT_MIME, apk)
     print("OWNPLAY_PRIVATE_SIGNED_APK_READBACK_PASS")
     print("SIGNED_APK_SHA256=" + apk_sha)
     print("SIGNED_APK_DRIVE_ID=" + apk_id)
-    evidence_id = multipart(EVIDENCE_NAME, "text/plain", report)
+    evidence_id = resumable(EVIDENCE_NAME, "text/plain", evidence)
     print("OWNPLAY_PRIVATE_EVIDENCE_READBACK_PASS")
     print("EVIDENCE_DRIVE_ID=" + evidence_id)
 
