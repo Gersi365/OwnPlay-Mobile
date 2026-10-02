@@ -1,10 +1,16 @@
 name: OwnPlay Mobile QA v37 unsigned presign
 
 # Execution-only mirror workflow. Canonical candidate is held in OwnPlay Mobile Drive.
-# This file never runs on push and must not be dispatched before the verified
-# zero-additional-cost and unsigned-artifact handoff gates are satisfied.
+# Inert until an explicit manual dispatch or a change to the exact marker path
+# on main, AFTER verified zero-additional-cost and unsigned handoff gates.
+# Editing this workflow file alone does not match the narrow push paths filter.
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - tools/qa-v37/presign-trigger.txt
 
 permissions:
   contents: read
