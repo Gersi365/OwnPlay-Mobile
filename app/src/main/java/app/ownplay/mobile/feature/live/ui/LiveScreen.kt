@@ -1292,7 +1292,9 @@ private fun rememberLiveSchedule(
     sourceId: app.ownplay.mobile.sources.domain.SourceId,
     channelId: String?,
 ): List<LiveProgram> {
-    var programs by remember(repository, sourceId, channelId) { mutableStateOf(emptyList()) }
+    var programs by remember(repository, sourceId, channelId) {
+        mutableStateOf<List<LiveProgram>>(emptyList())
+    }
     LaunchedEffect(repository, sourceId, channelId) {
         val stableChannelId = channelId?.takeIf(String::isNotBlank)
         programs = if (stableChannelId == null) {
