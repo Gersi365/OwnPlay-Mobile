@@ -28,6 +28,10 @@ build_tools="$android_home/build-tools/36.0.0"
 script_dir="$(cd -- "$(dirname -- "$0")" && pwd -P)"
 [[ -s "$script_dir/private-drive-bridge.py" && -s "$script_dir/sign-verified-v37.sh" ]] ||
   fail "nonsecret signing components missing"
+[[ "$(git hash-object -- "$script_dir/private-drive-bridge.py")" == "b7f4872bff15413196c878d63c2f18eb760018da" ]] ||
+  fail "verified canonical private Drive bridge version mismatch"
+[[ "$(git hash-object -- "$script_dir/sign-verified-v37.sh")" == "5920b32dd16afb3aef4034c04cd917f50ca537bd" ]] ||
+  fail "verified canonical QA signer stage version mismatch"
 
 # GitHub's ordinary GITHUB_TOKEN is NOT assumed to administer environment
 # secrets. Owner-authorized secret-write credential stays in protected env.
@@ -40,14 +44,14 @@ existing="$(gh api "repos/$repo/environments/qa-signing/secrets" --jq '.secrets[
 for key in OWNPLAY_QA_V37_P12_B64 OWNPLAY_QA_V37_PASS OWNPLAY_QA_V37_CERT_SHA256 OWNPLAY_QA_V37_ALIAS; do
   ! grep -Fxq "$key" <<< "$existing" || fail "new QA signer secret already exists; never overwrite"
 done
-python3 "$script_dir/private-drive-bridge.py" probe >/dev/null ||
+python3 -I "$script_dir/private-drive-bridge.py" probe >/dev/null ||
   fail "authenticated canonical private Drive ingress/egress folder probe failed"
 
 work="$(mktemp -d -- "$runner_temp/ownplay-v37-secure.XXXXXXXX")"
 chmod 700 -- "$work"
 cleanup() { rm -rf -- "$work"; }
 trap cleanup EXIT
-python3 "$script_dir/private-drive-bridge.py" download "$work/unsigned.apk" >/dev/null ||
+python3 -I "$script_dir/private-drive-bridge.py" download "$work/unsigned.apk" >/dev/null ||
   fail "canonical private v37 APK download/hash verification failed"
 [[ "$(sha256sum "$work/unsigned.apk" | cut -d ' ' -f1)" == "4ea97b39997b97427d829df0db79019c05acaf92438006bd85626c2d496991cf" ]] ||
   fail "presign APK SHA-256 mismatch"
@@ -106,9 +110,14 @@ done
 # Encrypted secret readback shows NAMES only; no plaintext value retrieval is
 # claimed. This protected job retains the newly generated key only until exit.
 
-python3 "$script_dir/private-drive-bridge.py" upload \
-  "$work/signed.apk" "$work/nonsecret-signature-report.txt" ||
+python3 -I "$script_dir/private-drive-bridge.py" upload \
+  "$work/signed.apk" "$work/nonsecret-signature-report.txt" \
+  > "$work/private-drive-egress.txt" 2> "$work/private-drive-egress.error" ||
   fail "signed APK and nonsecret evidence private canonical Drive return failed"
+grep -Fxq 'OWNPLAY_PRIVATE_SIGNED_APK_READBACK_PASS' "$work/private-drive-egress.txt" ||
+  fail "private signed APK raw Drive readback marker missing"
+grep -Fxq 'OWNPLAY_PRIVATE_EVIDENCE_READBACK_PASS' "$work/private-drive-egress.txt" ||
+  fail "private signature evidence raw Drive readback marker missing"
 printf 'OWNPLAY_QA_V37_PROTECTED_ROUTE_COMPLETE\n'
 printf 'NEW_CERT_SHA256=%s\n' "$cert_sha"
 printf 'PRIVATE_KEY_STORAGE=github_environment_qa-signing_encrypted_secrets\n'
