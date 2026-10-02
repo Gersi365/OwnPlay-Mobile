@@ -69,6 +69,8 @@ def require_folder(folder_id, parent):
 def require_canonical():
     require_folder(BUILD_PARENT, ROOT)
     require_folder(OUTPUT_PARENT, BUILD_PARENT)
+    require_folder("1LeSanmjFHeTE6cx8BNMMLtOyk0RLr8uI", ROOT)  # QA audit root
+    require_folder(INPUT_PARENT, "1LeSanmjFHeTE6cx8BNMMLtOyk0RLr8uI")
     m = metadata(INPUT_ID)
     if (m.get("id") != INPUT_ID or m.get("name") != INPUT_NAME or
         m.get("mimeType") != INPUT_MIME or m.get("parents") != [INPUT_PARENT] or
@@ -117,6 +119,13 @@ def stream_and_hash(response, output=None, upper_bound=None):
 def read_content(file_id, output=None, upper_bound=None):
     with call("GET", "/drive/v3/files/" + file_id + "?alt=media&supportsAllDrives=true") as response:
         return stream_and_hash(response, output, upper_bound)
+
+def probe():
+    require_canonical()
+    m = metadata(OUTPUT_PARENT, "id,name,mimeType,parents,trashed,capabilities(canAddChildren)")
+    if m.get("capabilities", {}).get("canAddChildren") is not True:
+        raise ValueError("authenticated output folder cannot accept a new private QA file")
+    print("OWNPLAY_PRIVATE_DRIVE_AUTH_AND_FOLDER_PREFLIGHT_PASS")
 
 def download(target):
     target = Path(target)
@@ -190,12 +199,14 @@ def upload(apk, verification_file):
     print("EVIDENCE_DRIVE_ID=" + evidence_id)
 
 def main():
-    if len(sys.argv) == 3 and sys.argv[1] == "download":
+    if len(sys.argv) == 2 and sys.argv[1] == "probe":
+        probe()
+    elif len(sys.argv) == 3 and sys.argv[1] == "download":
         download(sys.argv[2])
     elif len(sys.argv) == 4 and sys.argv[1] == "upload":
         upload(sys.argv[2], sys.argv[3])
     else:
-        raise ValueError("usage: private-drive-bridge.py download <private-apk-path> | upload <signed-apk-path> <nonsecret-verification-report-path>")
+        raise ValueError("usage: private-drive-bridge.py probe | download <private-apk-path> | upload <signed-apk-path> <nonsecret-verification-report-path>")
 
 try:
     main()
