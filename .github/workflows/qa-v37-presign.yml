@@ -135,13 +135,6 @@ jobs:
           echo 'Unsigned QA v37 presign metadata and alignment: PASS'
           cat qa-output/PRESIGN_SHA256.txt
 
-      - name: Retain only the unsigned QA handoff briefly
-        uses: actions/upload-artifact@v4
-        with:
-          name: OwnPlay-QA-v37-presign-unsigned
-          path: |
-            qa-output/OwnPlay-QA-v37-presign-aligned.apk
-            qa-output/PRESIGN_SHA256.txt
-            qa-output/PRESIGN_METADATA.txt
-          if-no-files-found: error
-          retention-days: 1
+      # Deliberately no artifact-upload step. This execution-only workflow must
+      # not publish the APK from a public repository until the owner's LIVE
+      # private-handoff and exact zero-additional-cost gates are verified.
