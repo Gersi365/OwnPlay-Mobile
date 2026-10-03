@@ -9,6 +9,21 @@ umask 077
 fail() { printf 'OWNPLAY_QA_V37_ROUTE_BLOCKED: %s\n' "$1" >&2; exit 2; }
 repo="Gersi365/OwnPlay-Mobile"
 branch="qa/v37-clean-install-signing"
+work=""
+cleanup_secret_writer=false
+cleanup() {
+  local status=$?
+  trap - EXIT
+  if [[ "$cleanup_secret_writer" == "true" && -n "${GH_TOKEN:-}" ]]; then
+    gh secret delete OWNPLAY_QA_SECRET_ADMIN_TOKEN --env qa-signing --repo "$repo" >/dev/null 2>&1 || true
+    unset GH_TOKEN
+  fi
+  if [[ -n "$work" && -d "$work" ]]; then
+    rm -rf -- "$work"
+  fi
+  exit "$status"
+}
+trap cleanup EXIT
 [[ "$(printenv GITHUB_ACTIONS || true)" == "true" ]] || fail "GitHub Actions required"
 [[ "$(printenv GITHUB_REPOSITORY || true)" == "$repo" ]] || fail "repository identity mismatch"
 [[ "$(printenv GITHUB_REF_NAME || true)" == "$branch" ]] || fail "branch identity mismatch"
@@ -36,6 +51,7 @@ script_dir="$(cd -- "$(dirname -- "$0")" && pwd -P)"
 # GitHub's ordinary GITHUB_TOKEN is NOT assumed to administer environment
 # secrets. Owner-authorized secret-write credential stays in protected env.
 export GH_TOKEN="$(printenv OWNPLAY_QA_SECRET_ADMIN_TOKEN)"
+cleanup_secret_writer=true
 unset OWNPLAY_QA_SECRET_ADMIN_TOKEN
 gh api "repos/$repo/environments/qa-signing/secrets/public-key" >/dev/null 2>&1 ||
   fail "encrypted environment-secret API access unavailable"
@@ -49,8 +65,6 @@ python3 -I "$script_dir/private-drive-bridge.py" probe >/dev/null ||
 
 work="$(mktemp -d -- "$runner_temp/ownplay-v37-secure.XXXXXXXX")"
 chmod 700 -- "$work"
-cleanup() { rm -rf -- "$work"; }
-trap cleanup EXIT
 python3 -I "$script_dir/private-drive-bridge.py" download "$work/unsigned.apk" >/dev/null ||
   fail "canonical private v37 APK download/hash verification failed"
 [[ "$(sha256sum "$work/unsigned.apk" | cut -d ' ' -f1)" == "7faf4f50d189e55cc6591b7ef95f94bdb9f0ad5fb79d194e5438e152fcdc69cb" ]] ||
@@ -107,8 +121,20 @@ stored="$(gh api "repos/$repo/environments/qa-signing/secrets" --jq '.secrets[].
 for key in OWNPLAY_QA_V37_P12_B64 OWNPLAY_QA_V37_PASS OWNPLAY_QA_V37_CERT_SHA256 OWNPLAY_QA_V37_ALIAS; do
   grep -Fxq "$key" <<< "$stored" || fail "expected restricted encrypted secret missing"
 done
-# Encrypted secret readback shows NAMES only; no plaintext value retrieval is
-# claimed. This protected job retains the newly generated key only until exit.
+# Remove the one-time secret-writer credential from the environment after the
+# QA signer secrets are persisted. Read back names only; never reveal values.
+gh secret delete OWNPLAY_QA_SECRET_ADMIN_TOKEN --env qa-signing --repo "$repo" \
+  >/dev/null 2>&1 || fail "one-time environment-secret writer cleanup failed"
+stored_after_cleanup="$(gh api "repos/$repo/environments/qa-signing/secrets" --jq '.secrets[].name' 2>/dev/null)" ||
+  fail "post-cleanup environment-secret inventory unavailable"
+grep -Fxq "OWNPLAY_QA_V37_P12_B64" <<< "$stored_after_cleanup" ||
+  fail "QA signing key was missing after cleanup"
+! grep -Fxq "OWNPLAY_QA_SECRET_ADMIN_TOKEN" <<< "$stored_after_cleanup" ||
+  fail "one-time environment-secret writer still exists after cleanup"
+cleanup_secret_writer=false
+unset GH_TOKEN
+# The protected job keeps the QA signing key only in encrypted environment
+# secrets; its private runner copy is removed on exit.
 
 python3 -I "$script_dir/private-drive-bridge.py" upload \
   "$work/signed.apk" "$work/nonsecret-signature-report.txt" \
