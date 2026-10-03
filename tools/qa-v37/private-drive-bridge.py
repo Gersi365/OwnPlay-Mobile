@@ -17,18 +17,23 @@ import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
+import zipfile
 from pathlib import Path
 
 HOST = "https://www.googleapis.com"
 ROOT = "1K4laogfioYHgnwXRzIEFzlUiweZ7-3_F"
 BUILD_PARENT = "10PNx--XlYzrpuUKZnRWFqw5K823UIoTR"  # 07_BUILD_ARTIFACTS
 OUTPUT_PARENT = "18LOFaWlM0TCSYvctOpLGIDMWwGCDbiez"  # QA Builds
-INPUT_PARENT = "1fzepCqj_Pkkm2vm5DF5i20FEJk27ezYY"
-INPUT_ID = "1dizPKUUXYr5_GC2qrI2e6IlvRvPv77DD"
-INPUT_NAME = "OwnPlay-QA-v37-presign-aligned.apk"
-INPUT_MIME = "application/vnd.android.package-archive"
-INPUT_SIZE = 18912498
-INPUT_SHA = "4ea97b39997b97427d829df0db79019c05acaf92438006bd85626c2d496991cf"
+INPUT_ID = "14pU63AlVNTXXqZoZZWTc0dQrRAoTf1Cf"
+INPUT_NAME = "OwnPlay-QA-v37-presign-unsigned-run-37101235385.zip"
+INPUT_MIME = "application/zip"
+INPUT_SIZE = 15135574
+INPUT_SHA = "79a82dfc0eb3d3f0ae9a5f7f964db650e385089d4e42e84b3108b51a925a26ec"
+APK_MEMBER = "OwnPlay-QA-v37-presign-aligned.apk"
+APK_SIZE = 18961902
+APK_SHA = "7faf4f50d189e55cc6591b7ef95f94bdb9f0ad5fb79d194e5438e152fcdc69cb"
+PRESIGN_SHA_MEMBER = "PRESIGN_SHA256.txt"
+PRESIGN_METADATA_MEMBER = "PRESIGN_METADATA.txt"
 OUTPUT_NAME = "OwnPlay-QA-v37-clean-install-signed.apk"
 EVIDENCE_NAME = "OwnPlay-QA-v37-clean-install-signature-report.txt"
 TOKEN = os.environ.get("OWNPLAY_DRIVE_ACCESS_TOKEN", "")
@@ -69,13 +74,11 @@ def require_folder(folder_id, parent):
 def require_canonical():
     require_folder(BUILD_PARENT, ROOT)
     require_folder(OUTPUT_PARENT, BUILD_PARENT)
-    require_folder("1LeSanmjFHeTE6cx8BNMMLtOyk0RLr8uI", ROOT)  # QA audit root
-    require_folder(INPUT_PARENT, "1LeSanmjFHeTE6cx8BNMMLtOyk0RLr8uI")
     m = metadata(INPUT_ID)
     if (m.get("id") != INPUT_ID or m.get("name") != INPUT_NAME or
-        m.get("mimeType") != INPUT_MIME or m.get("parents") != [INPUT_PARENT] or
+        m.get("mimeType") != INPUT_MIME or m.get("parents") != [OUTPUT_PARENT] or
         m.get("trashed") or int(m.get("size", -1)) != INPUT_SIZE):
-        raise ValueError("canonical APK input metadata mismatch")
+        raise ValueError("canonical unsigned v37 ZIP metadata mismatch")
 
 def secure_dir(path):
     path = Path(path).resolve(strict=True)
@@ -133,21 +136,78 @@ def download(target):
     if target.exists() or target.is_symlink():
         raise ValueError("private APK destination already exists")
     require_canonical()
-    fd, name = tempfile.mkstemp(prefix=".ownplay-v37-", dir=str(directory))
+    zip_fd, zip_name = tempfile.mkstemp(prefix=".ownplay-v37-source-", dir=str(directory))
+    apk_name = None
     try:
-        with os.fdopen(fd, "wb") as out:
+        with os.fdopen(zip_fd, "wb") as out:
             os.fchmod(out.fileno(), 0o600)
-            size, digest = read_content(INPUT_ID, out, INPUT_SIZE)
+            zip_size, zip_digest = read_content(INPUT_ID, out, INPUT_SIZE)
             out.flush()
             os.fsync(out.fileno())
-        if size != INPUT_SIZE or digest != INPUT_SHA:
-            raise ValueError("canonical APK SHA-256 or size check failed")
-        os.replace(name, target)
+        if zip_size != INPUT_SIZE or zip_digest != INPUT_SHA:
+            raise ValueError("canonical unsigned v37 ZIP SHA-256 or size check failed")
+        with zipfile.ZipFile(zip_name, "r") as archive:
+            infos = archive.infolist()
+            expected_names = {APK_MEMBER, PRESIGN_SHA_MEMBER, PRESIGN_METADATA_MEMBER}
+            if len(infos) != 3 or {item.filename for item in infos} != expected_names:
+                raise ValueError("canonical v37 ZIP member list mismatch")
+            members = {item.filename: item for item in infos}
+            for item in infos:
+                mode = (item.external_attr >> 16) & 0o170000
+                if item.is_dir() or mode not in (0, stat.S_IFREG) or item.flag_bits & 0x1:
+                    raise ValueError("unsafe or encrypted ZIP member refused")
+            checksum_text = archive.read(PRESIGN_SHA_MEMBER).decode("ascii")
+            expected_checksum = APK_SHA + "  qa-output/" + APK_MEMBER + "\n"
+            if checksum_text != expected_checksum:
+                raise ValueError("embedded canonical APK SHA-256 mismatch")
+            metadata_text = archive.read(PRESIGN_METADATA_MEMBER).decode("utf-8")
+            metadata_fields = {}
+            for line in metadata_text.splitlines():
+                key, separator, value = line.partition(": ")
+                if separator:
+                    metadata_fields[key] = value
+            required = {
+                "SIGNED": "NO (presign only)",
+                "PACKAGE": "app.ownplay.mobile",
+                "VERSION_CODE": "37",
+                "VERSION_NAME": "0.1.0-dev",
+                "SOURCE_COMMIT": "e52aa593f3ac18ae96373c8b139e277d13c4a1f0",
+                "SOURCE_TREE": "57c3e6fb137b5e650b55148a8c4ed2092e166caa",
+            }
+            if any(metadata_fields.get(key) != value for key, value in required.items()):
+                raise ValueError("unsigned v37 metadata identity mismatch")
+            apk_info = members[APK_MEMBER]
+            if apk_info.file_size != APK_SIZE:
+                raise ValueError("canonical unsigned v37 APK size mismatch")
+            apk_fd, apk_name = tempfile.mkstemp(prefix=".ownplay-v37-apk-", dir=str(directory))
+            digest = hashlib.sha256()
+            size = 0
+            with os.fdopen(apk_fd, "wb") as out, archive.open(apk_info, "r") as source:
+                os.fchmod(out.fileno(), 0o600)
+                while True:
+                    part = source.read(1024 * 1024)
+                    if not part:
+                        break
+                    size += len(part)
+                    if size > APK_SIZE:
+                        raise ValueError("unsigned v37 APK exceeds expected size")
+                    digest.update(part)
+                    out.write(part)
+                out.flush()
+                os.fsync(out.fileno())
+            if size != APK_SIZE or digest.hexdigest() != APK_SHA:
+                raise ValueError("canonical unsigned v37 APK SHA-256 or size check failed")
+            os.replace(apk_name, target)
+            apk_name = None
     finally:
-        if os.path.exists(name):
-            os.unlink(name)
+        if os.path.exists(zip_name):
+            os.unlink(zip_name)
+        if apk_name and os.path.exists(apk_name):
+            os.unlink(apk_name)
+    secure_file(target)
     print("OWNPLAY_PRIVATE_INGRESS_PASS")
-    print("INPUT_SHA256=" + INPUT_SHA)
+    print("INPUT_ZIP_SHA256=" + INPUT_SHA)
+    print("INPUT_APK_SHA256=" + APK_SHA)
 
 def resumable(name, mime, private_file):
     """Upload with Drive resumable protocol. No third-party hosts, no retries.
@@ -229,7 +289,7 @@ def upload(apk, verification_file):
     if len(report) > 8192 or not report.startswith(b"OWNPLAY_QA_V37_SIGNED_VERIFIED\n"):
         raise ValueError("invalid nonsecret signature report")
     signed_size = apk.stat().st_size
-    if signed_size < INPUT_SIZE or signed_size > INPUT_SIZE + 131072:
+    if signed_size < APK_SIZE or signed_size > APK_SIZE + 131072:
         raise ValueError("unexpected signed APK size")
     apk_sha = sha_of_file(apk)
     expected_line = ("SIGNED_APK_SHA256=" + apk_sha).encode("ascii")
