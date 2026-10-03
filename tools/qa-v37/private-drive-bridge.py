@@ -23,10 +23,12 @@ from pathlib import Path
 HOST = "https://www.googleapis.com"
 ROOT = "1K4laogfioYHgnwXRzIEFzlUiweZ7-3_F"
 BUILD_PARENT = "10PNx--XlYzrpuUKZnRWFqw5K823UIoTR"  # 07_BUILD_ARTIFACTS
-OUTPUT_PARENT = "18LOFaWlM0TCSYvctOpLGIDMWwGCDbiez"  # QA Builds
+QA_PARENT = "18LOFaWlM0TCSYvctOpLGIDMWwGCDbiez"  # QA Builds
+OUTPUT_PARENT = "1AspdPq1R8Wy4LuvhRqPHvD2GzongdFlB"  # dedicated signed-output child
 INPUT_ID = "14pU63AlVNTXXqZoZZWTc0dQrRAoTf1Cf"
 INPUT_NAME = "OwnPlay-QA-v37-presign-unsigned-run-37101235385.zip"
 INPUT_MIME = "application/zip"
+APK_MIME = "application/vnd.android.package-archive"
 INPUT_SIZE = 15135574
 INPUT_SHA = "79a82dfc0eb3d3f0ae9a5f7f964db650e385089d4e42e84b3108b51a925a26ec"
 APK_MEMBER = "OwnPlay-QA-v37-presign-aligned.apk"
@@ -73,10 +75,11 @@ def require_folder(folder_id, parent):
 
 def require_canonical():
     require_folder(BUILD_PARENT, ROOT)
-    require_folder(OUTPUT_PARENT, BUILD_PARENT)
+    require_folder(QA_PARENT, BUILD_PARENT)
+    require_folder(OUTPUT_PARENT, QA_PARENT)
     m = metadata(INPUT_ID)
     if (m.get("id") != INPUT_ID or m.get("name") != INPUT_NAME or
-        m.get("mimeType") != INPUT_MIME or m.get("parents") != [OUTPUT_PARENT] or
+        m.get("mimeType") != INPUT_MIME or m.get("parents") != [QA_PARENT] or
         m.get("trashed") or int(m.get("size", -1)) != INPUT_SIZE):
         raise ValueError("canonical unsigned v37 ZIP metadata mismatch")
 
@@ -280,6 +283,32 @@ def resumable(name, mime, private_file):
         raise ValueError("Drive raw-readback content mismatch; do not promote")
     return remote_id
 
+def preflight(private_dir):
+    """Real scoped write + raw readback + cleanup BEFORE creating a QA key.
+
+    This creates only a small, nonsecret temporary object in the dedicated
+    signed-output folder. Ambiguous upload/deletion failure is fatal: do not
+    retry blindly or generate signing material while it remains unresolved.
+    """
+    probe()
+    directory = secure_dir(private_dir)
+    fd, name = tempfile.mkstemp(prefix=".ownplay-transfer-preflight-", dir=str(directory))
+    try:
+        with os.fdopen(fd, "wb") as out:
+            os.fchmod(out.fileno(), 0o600)
+            out.write(b"OwnPlay QA v37 private Drive transfer check - NONSECRET\\n")
+            out.flush()
+            os.fsync(out.fileno())
+        remote_id = resumable("OwnPlay-QA-v37-private-transfer-preflight.txt",
+                              "text/plain", Path(name))
+        with call("DELETE", "/drive/v3/files/" + remote_id + "?supportsAllDrives=true") as response:
+            if response.status != 204:
+                raise ValueError("private preflight cleanup was not confirmed")
+    finally:
+        if os.path.exists(name):
+            os.unlink(name)
+    print("OWNPLAY_PRIVATE_DRIVE_UPLOAD_READBACK_CLEANUP_PREFLIGHT_PASS")
+
 def upload(apk, verification_file):
     require_canonical()
     apk = secure_file(apk)
@@ -295,7 +324,7 @@ def upload(apk, verification_file):
     expected_line = ("SIGNED_APK_SHA256=" + apk_sha).encode("ascii")
     if expected_line not in report.splitlines():
         raise ValueError("signature report SHA-256 does not match signed input")
-    apk_id = resumable(OUTPUT_NAME, INPUT_MIME, apk)
+    apk_id = resumable(OUTPUT_NAME, APK_MIME, apk)
     print("OWNPLAY_PRIVATE_SIGNED_APK_READBACK_PASS")
     print("SIGNED_APK_SHA256=" + apk_sha)
     print("SIGNED_APK_DRIVE_ID=" + apk_id)
@@ -308,10 +337,12 @@ def main():
         probe()
     elif len(sys.argv) == 3 and sys.argv[1] == "download":
         download(sys.argv[2])
+    elif len(sys.argv) == 3 and sys.argv[1] == "preflight":
+        preflight(sys.argv[2])
     elif len(sys.argv) == 4 and sys.argv[1] == "upload":
         upload(sys.argv[2], sys.argv[3])
     else:
-        raise ValueError("usage: private-drive-bridge.py probe | download <private-apk-path> | upload <signed-apk-path> <nonsecret-verification-report-path>")
+        raise ValueError("usage: private-drive-bridge.py probe | preflight <private-dir> | download <private-apk-path> | upload <signed-apk-path> <nonsecret-verification-report-path>")
 
 try:
     main()
