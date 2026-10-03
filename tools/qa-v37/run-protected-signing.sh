@@ -43,7 +43,7 @@ build_tools="$android_home/build-tools/36.0.0"
 script_dir="$(cd -- "$(dirname -- "$0")" && pwd -P)"
 [[ -s "$script_dir/private-drive-bridge.py" && -s "$script_dir/sign-verified-v37.sh" ]] ||
   fail "nonsecret signing components missing"
-[[ "$(git hash-object -- "$script_dir/private-drive-bridge.py")" == "b75e64a538bbab8660158efc2a6b89d0794e0d7a" ]] ||
+[[ "$(git hash-object -- "$script_dir/private-drive-bridge.py")" == "b51d08b7ae3e9c811595048e5675e7810b16fd58" ]] ||
   fail "verified canonical private Drive bridge version mismatch"
 [[ "$(git hash-object -- "$script_dir/sign-verified-v37.sh")" == "cb2db8ec3095f594906127b308f9996e166ea4d3" ]] ||
   fail "verified canonical QA signer stage version mismatch"
@@ -65,6 +65,10 @@ python3 -I "$script_dir/private-drive-bridge.py" probe >/dev/null ||
 
 work="$(mktemp -d -- "$runner_temp/ownplay-v37-secure.XXXXXXXX")"
 chmod 700 -- "$work"
+# Prove one real private upload, exact raw readback, and deletion in the
+# dedicated output folder BEFORE generating or persisting any QA signing key.
+python3 -I "$script_dir/private-drive-bridge.py" preflight "$work" >/dev/null ||
+  fail "private Drive write/readback/cleanup preflight failed before key generation"
 python3 -I "$script_dir/private-drive-bridge.py" download "$work/unsigned.apk" >/dev/null ||
   fail "canonical private v37 APK download/hash verification failed"
 [[ "$(sha256sum "$work/unsigned.apk" | cut -d ' ' -f1)" == "7faf4f50d189e55cc6591b7ef95f94bdb9f0ad5fb79d194e5438e152fcdc69cb" ]] ||
