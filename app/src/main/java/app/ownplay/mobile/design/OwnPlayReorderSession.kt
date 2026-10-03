@@ -25,6 +25,12 @@ data class OwnPlayReorderSession<T>(
     val isDirty: Boolean
         get() = workingIds != committedIds
 
+    fun canCommitTo(currentIds: List<T>): Boolean =
+        workingIds.size == currentIds.size &&
+            workingIds.toSet().size == workingIds.size &&
+            currentIds.toSet().size == currentIds.size &&
+            workingIds.toSet() == currentIds.toSet()
+
     fun onSelectorTap(id: T): OwnPlayReorderSelectorAction<T> {
         if (id !in workingIds) return OwnPlayReorderSelectorAction.Updated(this)
         if (isDirty && activeId != id) return OwnPlayReorderSelectorAction.Updated(this)

@@ -28,6 +28,7 @@ internal fun LibraryDownloadedMediaRow(
     val kindLabel = when (item.mediaKind) {
         DownloadMediaKind.MOVIE -> "Movie"
         DownloadMediaKind.EPISODE -> "Episode"
+        DownloadMediaKind.CATCH_UP -> "Catch-up"
     }
 
     Surface(

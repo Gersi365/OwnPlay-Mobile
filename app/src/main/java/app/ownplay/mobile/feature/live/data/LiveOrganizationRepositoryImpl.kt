@@ -18,6 +18,7 @@ import app.ownplay.mobile.feature.live.domain.ProviderLiveManagementChannel
 import app.ownplay.mobile.feature.live.domain.ProviderLiveManagementSnapshot
 import app.ownplay.mobile.feature.live.domain.ProviderLiveOrganizationContract
 import app.ownplay.mobile.sources.domain.SourceId
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -152,6 +153,8 @@ class RoomLiveOrganizationRepository(
             }
             true
         }
+    } catch (cancelled: CancellationException) {
+        throw cancelled
     } catch (_: Exception) {
         false
     }
@@ -168,6 +171,8 @@ class RoomLiveOrganizationRepository(
             }
             true
         }
+    } catch (cancelled: CancellationException) {
+        throw cancelled
     } catch (_: Exception) {
         false
     }

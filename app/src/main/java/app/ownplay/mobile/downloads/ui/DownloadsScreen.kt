@@ -11,9 +11,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import app.ownplay.mobile.design.rememberContextLazyListState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -26,6 +30,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -39,6 +44,7 @@ import app.ownplay.mobile.design.OwnPlayColors
 import app.ownplay.mobile.design.OwnPlayFeaturePlaceholder
 import app.ownplay.mobile.design.OwnPlayShapes
 import app.ownplay.mobile.downloads.domain.DownloadActionHandler
+import app.ownplay.mobile.downloads.domain.CatchUpDownloadIdentity
 import app.ownplay.mobile.downloads.domain.DownloadDetailsNavigation
 import app.ownplay.mobile.downloads.domain.DownloadEpisodeContext
 import app.ownplay.mobile.downloads.domain.DownloadItem
@@ -51,6 +57,7 @@ import app.ownplay.mobile.downloads.domain.DownloadUserAction
 import app.ownplay.mobile.downloads.domain.DownloadUserActionPolicy
 import app.ownplay.mobile.feature.playback.domain.PlaybackSessionController
 import app.ownplay.mobile.feature.playback.domain.PlaybackTarget
+import app.ownplay.mobile.sources.domain.SourceId
 import app.ownplay.mobile.feature.live.domain.LiveRecording
 import app.ownplay.mobile.feature.live.domain.LiveRecordingStatus
 import java.text.DateFormat
@@ -59,34 +66,91 @@ import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
+private enum class DownloadLibraryFilter(val label: String) {
+    ALL("All types"),
+    RECORDINGS("Recordings"),
+    CATCH_UP("Catch-up"),
+    MOVIES("Movies"),
+    SERIES("Series"),
+}
+
 @Composable
 fun DownloadsScreen(
     modifier: Modifier = Modifier,
+    openRecordingsRequestId: Long = 0L,
+    onOpenRecordingsRequestConsumed: () -> Unit = {},
     onPlaybackStarted: () -> Unit = {},
     onOpenDetails: (DownloadDetailsNavigation) -> Unit = {},
     onOpenSettings: () -> Unit = {},
     onOpenLibrary: () -> Unit = {},
+    onSavedTvPlaybackStarted: () -> Unit = {},
 ) {
     val application = LocalContext.current.applicationContext as OwnPlayApplication
     val services = remember(application) { application.services }
+    val playbackScope = rememberCoroutineScope()
     val recordings by services.liveRecordingRepository.recordings.collectAsState(initial = emptyList())
-    var showingRecordings by remember { mutableStateOf(false) }
+    var selectedDownloadFilter by rememberSaveable {
+        mutableStateOf(DownloadLibraryFilter.ALL)
+    }
+    val catalogListState = rememberContextLazyListState(selectedDownloadFilter.name)
+
+    fun selectDownloadFilter(filter: DownloadLibraryFilter) {
+        if (filter == selectedDownloadFilter) return
+        selectedDownloadFilter = filter
+        playbackScope.launch { catalogListState.scrollToItem(0) }
+    }
+
+    fun openRecording(recording: LiveRecording) {
+        val reference = recording.localReference ?: return
+        val start = recording.actualStartEpochSeconds ?: recording.startEpochSeconds
+        val end = recording.deadlineEpochSeconds
+        if (end <= start) return
+        playbackScope.launch {
+            services.playbackSessionController.activateCatchUp(
+                PlaybackTarget.CatchUp(
+                    sourceId = SourceId(recording.sourceId),
+                    channelId = recording.channelId,
+                    programId = recording.recordingId,
+                    title = recording.title,
+                    startEpochSeconds = start,
+                    endEpochSeconds = end,
+                    localMediaUri = reference,
+                ),
+            )
+            services.playbackSessionController.enterFullscreen()
+            onSavedTvPlaybackStarted()
+        }
+    }
+
+    LaunchedEffect(openRecordingsRequestId) {
+        if (openRecordingsRequestId > 0L) {
+            selectDownloadFilter(DownloadLibraryFilter.RECORDINGS)
+            onOpenRecordingsRequestConsumed()
+        }
+    }
     val activeSourceFlow = remember(services.sourceRepository) {
         services.sourceRepository.observeActiveSource()
     }
     val source by activeSourceFlow.collectAsState(initial = null)
 
     val activeSource = source
-    if (showingRecordings) {
+    if (selectedDownloadFilter == DownloadLibraryFilter.RECORDINGS) {
         Column(modifier = modifier.fillMaxSize()) {
-            DownloadSectionTabs(
-                showingRecordings = true,
-                onSelectDownloads = { showingRecordings = false },
-                onSelectRecordings = { showingRecordings = true },
+            Text(
+                text = "Downloads / Offline",
+                color = OwnPlayColors.TextPrimary,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+            )
+            DownloadLibraryFilterBar(
+                selectedFilter = selectedDownloadFilter,
+                onFilterSelected = ::selectDownloadFilter,
             )
             LiveRecordingsCatalog(
                 recordings = recordings,
                 onCancel = services.liveRecordingScheduler::cancel,
+                onOpen = ::openRecording,
                 modifier = Modifier.weight(1f),
             )
         }
@@ -94,18 +158,33 @@ fun DownloadsScreen(
     }
     if (activeSource == null) {
         Column(modifier = modifier.fillMaxSize()) {
-            DownloadSectionTabs(
-                showingRecordings = false,
-                onSelectDownloads = { showingRecordings = false },
-                onSelectRecordings = { showingRecordings = true },
+            Text(
+                text = "Downloads / Offline",
+                color = OwnPlayColors.TextPrimary,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
             )
-            OwnPlayFeaturePlaceholder(
-                title = "Downloads",
-                message = "Add or select a source in Settings to manage offline media.",
-                modifier = Modifier.weight(1f),
-                actionLabel = "Open Settings",
-                onAction = onOpenSettings,
+            DownloadLibraryFilterBar(
+                selectedFilter = selectedDownloadFilter,
+                onFilterSelected = ::selectDownloadFilter,
             )
+            if (selectedDownloadFilter == DownloadLibraryFilter.ALL && recordings.isNotEmpty()) {
+                LiveRecordingsCatalog(
+                    recordings = recordings,
+                    onCancel = services.liveRecordingScheduler::cancel,
+                    onOpen = ::openRecording,
+                    modifier = Modifier.weight(1f),
+                )
+            } else {
+                OwnPlayFeaturePlaceholder(
+                    title = "Downloads",
+                    message = "Add or select a source in Settings to manage offline media.",
+                    modifier = Modifier.weight(1f),
+                    actionLabel = "Open Settings",
+                    onAction = onOpenSettings,
+                )
+            }
         }
         return
     }
@@ -208,13 +287,23 @@ fun DownloadsScreen(
     }
 
     Column(modifier = modifier.fillMaxSize()) {
-        DownloadSectionTabs(
-            showingRecordings = false,
-            onSelectDownloads = { showingRecordings = false },
-            onSelectRecordings = { showingRecordings = true },
+        DownloadLibraryFilterBar(
+            selectedFilter = selectedDownloadFilter,
+            onFilterSelected = ::selectDownloadFilter,
+        )
+        Text(
+            "Downloads from the active source · Recordings from all sources",
+            color = OwnPlayColors.TextMuted,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
         )
         DownloadCatalog(
             downloads = downloads,
+            selectedFilter = selectedDownloadFilter,
+            listState = catalogListState,
+            recordings = recordings,
+            onCancelRecording = services.liveRecordingScheduler::cancel,
+            onOpenRecording = ::openRecording,
             episodeContexts = episodeContexts,
             repository = services.downloadRepository,
             playbackSessionController = services.playbackSessionController,
@@ -232,32 +321,21 @@ fun DownloadsScreen(
 }
 
 @Composable
-private fun DownloadSectionTabs(
-    showingRecordings: Boolean,
-    onSelectDownloads: () -> Unit,
-    onSelectRecordings: () -> Unit,
+private fun DownloadLibraryFilterBar(
+    selectedFilter: DownloadLibraryFilter,
+    onFilterSelected: (DownloadLibraryFilter) -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    FlowRow(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        TextButton(
-            onClick = onSelectDownloads,
-            modifier = Modifier
-                .weight(1f)
-                .heightIn(min = 48.dp),
-        ) {
-            Text(if (showingRecordings) "Downloads" else "Downloads · selected")
-        }
-        TextButton(
-            onClick = onSelectRecordings,
-            modifier = Modifier
-                .weight(1f)
-                .heightIn(min = 48.dp),
-        ) {
-            Text(if (showingRecordings) "Recordings · selected" else "Recordings")
+        DownloadLibraryFilter.entries.forEach { filter ->
+            FilterChip(
+                selected = selectedFilter == filter,
+                onClick = { onFilterSelected(filter) },
+                label = { Text(filter.label) },
+            )
         }
     }
 }
@@ -266,6 +344,7 @@ private fun DownloadSectionTabs(
 private fun LiveRecordingsCatalog(
     recordings: List<LiveRecording>,
     onCancel: (String) -> Boolean,
+    onOpen: (LiveRecording) -> Unit,
     modifier: Modifier,
 ) {
     val dateFormatter = remember { DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT) }
@@ -275,63 +354,89 @@ private fun LiveRecordingsCatalog(
             .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        liveRecordingItems(recordings, onCancel, onOpen, showEmptyMessage = true)
+    }
+}
+
+private fun LazyListScope.liveRecordingItems(
+    recordings: List<LiveRecording>,
+    onCancel: (String) -> Boolean,
+    onOpen: (LiveRecording) -> Unit,
+    showEmptyMessage: Boolean,
+) {
+    val dateFormatter = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
+    item {
+        Text(
+            text = "Recordings",
+            color = OwnPlayColors.TextPrimary,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+        )
+    }
+    if (recordings.isEmpty() && showEmptyMessage) {
         item {
             Text(
-                text = "Recordings",
-                color = OwnPlayColors.TextPrimary,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
+                text = "No recordings yet. Record or schedule a program from the Live EPG.",
+                color = OwnPlayColors.TextSecondary,
             )
         }
-        if (recordings.isEmpty()) {
-            item {
+    }
+    items(recordings, key = LiveRecording::recordingId) { recording ->
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = OwnPlayShapes.Medium,
+            color = OwnPlayColors.SurfaceRaised,
+        ) {
+            Column(
+                modifier = Modifier.padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(5.dp),
+            ) {
                 Text(
-                    text = "No recordings yet. Record or schedule a program from the Live EPG.",
+                    text = recording.title,
+                    color = OwnPlayColors.TextPrimary,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = "${recording.channelName} · ${dateFormatter.format(Date(recording.startEpochSeconds * 1_000L))}",
                     color = OwnPlayColors.TextSecondary,
                 )
-            }
-        }
-        items(recordings, key = LiveRecording::recordingId) { recording ->
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = OwnPlayShapes.Medium,
-                color = OwnPlayColors.SurfaceRaised,
-            ) {
-                Column(
-                    modifier = Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(5.dp),
+                Text(
+                    text = when (recording.status) {
+                        LiveRecordingStatus.SCHEDULED -> "Scheduled"
+                        LiveRecordingStatus.STARTING -> "Preparing / connecting · waiting for media"
+                        LiveRecordingStatus.RECORDING -> "Recording"
+                        LiveRecordingStatus.FINALIZING -> "Saving recording…"
+                        LiveRecordingStatus.COMPLETED -> "Saved in OwnPlay Downloads/Recordings"
+                        LiveRecordingStatus.PARTIAL -> "Partial recording saved in OwnPlay Downloads/Recordings"
+                        LiveRecordingStatus.FAILED -> recording.safeError ?: "Recording failed"
+                        LiveRecordingStatus.CANCELLED -> "Cancelled"
+                    },
+                    color = if (recording.status == LiveRecordingStatus.FAILED) {
+                        OwnPlayColors.Error
+                    } else {
+                        OwnPlayColors.TextSecondary
+                    },
+                )
+                if (recording.status == LiveRecordingStatus.SCHEDULED ||
+                    recording.status == LiveRecordingStatus.STARTING ||
+                    recording.status == LiveRecordingStatus.RECORDING
                 ) {
-                    Text(
-                        text = recording.title,
-                        color = OwnPlayColors.TextPrimary,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(
-                        text = "${recording.channelName} · ${dateFormatter.format(Date(recording.startEpochSeconds * 1_000L))}",
-                        color = OwnPlayColors.TextSecondary,
-                    )
-                    Text(
-                        text = when (recording.status) {
-                            LiveRecordingStatus.SCHEDULED -> "Scheduled"
-                            LiveRecordingStatus.RECORDING -> "Recording"
-                            LiveRecordingStatus.COMPLETED -> "Saved in OwnPlay Downloads/Recordings"
-                            LiveRecordingStatus.FAILED -> recording.safeError ?: "Recording failed"
-                            LiveRecordingStatus.CANCELLED -> "Cancelled"
-                        },
-                        color = if (recording.status == LiveRecordingStatus.FAILED) {
-                            OwnPlayColors.Error
-                        } else {
-                            OwnPlayColors.TextSecondary
-                        },
-                    )
-                    if (recording.status == LiveRecordingStatus.SCHEDULED) {
-                        TextButton(
-                            onClick = { onCancel(recording.recordingId) },
-                            modifier = Modifier.heightIn(min = 48.dp),
-                        ) {
-                            Text("Cancel recording")
-                        }
+                    TextButton(
+                        onClick = { onCancel(recording.recordingId) },
+                        modifier = Modifier.heightIn(min = 48.dp),
+                    ) {
+                        Text(if (recording.status in setOf(LiveRecordingStatus.STARTING, LiveRecordingStatus.RECORDING)) "Stop & Save" else "Cancel recording")
                     }
+                }
+                if (
+                    (recording.status == LiveRecordingStatus.COMPLETED ||
+                        recording.status == LiveRecordingStatus.PARTIAL) &&
+                    !recording.localReference.isNullOrBlank()
+                ) {
+                    TextButton(
+                        onClick = { onOpen(recording) },
+                        modifier = Modifier.heightIn(min = 48.dp),
+                    ) { Text("Open offline") }
                 }
             }
         }
@@ -341,6 +446,11 @@ private fun LiveRecordingsCatalog(
 @Composable
 private fun DownloadCatalog(
     downloads: List<DownloadItem>,
+    selectedFilter: DownloadLibraryFilter,
+    listState: LazyListState,
+    recordings: List<LiveRecording>,
+    onCancelRecording: (String) -> Boolean,
+    onOpenRecording: (LiveRecording) -> Unit,
     episodeContexts: Map<String, DownloadEpisodeContext>,
     repository: DownloadRepository,
     playbackSessionController: PlaybackSessionController,
@@ -354,8 +464,14 @@ private fun DownloadCatalog(
     onScanImportFolder: () -> Unit,
     modifier: Modifier,
 ) {
-    val movies = downloads.filter { it.mediaKind == DownloadMediaKind.MOVIE }
-    val episodes = downloads.filter { it.mediaKind == DownloadMediaKind.EPISODE }
+    val includeAll = selectedFilter == DownloadLibraryFilter.ALL
+    val movies = downloads.filter { includeAll || selectedFilter == DownloadLibraryFilter.MOVIES }
+        .filter { it.mediaKind == DownloadMediaKind.MOVIE }
+    val episodes = downloads.filter { includeAll || selectedFilter == DownloadLibraryFilter.SERIES }
+        .filter { it.mediaKind == DownloadMediaKind.EPISODE }
+    val catchUps = downloads.filter { includeAll || selectedFilter == DownloadLibraryFilter.CATCH_UP }
+        .filter { it.mediaKind == DownloadMediaKind.CATCH_UP }
+    val visibleItems = movies + episodes + catchUps
     val waitingOrder = downloads
         .filter { it.status == DownloadStatus.WAITING_FOR_WIFI || it.status == DownloadStatus.QUEUED }
         .sortedWith(compareBy<DownloadItem> { it.createdAtEpochMs }.thenBy { it.downloadId.value })
@@ -370,6 +486,7 @@ private fun DownloadCatalog(
         )
 
     LazyColumn(
+        state = listState,
         modifier = modifier
             .fillMaxSize()
             .padding(horizontal = 20.dp, vertical = 16.dp),
@@ -377,19 +494,19 @@ private fun DownloadCatalog(
     ) {
         item {
             Text(
-                text = "Downloads",
+                text = "Downloads / Offline",
                 color = OwnPlayColors.TextPrimary,
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
             )
         }
-        if (downloads.isEmpty()) {
+        if (visibleItems.isEmpty() && (!includeAll || recordings.isEmpty())) {
             item {
                 Column(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     Text(
-                        text = "No downloads yet. Start a Movie or Episode download from Library.",
+                        text = "No downloads yet. Download Movies or Series from Library, or save eligible archived programs from Live.",
                         color = OwnPlayColors.TextMuted,
                     )
                     FilledTonalButton(
@@ -400,6 +517,30 @@ private fun DownloadCatalog(
                         Text("Browse Library")
                     }
                 }
+            }
+        }
+
+        if (includeAll && recordings.isNotEmpty()) {
+            liveRecordingItems(
+                recordings = recordings,
+                onCancel = onCancelRecording,
+                onOpen = onOpenRecording,
+                showEmptyMessage = false,
+            )
+        }
+
+        if (catchUps.isNotEmpty()) {
+            item { DownloadSectionTitle("Catch-up") }
+            items(catchUps.sortedByDescending { it.createdAtEpochMs }, key = { it.downloadId.value }) { item ->
+                DownloadRow(
+                    item = item,
+                    episodeContext = null,
+                    queuePosition = waitingOrder[item.downloadId.value],
+                    repository = repository,
+                    playbackSessionController = playbackSessionController,
+                    onPlaybackStarted = onPlaybackStarted,
+                    onOpenDetails = onOpenDetails,
+                )
             }
         }
 
@@ -548,10 +689,31 @@ private fun DownloadRow(
     val scope = rememberCoroutineScope()
     var busy by remember(item.downloadId) { mutableStateOf(false) }
     var actionFailed by remember(item.downloadId) { mutableStateOf(false) }
-    var removeConfirmationOpen by remember(item.downloadId) { mutableStateOf(false) }
+    var pendingRemovalAction by remember(item.downloadId) { mutableStateOf<DownloadUserAction?>(null) }
     val primary = DownloadUserActionPolicy.primary(item.status)
 
     fun play(offline: Boolean) {
+        if (item.mediaKind == DownloadMediaKind.CATCH_UP) {
+            val identity = CatchUpDownloadIdentity.decode(item.sourceContentIdentity) ?: run {
+                actionFailed = true
+                return
+            }
+            scope.launch {
+                playbackSessionController.activateCatchUp(
+                    PlaybackTarget.CatchUp(
+                        sourceId = item.sourceId,
+                        channelId = identity.channelId,
+                        programId = identity.programId,
+                        title = item.title,
+                        startEpochSeconds = identity.startEpochSeconds,
+                        endEpochSeconds = identity.endEpochSeconds,
+                        offlineDownloadId = item.downloadId.value.takeIf { offline },
+                    ),
+                )
+                onPlaybackStarted()
+            }
+            return
+        }
         val target = when (item.mediaKind) {
             DownloadMediaKind.MOVIE -> PlaybackTarget.Movie(
                 sourceId = item.sourceId,
@@ -564,6 +726,7 @@ private fun DownloadRow(
                 offlineDownloadId = item.downloadId.value.takeIf { offline },
                 seriesId = episodeContext?.seriesId,
             )
+            DownloadMediaKind.CATCH_UP -> error("Handled above")
         }
         scope.launch {
             playbackSessionController.activateLibraryMedia(target)
@@ -586,6 +749,7 @@ private fun DownloadRow(
                     mediaKind = item.mediaKind,
                     contentId = item.contentId,
                     title = item.title,
+                    sourceContentIdentity = item.sourceContentIdentity,
                 )
                 actionFailed = !handler.execute(action, request, item.downloadId)
             } catch (cancelled: CancellationException) {
@@ -598,30 +762,38 @@ private fun DownloadRow(
         }
     }
 
-    if (removeConfirmationOpen) {
+    pendingRemovalAction?.let { removalAction ->
+        val forgetting = removalAction == DownloadUserAction.FORGET
         AlertDialog(
-            onDismissRequest = { if (!busy) removeConfirmationOpen = false },
-            title = { Text("Delete offline file?") },
+            onDismissRequest = { if (!busy) pendingRemovalAction = null },
+            title = { Text(if (forgetting) "Forget from OwnPlay?" else "Delete physical file?") },
             text = {
                 Text(
-                    "This will remove the item from OwnPlay and permanently delete any local file associated with it. Do you want to continue?",
+                    if (forgetting) {
+                        "This removes OwnPlay's entry and keeps the file on this device."
+                    } else {
+                        "This permanently deletes the OwnPlay-managed file and its entry from this device."
+                    },
                 )
             },
             confirmButton = {
                 TextButton(
                     enabled = !busy,
                     onClick = {
-                        removeConfirmationOpen = false
-                        dispatch(DownloadUserAction.REMOVE)
+                        pendingRemovalAction = null
+                        dispatch(removalAction)
                     },
                 ) {
-                    Text("Remove and delete file", color = OwnPlayColors.Error)
+                    Text(
+                        if (forgetting) "Forget" else "Delete file",
+                        color = if (forgetting) OwnPlayColors.TextPrimary else OwnPlayColors.Error,
+                    )
                 }
             },
             dismissButton = {
                 TextButton(
                     enabled = !busy,
-                    onClick = { removeConfirmationOpen = false },
+                    onClick = { pendingRemovalAction = null },
                 ) {
                     Text("Cancel")
                 }
@@ -681,7 +853,8 @@ private fun DownloadRow(
                             action == DownloadUserAction.PLAY_OFFLINE -> "Play offline"
                             action == DownloadUserAction.DOWNLOAD -> "Download"
                             action == DownloadUserAction.PAUSE -> "Pause"
-                            action == DownloadUserAction.RESUME -> "Resume"
+                            action == DownloadUserAction.RESUME -> "Restart from beginning"
+                            action == DownloadUserAction.CANCEL -> "Cancel"
                             action == DownloadUserAction.RETRY -> "Retry"
                             else -> "Open"
                         },
@@ -720,10 +893,22 @@ private fun DownloadRow(
                 if (DownloadUserActionPolicy.canRemove(item.status)) {
                     TextButton(
                         enabled = !busy,
-                        onClick = { removeConfirmationOpen = true },
+                        onClick = { pendingRemovalAction = DownloadUserAction.FORGET },
                         modifier = Modifier.heightIn(min = 48.dp),
                     ) {
-                        Text("Remove", color = OwnPlayColors.Error)
+                        Text("Forget from OwnPlay")
+                    }
+                    if (
+                        item.status == DownloadStatus.COMPLETED &&
+                        item.origin == DownloadOrigin.APP_MANAGED
+                    ) {
+                        TextButton(
+                            enabled = !busy,
+                            onClick = { pendingRemovalAction = DownloadUserAction.REMOVE },
+                            modifier = Modifier.heightIn(min = 48.dp),
+                        ) {
+                            Text("Delete file", color = OwnPlayColors.Error)
+                        }
                     }
                 }
             }

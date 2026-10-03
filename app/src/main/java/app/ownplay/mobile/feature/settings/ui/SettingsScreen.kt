@@ -41,6 +41,12 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.key
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.saveable.mapSaver
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -63,6 +69,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import app.ownplay.mobile.OwnPlayApplication
+import app.ownplay.mobile.app.SettingsExitGuard
+import app.ownplay.mobile.design.rememberContextLazyListState
+import app.ownplay.mobile.sources.domain.SourceConnectionSecurityPolicy
 import app.ownplay.mobile.design.OwnPlayColors
 import app.ownplay.mobile.design.OwnPlayMobileTopBar
 import app.ownplay.mobile.design.OwnPlayReorderPhase
@@ -142,8 +151,50 @@ private fun settingsResultMessage(
     SettingsOperationMessage.error(failure)
 }
 
+private val LocalSettingsExitGuard = staticCompositionLocalOf<SettingsExitGuard?> { null }
+
+@Composable
+private fun RegisterSettingsExitGuard(onExitRequested: (() -> Unit) -> Unit) {
+    val guard = LocalSettingsExitGuard.current
+    val currentHandler by rememberUpdatedState(onExitRequested)
+    DisposableEffect(guard) {
+        val owner = Any()
+        guard?.register(owner) { continueNavigation -> currentHandler(continueNavigation) }
+        onDispose { guard?.unregister(owner) }
+    }
+}
+
+private val ReorderSessionSaver = mapSaver(
+    save = { session: OwnPlayReorderSession<String> ->
+        mapOf("committed" to ArrayList(session.committedIds), "working" to ArrayList(session.workingIds),
+            "active" to (session.activeId ?: ""), "phase" to session.phase.name)
+    },
+    restore = { values ->
+        OwnPlayReorderSession(
+            committedIds = (values["committed"] as? List<*>)?.mapNotNull { it as? String }.orEmpty(),
+            workingIds = (values["working"] as? List<*>)?.mapNotNull { it as? String }.orEmpty(),
+            activeId = (values["active"] as? String)?.takeIf(String::isNotEmpty),
+            phase = OwnPlayReorderPhase.entries.firstOrNull { it.name == values["phase"] } ?: OwnPlayReorderPhase.FIXED,
+        )
+    },
+)
+
 @Composable
 fun SettingsScreen(
+    modifier: Modifier = Modifier,
+    openSources: Boolean = false,
+    onOpenSourcesConsumed: () -> Unit = {},
+    sourceProvisioningMode: Boolean = false,
+    onSourceProvisioningBack: () -> Unit = {},
+    exitGuard: SettingsExitGuard? = null,
+) {
+    CompositionLocalProvider(LocalSettingsExitGuard provides exitGuard) {
+        SettingsScreenContent(modifier, openSources, onOpenSourcesConsumed, sourceProvisioningMode, onSourceProvisioningBack)
+    }
+}
+
+@Composable
+private fun SettingsScreenContent(
     modifier: Modifier = Modifier,
     openSources: Boolean = false,
     onOpenSourcesConsumed: () -> Unit = {},
@@ -172,11 +223,15 @@ fun SettingsScreen(
     val selectedSection = selectedSectionName?.let { value ->
         SettingsSection.entries.firstOrNull { it.name == value }
     }
+    val exitGuard = LocalSettingsExitGuard.current
 
     LaunchedEffect(openSources) {
         if (openSources) {
-            selectedSectionName = SettingsSection.SOURCES.name
-            onOpenSourcesConsumed()
+            val open = {
+                selectedSectionName = SettingsSection.SOURCES.name
+                onOpenSourcesConsumed()
+            }
+            if (exitGuard == null) open() else exitGuard.requestExit(open)
         }
     }
 
@@ -184,6 +239,7 @@ fun SettingsScreen(
         selectedSectionName = null
     }
 
+    key(selectedSectionName ?: "settings-home") {
     if (selectedSection == null) {
         SettingsHomeScreen(
             modifier = modifier,
@@ -203,6 +259,7 @@ fun SettingsScreen(
             modifier = modifier,
         )
     }
+    }
 }
 
 @Composable
@@ -211,6 +268,7 @@ private fun SettingsHomeScreen(
     onOpen: (SettingsSection) -> Unit,
 ) {
     LazyColumn(
+        state = rememberContextLazyListState("settings-home"),
         modifier = modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp, vertical = 8.dp),
@@ -435,6 +493,7 @@ private fun SettingsSourcesScreen(
     }
 
     LazyColumn(
+        state = rememberContextLazyListState(section.name, activeSource?.sourceId?.value),
         modifier = modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -1292,6 +1351,7 @@ private fun LibraryManagementScreen(
     }
 
     LazyColumn(
+        state = rememberContextLazyListState(sourceKey, modeName, targetName, kindName, contextKey),
         modifier = modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -1491,7 +1551,9 @@ private enum class LiveManagementTarget(
     val label: String,
     val summary: String,
 ) {
-    CATEGORIES("Categories", "Manage provider categories grouped by country."),
+    CATEGORIES("Categories by country", "Manage provider categories grouped by country."),
+    COUNTRY_ORDER("Country order", "Move one or more country groups while keeping their categories together."),
+    GLOBAL_CATEGORIES("Global category order", "Move provider categories across country boundaries."),
     CHANNELS("Channels", "Choose a country and category before managing channels."),
 }
 
@@ -1619,6 +1681,67 @@ private fun LiveManagementScreen(
     val channelCountByCategory = remember(management.channels) {
         management.channels.groupingBy { it.categoryId }.eachCount()
     }
+    val countryLabelByCategory = remember(countryGroups) {
+        countryGroups.flatMap { group -> group.categoryIds.map { it to group.label } }.toMap()
+    }
+
+    if (mode == LiveManagementMode.ORDER && target == LiveManagementTarget.COUNTRY_ORDER) {
+        val committedCountryKeys = countryGroups.map(LiveCountryGroup::key)
+        LiveBlockOrderWorkspace(
+            title = "Country order",
+            subtitle = "Selected countries move as one block; categories stay attached.",
+            items = countryGroups.map { group ->
+                LiveReorderItem(
+                    id = group.key,
+                    title = group.label,
+                    subtitle = "${group.categoryIds.size} categories",
+                )
+            },
+            committedIds = committedCountryKeys,
+            resetEnabled = management.categories.any { it.manualOrder != null },
+            onSave = { orderedKeys ->
+                val groupByKey = countryGroups.associateBy(LiveCountryGroup::key)
+                val fullOrder = orderedKeys.flatMap { key -> groupByKey[key]?.categoryIds.orEmpty() }
+                repository.setProviderCategoryOrder(source.sourceId, fullOrder)
+            },
+            onReset = { repository.resetProviderCategoryOrder(source.sourceId) },
+            resetLabel = "Reset both category orders",
+            saveSuccessMessage = "Country order saved.",
+            resetSuccessMessage = "Provider category order restored.",
+            onMessage = onMessage,
+            onBack = ::navigateBackClean,
+            modifier = modifier,
+        )
+        return
+    }
+
+    if (mode == LiveManagementMode.ORDER && target == LiveManagementTarget.GLOBAL_CATEGORIES) {
+        val fullCategoryIds = management.categories.map { it.categoryId }
+        LiveOrderWorkspace(
+            title = "Global category order",
+            subtitle = "Local order across all countries · provider identity stays unchanged",
+            items = management.categories.map { category ->
+                LiveReorderItem(
+                    id = category.categoryId,
+                    title = category.displayName,
+                    subtitle = countryLabelByCategory[category.categoryId],
+                )
+            },
+            committedIds = fullCategoryIds,
+            resetEnabled = management.categories.any { it.manualOrder != null },
+            resetLabel = "Reset both category orders",
+            saveSuccessMessage = "Global category order saved.",
+            resetSuccessMessage = "Provider category order restored.",
+            onSave = { orderedIds ->
+                repository.setProviderCategoryOrder(source.sourceId, orderedIds)
+            },
+            onReset = { repository.resetProviderCategoryOrder(source.sourceId) },
+            onMessage = onMessage,
+            onBack = ::navigateBackClean,
+            modifier = modifier,
+        )
+        return
+    }
 
     if (mode == LiveManagementMode.ORDER && target == LiveManagementTarget.CATEGORIES && selectedCountry != null) {
         val scopedIds = categoriesInCountry.map { it.categoryId }
@@ -1721,6 +1844,7 @@ private fun LiveManagementScreen(
     }
 
     LazyColumn(
+        state = rememberContextLazyListState(sourceKey, modeName, targetName, selectedCountryKey, selectedCategoryId),
         modifier = modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp, vertical = 8.dp),
@@ -1762,7 +1886,17 @@ private fun LiveManagementScreen(
             }
 
             target == null -> {
-                items(LiveManagementTarget.entries, key = { it.name }) { option ->
+                val targets = if (mode == LiveManagementMode.ORDER) {
+                    listOf(
+                        LiveManagementTarget.COUNTRY_ORDER,
+                        LiveManagementTarget.GLOBAL_CATEGORIES,
+                        LiveManagementTarget.CATEGORIES,
+                        LiveManagementTarget.CHANNELS,
+                    )
+                } else {
+                    listOf(LiveManagementTarget.CATEGORIES, LiveManagementTarget.CHANNELS)
+                }
+                items(targets, key = { it.name }) { option ->
                     LiveManagementChoiceRow(
                         title = option.label,
                         subtitle = option.summary,
@@ -1900,6 +2034,167 @@ private fun LiveManagementScreen(
 }
 
 @Composable
+private fun LiveBlockOrderWorkspace(
+    title: String,
+    subtitle: String,
+    items: List<LiveReorderItem>,
+    committedIds: List<String>,
+    resetEnabled: Boolean,
+    onSave: suspend (List<String>) -> Boolean,
+    onReset: suspend () -> Boolean,
+    resetLabel: String,
+    saveSuccessMessage: String,
+    resetSuccessMessage: String,
+    onMessage: (SettingsOperationMessage) -> Unit,
+    onBack: () -> Unit,
+    modifier: Modifier,
+) {
+    val scope = rememberCoroutineScope()
+    var baseIds by rememberSaveable(title) { mutableStateOf(committedIds) }
+    var workingIds by rememberSaveable(title) { mutableStateOf(committedIds) }
+    var selectedIds by remember(title) { mutableStateOf<Set<String>>(emptySet()) }
+    var saving by remember(title) { mutableStateOf(false) }
+    var confirmExit by remember(title) { mutableStateOf(false) }
+    val dirty = workingIds != baseIds
+    val providerChanged = workingIds.size != committedIds.size || workingIds.toSet() != committedIds.toSet()
+    var pendingExit by remember(title) { mutableStateOf<(() -> Unit)?>(null) }
+    LaunchedEffect(committedIds) {
+        if (!dirty) { baseIds = committedIds; workingIds = committedIds }
+    }
+    fun completeExit() { val action = pendingExit ?: onBack; pendingExit = null; action() }
+    fun requestExit(action: () -> Unit) {
+        if (saving) return
+        if (dirty) { pendingExit = action; confirmExit = true } else action()
+    }
+    RegisterSettingsExitGuard(::requestExit)
+    val itemById = remember(items) { items.associateBy(LiveReorderItem::id) }
+
+    fun moveSelection(direction: Int) {
+        if (selectedIds.isEmpty() || direction == 0) return
+        val firstSelected = workingIds.indexOfFirst { it in selectedIds }
+        if (firstSelected < 0) return
+        val selectedBlock = workingIds.filter { it in selectedIds }
+        val remaining = workingIds.filterNot { it in selectedIds }
+        val insertion = workingIds.take(firstSelected).count { it !in selectedIds }
+        val target = (insertion + direction).coerceIn(0, remaining.size)
+        workingIds = remaining.take(target) + selectedBlock + remaining.drop(target)
+    }
+
+    fun save(exitAfterSave: Boolean) {
+        if (saving || !dirty || providerChanged) return
+        saving = true
+        scope.launch {
+            val succeeded = onSave(workingIds)
+            saving = false
+            if (succeeded) {
+                onMessage(SettingsOperationMessage.success(saveSuccessMessage))
+                baseIds = workingIds
+                confirmExit = false
+                if (exitAfterSave) completeExit()
+            } else {
+                onMessage(SettingsOperationMessage.error("Could not save the order."))
+            }
+        }
+    }
+
+    fun requestBack() {
+        requestExit(onBack)
+    }
+
+    BackHandler { requestBack() }
+    LazyColumn(
+        state = rememberContextLazyListState(title),
+        modifier = modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        item {
+            OwnPlayMobileTopBar(title = title, subtitle = subtitle, onBack = ::requestBack)
+        }
+        item {
+            Text(
+                "Select one or more rows, then move the selection up or down. Hidden categories remain in the order.",
+                color = OwnPlayColors.TextSecondary,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(enabled = selectedIds.isNotEmpty() && !saving, onClick = { moveSelection(-1) }) {
+                    Text("Move up")
+                }
+                TextButton(enabled = selectedIds.isNotEmpty() && !saving, onClick = { moveSelection(1) }) {
+                    Text("Move down")
+                }
+                if (selectedIds.isNotEmpty()) {
+                    TextButton(onClick = { selectedIds = emptySet() }) { Text("Clear selection") }
+                }
+            }
+        }
+        if (providerChanged) {
+            item { Text("The provider list changed. Discard these edits and reopen the order before saving.", color = OwnPlayColors.Error) }
+        }
+        itemsIndexed(workingIds, key = { _, id -> id }) { index, id ->
+            val item = itemById[id] ?: return@itemsIndexed
+            val selected = id in selectedIds
+            Surface(
+                color = if (selected) OwnPlayColors.Accent.copy(alpha = 0.14f) else OwnPlayColors.SurfaceRaised,
+                shape = OwnPlayShapes.Medium,
+                modifier = Modifier.fillMaxWidth().clickable {
+                    selectedIds = if (selected) selectedIds - id else selectedIds + id
+                },
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Text(if (selected) "✓" else "○", color = OwnPlayColors.Accent)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(item.title, color = OwnPlayColors.TextPrimary, fontWeight = FontWeight.SemiBold)
+                        item.subtitle?.let { Text(it, color = OwnPlayColors.TextMuted, style = MaterialTheme.typography.bodySmall) }
+                    }
+                    Text("${index + 1}", color = OwnPlayColors.TextSecondary)
+                }
+            }
+        }
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilledTonalButton(
+                    enabled = dirty && !saving && !providerChanged,
+                    onClick = { save(exitAfterSave = false) },
+                    modifier = Modifier.heightIn(min = 48.dp),
+                ) { Text(if (saving) "Saving…" else "Save") }
+                FilledTonalButton(
+                    enabled = resetEnabled && !dirty && !saving,
+                    onClick = {
+                        saving = true
+                        scope.launch {
+                            val succeeded = onReset()
+                            saving = false
+                            onMessage(settingsResultMessage(succeeded, resetSuccessMessage, "Could not reset the order."))
+                        }
+                    },
+                    modifier = Modifier.heightIn(min = 48.dp),
+                ) { Text("Reset") }
+            }
+        }
+    }
+    if (confirmExit) {
+        AlertDialog(
+            onDismissRequest = { if (!saving) { confirmExit = false; pendingExit = null } },
+            title = { Text("Save order changes?") },
+            text = { Text("This reorder has pending changes. Save or discard them before leaving.") },
+            confirmButton = {
+                TextButton(enabled = !saving && !providerChanged, onClick = { save(exitAfterSave = true) }) { Text("Save") }
+            },
+            dismissButton = {
+                TextButton(enabled = !saving, onClick = { baseIds = committedIds; workingIds = committedIds; confirmExit = false; completeExit() }) {
+                    Text("Discard")
+                }
+            },
+        )
+    }
+}
+
+@Composable
 private fun LiveManagementMessageBanner(message: SettingsOperationMessage) {
     val feedbackSurface = when (message.severity) {
         SettingsMessageSeverity.ERROR -> OwnPlayColors.Error.copy(alpha = 0.12f)
@@ -2015,9 +2310,17 @@ private fun LiveOrderWorkspace(
     modifier: Modifier,
 ) {
     val scope = rememberCoroutineScope()
-    var session by remember(title) { mutableStateOf(OwnPlayReorderSession(committedIds = committedIds)) }
+    var session by rememberSaveable(title, stateSaver = ReorderSessionSaver) { mutableStateOf(OwnPlayReorderSession(committedIds = committedIds)) }
     var saving by remember(title) { mutableStateOf(false) }
     var confirmExit by remember(title) { mutableStateOf(false) }
+    var pendingExit by remember(title) { mutableStateOf<(() -> Unit)?>(null) }
+    val providerChanged = !session.canCommitTo(committedIds)
+    fun completeExit() { val action = pendingExit ?: onBack; pendingExit = null; action() }
+    fun requestExit(action: () -> Unit) {
+        if (saving) return
+        if (session.isDirty) { pendingExit = action; confirmExit = true } else action()
+    }
+    RegisterSettingsExitGuard(::requestExit)
 
     LaunchedEffect(committedIds) {
         session = session.syncCommitted(committedIds)
@@ -2030,7 +2333,7 @@ private fun LiveOrderWorkspace(
     }
 
     fun saveOrder(orderedIds: List<String>, exitAfterSave: Boolean) {
-        if (saving) return
+        if (saving || providerChanged) return
         saving = true
         scope.launch {
             val succeeded = onSave(orderedIds)
@@ -2039,7 +2342,7 @@ private fun LiveOrderWorkspace(
                 session = session.markSaved()
                 confirmExit = false
                 onMessage(SettingsOperationMessage.success(saveSuccessMessage))
-                if (exitAfterSave) onBack()
+                if (exitAfterSave) completeExit()
             } else {
                 onMessage(SettingsOperationMessage.error("Could not save the order."))
             }
@@ -2047,11 +2350,7 @@ private fun LiveOrderWorkspace(
     }
 
     fun requestBack() {
-        if (session.isDirty) {
-            confirmExit = true
-        } else {
-            onBack()
-        }
+        requestExit(onBack)
     }
 
     BackHandler { requestBack() }
@@ -2066,6 +2365,7 @@ private fun LiveOrderWorkspace(
     }
 
     LazyColumn(
+        state = rememberContextLazyListState(title),
         modifier = modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp, vertical = 8.dp),
@@ -2104,6 +2404,9 @@ private fun LiveOrderWorkspace(
                 }
             }
         }
+        if (providerChanged) {
+            item { Text("The provider list changed. Discard these edits and reopen the order before saving.", color = OwnPlayColors.Error) }
+        }
         if (orderedItems.isEmpty()) {
             item { Text("Nothing to reorder here.", color = OwnPlayColors.TextMuted) }
         } else {
@@ -2116,8 +2419,8 @@ private fun LiveOrderWorkspace(
                     item = item,
                     position = index + 1,
                     active = session.activeId == item.id,
-                    selectorEnabled = !saving && (!session.isDirty || session.activeId == item.id),
-                    dragEnabled = !saving && session.activeId == item.id,
+                    selectorEnabled = !saving && !providerChanged && (!session.isDirty || session.activeId == item.id),
+                    dragEnabled = !saving && !providerChanged && session.activeId == item.id,
                     onSelectorTap = {
                         when (val action = session.onSelectorTap(item.id)) {
                             is OwnPlayReorderSelectorAction.Updated -> session = action.session
@@ -2161,12 +2464,12 @@ private fun LiveOrderWorkspace(
 
     if (confirmExit) {
         AlertDialog(
-            onDismissRequest = { if (!saving) confirmExit = false },
+            onDismissRequest = { if (!saving) { confirmExit = false; pendingExit = null } },
             title = { Text("Save order changes?") },
             text = { Text("This reorder has pending changes. Save them or discard them before leaving.") },
             confirmButton = {
                 TextButton(
-                    enabled = !saving,
+                    enabled = !saving && !providerChanged,
                     onClick = { saveOrder(session.workingIds, exitAfterSave = true) },
                 ) { Text(if (saving) "Saving…" else "Save") }
             },
@@ -2174,9 +2477,9 @@ private fun LiveOrderWorkspace(
                 TextButton(
                     enabled = !saving,
                     onClick = {
-                        session = session.discard()
+                        session = OwnPlayReorderSession(committedIds = committedIds)
                         confirmExit = false
-                        onBack()
+                        completeExit()
                     },
                 ) { Text("Discard") }
             },
@@ -2687,6 +2990,7 @@ private fun XtreamSourceFormScreen(
             server.isNotBlank() &&
             username.isNotBlank() &&
             password.isNotBlank(),
+        hasUnsavedInput = name.isNotEmpty() || server.isNotEmpty() || username.isNotEmpty() || password.isNotEmpty(),
         onBack = onBack,
         onConfirm = { onSubmit(SourceInput.Xtream(name, server, username, password)) },
         modifier = modifier,
@@ -2707,6 +3011,7 @@ private fun XtreamSourceFormScreen(
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
+        SourceTransportWarning(server)
         OutlinedTextField(
             value = username,
             onValueChange = { username = it },
@@ -2743,6 +3048,7 @@ private fun M3uSourceFormScreen(
         submitting = submitting,
         errorMessage = errorMessage,
         confirmEnabled = name.isNotBlank() && playlist.isNotBlank(),
+        hasUnsavedInput = name.isNotEmpty() || playlist.isNotEmpty(),
         onBack = onBack,
         onConfirm = {
             onSubmit(
@@ -2771,6 +3077,7 @@ private fun M3uSourceFormScreen(
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
+        SourceTransportWarning(playlist)
         Text(
             "XMLTV / EPG is not used by this build.",
             color = OwnPlayColors.TextSecondary,
@@ -2798,6 +3105,7 @@ private fun ReconnectSourceFormScreen(
                 errorMessage = errorMessage,
                 confirmLabel = "Reconnect",
                 confirmEnabled = server.isNotBlank() && username.isNotBlank() && password.isNotBlank(),
+                hasUnsavedInput = server != source.connectionLabel || username.isNotEmpty() || password.isNotEmpty(),
                 onBack = onBack,
                 onConfirm = { onSubmit(SourceReconnectInput.Xtream(server, username, password)) },
                 modifier = modifier,
@@ -2814,6 +3122,7 @@ private fun ReconnectSourceFormScreen(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
+                SourceTransportWarning(server)
                 OutlinedTextField(
                     value = username,
                     onValueChange = { username = it },
@@ -2842,6 +3151,7 @@ private fun ReconnectSourceFormScreen(
                 errorMessage = errorMessage,
                 confirmLabel = "Reconnect",
                 confirmEnabled = playlist.isNotBlank(),
+                hasUnsavedInput = playlist != source.connectionLabel,
                 onBack = onBack,
                 onConfirm = {
                     onSubmit(SourceReconnectInput.M3u(playlistUrl = playlist, epgUrl = null))
@@ -2860,6 +3170,7 @@ private fun ReconnectSourceFormScreen(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
+                SourceTransportWarning(playlist)
                 Text(
                     "XMLTV / EPG is not used by this build.",
                     color = OwnPlayColors.TextSecondary,
@@ -2870,18 +3181,33 @@ private fun ReconnectSourceFormScreen(
 }
 
 @Composable
+private fun SourceTransportWarning(url: String) {
+    SourceConnectionSecurityPolicy.transportWarning(url)?.let { warning ->
+        Text(warning, color = OwnPlayColors.Error, style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+@Composable
 private fun SourceFormScaffold(
     title: String,
     submitting: Boolean,
     errorMessage: String?,
     confirmLabel: String = "Save",
     confirmEnabled: Boolean = true,
+    hasUnsavedInput: Boolean = false,
     onBack: () -> Unit,
     onConfirm: () -> Unit,
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    BackHandler { if (!submitting) onBack() }
+    var confirmDiscard by remember { mutableStateOf(false) }
+    var pendingExit by remember { mutableStateOf<(() -> Unit)?>(null) }
+    fun requestExit(action: () -> Unit) {
+        if (submitting) return
+        if (hasUnsavedInput) { pendingExit = action; confirmDiscard = true } else action()
+    }
+    RegisterSettingsExitGuard(::requestExit)
+    BackHandler { requestExit(onBack) }
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -2890,7 +3216,7 @@ private fun SourceFormScaffold(
     ) {
         OwnPlayMobileTopBar(
             title = title,
-            onBack = if (submitting) null else onBack,
+            onBack = if (submitting) null else ({ requestExit(onBack) }),
         )
         Column(
             modifier = Modifier
@@ -2931,6 +3257,20 @@ private fun SourceFormScaffold(
         ) {
             Text(if (submitting) "Saving…" else confirmLabel)
         }
+    }
+    if (confirmDiscard) {
+        AlertDialog(
+            onDismissRequest = { confirmDiscard = false; pendingExit = null },
+            title = { Text("Discard source draft?") },
+            text = { Text("Your entered changes have not been saved. Continue editing or discard this draft.") },
+            confirmButton = { TextButton(onClick = { confirmDiscard = false; pendingExit = null }) { Text("Continue editing") } },
+            dismissButton = { TextButton(onClick = {
+                val action = pendingExit ?: onBack
+                pendingExit = null
+                confirmDiscard = false
+                action()
+            }) { Text("Discard") } },
+        )
     }
 }
 

@@ -10,6 +10,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
+import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -20,8 +21,14 @@ import app.ownplay.mobile.OwnPlayApplication
 import app.ownplay.mobile.R
 import app.ownplay.mobile.downloads.domain.DownloadId
 import app.ownplay.mobile.downloads.domain.DownloadItem
+import app.ownplay.mobile.downloads.domain.DownloadActionHandler
+import app.ownplay.mobile.downloads.domain.DownloadMediaKind
 import app.ownplay.mobile.downloads.domain.DownloadNotificationPolicy
+import app.ownplay.mobile.downloads.domain.DownloadRequest
 import app.ownplay.mobile.downloads.domain.DownloadStatus
+import app.ownplay.mobile.downloads.domain.DownloadUserAction
+import app.ownplay.mobile.sources.domain.SourceId
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -105,6 +112,7 @@ internal class DownloadNotificationController(
             .setOnlyAlertOnce(true)
             .setOngoing(true)
             .setProgress(100, progress ?: 0, progress == null)
+            .setContentIntent(detailsPendingIntent(item))
             .addAction(
                 R.drawable.ic_download_notification,
                 "Pause",
@@ -134,7 +142,7 @@ internal class DownloadNotificationController(
             .setContentIntent(detailsPendingIntent(item))
             .addAction(
                 R.drawable.ic_download_notification,
-                "Resume",
+                "Restart from beginning",
                 actionPendingIntent(item.downloadId, DownloadNotificationActionReceiver.ACTION_RESUME),
             )
             .addAction(
@@ -161,6 +169,7 @@ internal class DownloadNotificationController(
     private fun detailsPendingIntent(item: DownloadItem): PendingIntent {
         val intent = Intent(applicationContext, MainActivity::class.java)
             .setAction(DownloadNotificationNavigationContract.ACTION_OPEN_DETAILS)
+            .setData(Uri.parse("ownplay://download/open/" + Uri.encode(item.downloadId.value)))
             .putExtra(DownloadNotificationNavigationContract.EXTRA_DOWNLOAD_ID, item.downloadId.value)
             .putExtra(DownloadNotificationNavigationContract.EXTRA_SOURCE_ID, item.sourceId.value)
             .putExtra(DownloadNotificationNavigationContract.EXTRA_MEDIA_KIND, item.mediaKind.name)
@@ -179,6 +188,7 @@ internal class DownloadNotificationController(
     ): PendingIntent {
         val intent = Intent(applicationContext, DownloadNotificationActionReceiver::class.java)
             .setAction(action)
+            .setData(Uri.parse("ownplay://download/action/" + Uri.encode(downloadId.value) + "/" + Uri.encode(action)))
             .putExtra(DownloadNotificationActionReceiver.EXTRA_DOWNLOAD_ID, downloadId.value)
         return PendingIntent.getBroadcast(
             applicationContext,
@@ -232,6 +242,7 @@ internal class DownloadNotificationController(
 
 internal object DownloadNotificationNavigationContract {
     const val ACTION_OPEN_DETAILS = "app.ownplay.mobile.action.OPEN_DOWNLOAD_DETAILS"
+    const val ACTION_OPEN_RECORDINGS = "app.ownplay.mobile.action.OPEN_RECORDINGS"
     const val EXTRA_DOWNLOAD_ID = "download_id"
     const val EXTRA_SOURCE_ID = "source_id"
     const val EXTRA_MEDIA_KIND = "media_kind"
@@ -244,6 +255,12 @@ class DownloadNotificationActionReceiver : BroadcastReceiver() {
         if (action != ACTION_PAUSE && action != ACTION_RESUME && action != ACTION_CANCEL) return
         val rawId = intent.getStringExtra(EXTRA_DOWNLOAD_ID)?.takeIf(String::isNotBlank) ?: return
         val downloadId = runCatching { DownloadId(rawId) }.getOrNull() ?: return
+        val userAction = when (action) {
+            ACTION_PAUSE -> DownloadUserAction.PAUSE
+            ACTION_RESUME -> DownloadUserAction.RESUME
+            ACTION_CANCEL -> DownloadUserAction.CANCEL
+            else -> return
+        }
         val application = context.applicationContext as? OwnPlayApplication ?: return
         val pendingResult = goAsync()
 
@@ -251,23 +268,18 @@ class DownloadNotificationActionReceiver : BroadcastReceiver() {
             try {
                 val repository = application.services.downloadRepository
                 val current = repository.get(downloadId) ?: return@launch
-                when (action) {
-                    ACTION_PAUSE -> {
-                        if (DownloadNotificationPolicy.canPause(current.status)) {
-                            repository.pause(downloadId)
-                        }
-                    }
-                    ACTION_RESUME -> {
-                        if (DownloadNotificationPolicy.canResume(current.status)) {
-                            repository.resume(downloadId)
-                        }
-                    }
-                    ACTION_CANCEL -> {
-                        if (DownloadNotificationPolicy.canCancel(current.status)) {
-                            repository.cancel(downloadId)
-                        }
-                    }
-                }
+                val request = DownloadRequest(
+                    sourceId = current.sourceId,
+                    mediaKind = current.mediaKind,
+                    contentId = current.contentId,
+                    title = current.title,
+                    sourceContentIdentity = current.sourceContentIdentity,
+                )
+                DownloadActionHandler(repository).execute(userAction, request, downloadId)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                // A stale notification or transient storage error should not crash the app process.
             } finally {
                 pendingResult.finish()
             }

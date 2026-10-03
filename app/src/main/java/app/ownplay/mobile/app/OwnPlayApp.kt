@@ -3,7 +3,6 @@ package app.ownplay.mobile.app
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
-import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
@@ -22,8 +21,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
@@ -40,6 +41,7 @@ import app.ownplay.mobile.feature.playback.ui.PlaybackVideoSurface
 import app.ownplay.mobile.feature.settings.ui.SettingsScreen
 import app.ownplay.mobile.sources.domain.SourceId
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.launch
 
 @Composable
 fun OwnPlayApp(
@@ -47,16 +49,23 @@ fun OwnPlayApp(
     onDownloadDetailsNavigationConsumed: () -> Unit = {},
     sourceSettingsNavigation: SourceId? = null,
     onSourceSettingsNavigationConsumed: () -> Unit = {},
+    openRecordingsRequestId: Long = 0L,
+    onOpenRecordingsRequestConsumed: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val application = context.applicationContext as OwnPlayApplication
     val services = remember(application) { application.services }
     val playbackState by services.playbackSessionController.state.collectAsState()
+    val isStandaloneOfflinePlayback =
+        (playbackState.target as? app.ownplay.mobile.feature.playback.domain.PlaybackTarget.CatchUp)
+            ?.let { it.localMediaUri != null || it.offlineDownloadId != null } == true
     val isFullscreenPlayback =
         playbackState.target != null && playbackState.presentation == PlaybackPresentation.FULLSCREEN
     val activeSourceFlow = remember(services.sourceRepository) {
         services.sourceRepository.observeActiveSource()
     }
+    val activeSource by activeSourceFlow.collectAsState(initial = null)
+    val sourceStateKey = activeSource?.sourceId?.value ?: "no-source"
     val bootstrapStateFlow = remember(services.sourceRepository) {
         combine(
             services.sourceRepository.observeSources(),
@@ -85,13 +94,10 @@ fun OwnPlayApp(
     }
     val selected = AppDestination.entries.firstOrNull { it.name == selectedName }
         ?: AppDestination.LIVE
-    val destinationStateHolder = rememberSaveableStateHolder()
-    var liveStateGeneration by rememberSaveable { mutableStateOf(0) }
-    var libraryStateGeneration by rememberSaveable { mutableStateOf(0) }
-    var settingsStateGeneration by rememberSaveable { mutableStateOf(0) }
-    var liveLastLeftAtMs by rememberSaveable { mutableStateOf(0L) }
-    var libraryLastLeftAtMs by rememberSaveable { mutableStateOf(0L) }
-    var settingsLastLeftAtMs by rememberSaveable { mutableStateOf(0L) }
+    val destinationStateHolder = key(sourceStateKey) { rememberSaveableStateHolder() }
+    var settingsEntryId by rememberSaveable { mutableStateOf(0L) }
+    val settingsExitGuard = remember { SettingsExitGuard() }
+    val navigationScope = rememberCoroutineScope()
     var showExitConfirmation by rememberSaveable { mutableStateOf(false) }
     var internalDownloadDetailsNavigation by remember {
         mutableStateOf<DownloadDetailsNavigation?>(null)
@@ -102,67 +108,32 @@ fun OwnPlayApp(
     val activeDownloadDetailsNavigation =
         internalDownloadDetailsNavigation ?: downloadDetailsNavigation
 
-    fun destinationGeneration(destination: AppDestination): Int = when (destination) {
-        AppDestination.LIVE -> liveStateGeneration
-        AppDestination.LIBRARY -> libraryStateGeneration
-        AppDestination.SETTINGS -> settingsStateGeneration
-        AppDestination.DOWNLOADS -> 0
-    }
-
-    fun lastLeftAtMs(destination: AppDestination): Long = when (destination) {
-        AppDestination.LIVE -> liveLastLeftAtMs
-        AppDestination.LIBRARY -> libraryLastLeftAtMs
-        AppDestination.SETTINGS -> settingsLastLeftAtMs
-        AppDestination.DOWNLOADS -> 0L
-    }
-
-    fun rememberDeparture(destination: AppDestination, nowMs: Long) {
-        when (destination) {
-            AppDestination.LIVE -> liveLastLeftAtMs = nowMs
-            AppDestination.LIBRARY -> libraryLastLeftAtMs = nowMs
-            AppDestination.SETTINGS -> settingsLastLeftAtMs = nowMs
-            AppDestination.DOWNLOADS -> Unit
-        }
-    }
-
-    fun clearDeparture(destination: AppDestination) {
-        when (destination) {
-            AppDestination.LIVE -> liveLastLeftAtMs = 0L
-            AppDestination.LIBRARY -> libraryLastLeftAtMs = 0L
-            AppDestination.SETTINGS -> settingsLastLeftAtMs = 0L
-            AppDestination.DOWNLOADS -> Unit
-        }
-    }
-
-    fun expireDestinationStateIfNeeded(destination: AppDestination, nowMs: Long) {
-        if (!destination.primary) return
-        val leftAtMs = lastLeftAtMs(destination)
-        if (leftAtMs <= 0L) return
-        val expired = nowMs < leftAtMs || nowMs - leftAtMs >= DESTINATION_STATE_RETENTION_MS
-        if (expired) {
-            val oldGeneration = destinationGeneration(destination)
-            destinationStateHolder.removeState(
-                "destination:${destination.name}:$oldGeneration",
-            )
-            when (destination) {
-                AppDestination.LIVE -> liveStateGeneration += 1
-                AppDestination.LIBRARY -> libraryStateGeneration += 1
-                AppDestination.SETTINGS -> settingsStateGeneration += 1
-                AppDestination.DOWNLOADS -> Unit
-            }
-        }
-        clearDeparture(destination)
-    }
-
-    fun navigateTo(destination: AppDestination) {
+    fun commitNavigation(destination: AppDestination) {
         if (destination == selected) return
-        val nowMs = SystemClock.elapsedRealtime()
-        rememberDeparture(selected, nowMs)
-        expireDestinationStateIfNeeded(destination, nowMs)
-        selectedName = destination.name
+            if (selected == AppDestination.SETTINGS) {
+                destinationStateHolder.removeState("destination:SETTINGS:$settingsEntryId")
+            }
+            if (destination == AppDestination.SETTINGS &&
+                ScreenPositionPolicy.resolve(ScreenFamily.SETTINGS, ScreenNavigationEvent.ENTER_PAGE) == ScreenPositionAction.RESET_TOP
+            ) {
+                settingsEntryId += 1L
+            }
+            selectedName = destination.name
     }
 
-    LaunchedEffect(bootstrapState) {
+    fun requestNavigation(action: () -> Unit) {
+        if (selected == AppDestination.SETTINGS) settingsExitGuard.requestExit(action) else action()
+    }
+
+    fun navigateTo(destination: AppDestination, onAccepted: () -> Unit = {}) {
+        if (destination == selected) return
+        requestNavigation {
+            onAccepted()
+            commitNavigation(destination)
+        }
+    }
+
+    LaunchedEffect(bootstrapState, isStandaloneOfflinePlayback) {
         when (bootstrapState) {
             AppBootstrapState.NEEDS_SOURCE_SELECTION_OR_REPAIR -> provisioningSourcesOpen = true
             AppBootstrapState.NEEDS_PROVISIONING,
@@ -171,13 +142,14 @@ fun OwnPlayApp(
         }
         if (
             bootstrapState != AppBootstrapState.READY &&
-            bootstrapState != AppBootstrapState.BOOTSTRAPPING
+            bootstrapState != AppBootstrapState.BOOTSTRAPPING &&
+            !isStandaloneOfflinePlayback
         ) {
             services.playbackSessionController.clear()
         }
     }
 
-    if (bootstrapState != AppBootstrapState.READY) {
+    if (bootstrapState != AppBootstrapState.READY && !isStandaloneOfflinePlayback) {
         if (bootstrapState == AppBootstrapState.BOOTSTRAPPING) {
             ProvisioningLoadingScreen(modifier = Modifier.fillMaxSize())
         } else if (provisioningSourcesOpen) {
@@ -209,9 +181,28 @@ fun OwnPlayApp(
 
     LaunchedEffect(activeDownloadDetailsNavigation) {
         val request = activeDownloadDetailsNavigation ?: return@LaunchedEffect
-        services.playbackSessionController.clear()
-        services.sourceRepository.setActiveSource(request.sourceId)
-        navigateTo(AppDestination.LIBRARY)
+        requestNavigation {
+            navigationScope.launch {
+                services.playbackSessionController.clear()
+                services.sourceRepository.setActiveSource(request.sourceId)
+                if (request.mediaKind == app.ownplay.mobile.downloads.domain.DownloadMediaKind.CATCH_UP) {
+                    internalDownloadDetailsNavigation = null
+                    onDownloadDetailsNavigationConsumed()
+                    returnToDownloadsAfterDetail = false
+                    commitNavigation(AppDestination.DOWNLOADS)
+                } else {
+                    commitNavigation(AppDestination.LIBRARY)
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(openRecordingsRequestId) {
+        if (openRecordingsRequestId <= 0L) return@LaunchedEffect
+        navigateTo(AppDestination.DOWNLOADS) {
+            services.playbackSessionController.clear()
+            returnToDownloadsAfterDetail = false
+        }
     }
 
     LaunchedEffect(sourceSettingsNavigation) {
@@ -264,9 +255,10 @@ fun OwnPlayApp(
                     selected = selected.bottomNavigationSelection,
                     onSelected = { destination ->
                         if (destination != selected) {
-                            returnToDownloadsAfterDetail = false
-                            internalDownloadDetailsNavigation = null
-                            navigateTo(destination)
+                            navigateTo(destination) {
+                                returnToDownloadsAfterDetail = false
+                                internalDownloadDetailsNavigation = null
+                            }
                         }
                     },
                 )
@@ -293,13 +285,14 @@ fun OwnPlayApp(
             },
             label = "primary-navigation",
         ) { destination ->
-            val destinationStateGeneration = destinationGeneration(destination)
+            val entryKey = if (destination == AppDestination.SETTINGS) settingsEntryId.toString() else sourceStateKey
             destinationStateHolder.SaveableStateProvider(
-                key = "destination:${destination.name}:$destinationStateGeneration",
+                key = "destination:${destination.name}:$entryKey",
             ) {
                 when (destination) {
                 AppDestination.LIVE -> LiveScreen(
                     modifier = modifier,
+                    onReturnToDownloads = { navigateTo(AppDestination.DOWNLOADS) },
                     onOpenSettings = {
                         openSourcesRequested = true
                         navigateTo(AppDestination.SETTINGS)
@@ -334,15 +327,26 @@ fun OwnPlayApp(
                     },
                 )
                 AppDestination.DOWNLOADS -> DownloadsScreen(
+                    openRecordingsRequestId = openRecordingsRequestId,
+                    onOpenRecordingsRequestConsumed = onOpenRecordingsRequestConsumed,
                     modifier = modifier,
                     onPlaybackStarted = {
                         returnToDownloadsAfterDetail = false
                         navigateTo(AppDestination.LIBRARY)
                     },
+                    onSavedTvPlaybackStarted = {
+                        returnToDownloadsAfterDetail = false
+                        navigateTo(AppDestination.LIVE)
+                    },
                     onOpenDetails = { request ->
-                        internalDownloadDetailsNavigation = request
-                        returnToDownloadsAfterDetail = true
-                        navigateTo(AppDestination.LIBRARY)
+                        if (request.mediaKind == app.ownplay.mobile.downloads.domain.DownloadMediaKind.CATCH_UP) {
+                            returnToDownloadsAfterDetail = false
+                            navigateTo(AppDestination.DOWNLOADS)
+                        } else {
+                            internalDownloadDetailsNavigation = request
+                            returnToDownloadsAfterDetail = true
+                            navigateTo(AppDestination.LIBRARY)
+                        }
                     },
                     onOpenSettings = {
                         openSourcesRequested = true
@@ -355,6 +359,7 @@ fun OwnPlayApp(
                     },
                 )
                 AppDestination.SETTINGS -> SettingsScreen(
+                    exitGuard = settingsExitGuard,
                     modifier = modifier,
                     openSources = sourceSettingsNavigation != null || openSourcesRequested,
                     onOpenSourcesConsumed = {
@@ -372,8 +377,6 @@ fun OwnPlayApp(
     }
 }
 
-
-private const val DESTINATION_STATE_RETENTION_MS = 5 * 60 * 1000L
 
 private tailrec fun Context.findActivity(): Activity? = when (this) {
     is Activity -> this

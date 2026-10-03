@@ -7,6 +7,7 @@ import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
@@ -36,6 +37,12 @@ internal interface DownloadTransferClient {
         output: OutputStream,
         onProgress: suspend (bytesTransferred: Long, totalBytes: Long?) -> Unit,
     ): DownloadTransferResult
+
+    suspend fun transferFinite(
+        uri: String,
+        output: OutputStream,
+        onProgress: suspend (bytesTransferred: Long, totalBytes: Long?) -> Unit,
+    ): DownloadTransferResult = transfer(uri, output, onProgress)
 }
 
 internal class OkHttpDownloadTransferClient(
@@ -45,6 +52,19 @@ internal class OkHttpDownloadTransferClient(
         uri: String,
         output: OutputStream,
         onProgress: suspend (Long, Long?) -> Unit,
+    ): DownloadTransferResult = transferInternal(uri, output, onProgress, requireContentLength = false)
+
+    override suspend fun transferFinite(
+        uri: String,
+        output: OutputStream,
+        onProgress: suspend (Long, Long?) -> Unit,
+    ): DownloadTransferResult = transferInternal(uri, output, onProgress, requireContentLength = true)
+
+    private suspend fun transferInternal(
+        uri: String,
+        output: OutputStream,
+        onProgress: suspend (Long, Long?) -> Unit,
+        requireContentLength: Boolean,
     ): DownloadTransferResult = withContext(Dispatchers.IO) {
         val request = try {
             Request.Builder().url(uri).get().build()
@@ -52,8 +72,12 @@ internal class OkHttpDownloadTransferClient(
             throw DownloadTransferException(DownloadTransferFailure.SOURCE_UNAVAILABLE, error)
         }
 
+        val call = client.newCall(request)
+        val cancellation = currentCoroutineContext()[Job]
+            ?.invokeOnCompletion { cause -> if (cause is CancellationException) call.cancel() }
         try {
-            client.newCall(request).execute().use { response ->
+            currentCoroutineContext().ensureActive()
+            call.execute().use { response ->
                 if (!response.isSuccessful) {
                     val failure = when (response.code) {
                         401, 403, 404, 410 -> DownloadTransferFailure.SOURCE_UNAVAILABLE
@@ -64,6 +88,9 @@ internal class OkHttpDownloadTransferClient(
                 }
                 val body = response.body
                 val totalBytes = body.contentLength().takeIf { it > 0L }
+                if (requireContentLength && totalBytes == null) {
+                    throw DownloadTransferException(DownloadTransferFailure.SOURCE_UNAVAILABLE)
+                }
                 val digest = MessageDigest.getInstance("SHA-256")
                 var transferred = 0L
                 body.byteStream().use { input ->
@@ -93,7 +120,10 @@ internal class OkHttpDownloadTransferClient(
         } catch (error: SocketTimeoutException) {
             throw DownloadTransferException(DownloadTransferFailure.TIMEOUT, error)
         } catch (error: IOException) {
+            currentCoroutineContext().ensureActive()
             throw DownloadTransferException(DownloadTransferFailure.NETWORK, error)
+        } finally {
+            cancellation?.dispose()
         }
     }
 

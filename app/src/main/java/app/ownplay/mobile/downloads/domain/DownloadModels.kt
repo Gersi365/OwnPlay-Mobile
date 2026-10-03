@@ -13,6 +13,7 @@ value class DownloadId(val value: String) {
 enum class DownloadMediaKind {
     MOVIE,
     EPISODE,
+    CATCH_UP,
 }
 
 enum class DownloadStatus {
@@ -47,6 +48,7 @@ data class DownloadRequest(
     val contentId: String,
     val title: String,
     val expectedBytes: Long? = null,
+    val sourceContentIdentity: String? = null,
 ) {
     init {
         require(contentId.isNotBlank()) { "Download content id must not be blank" }
@@ -73,6 +75,7 @@ data class DownloadItem(
     val createdAtEpochMs: Long,
     val updatedAtEpochMs: Long,
     val origin: DownloadOrigin = DownloadOrigin.APP_MANAGED,
+    val sourceContentIdentity: String? = null,
 ) {
     init {
         require(contentId.isNotBlank()) { "Download content id must not be blank" }
@@ -128,4 +131,7 @@ interface DownloadRepository {
     ): Boolean
 
     suspend fun remove(downloadId: DownloadId): Boolean
+
+    /** Removes OwnPlay tracking without deleting the user's physical media file. */
+    suspend fun forget(downloadId: DownloadId): Boolean = remove(downloadId)
 }

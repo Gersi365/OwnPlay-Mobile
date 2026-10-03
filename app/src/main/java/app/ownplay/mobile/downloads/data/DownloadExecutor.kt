@@ -52,7 +52,7 @@ internal class DownloadExecutor(
             var lastPublishedBytes = 0L
             var lastPublishedAt = clock()
             val transfer = pending.outputStream.use { output ->
-                transferClient.transfer(media.uri, output) { bytes, reportedTotal ->
+                val publishProgress: suspend (Long, Long?) -> Unit = { bytes, reportedTotal ->
                     val now = clock()
                     if (
                         progressPolicy.shouldPublish(
@@ -69,6 +69,17 @@ internal class DownloadExecutor(
                         }
                     }
                 }
+                if (media.requiresReportedContentLength) {
+                    transferClient.transferFinite(media.uri, output, publishProgress)
+                } else {
+                    transferClient.transfer(media.uri, output, publishProgress)
+                }
+            }
+
+            if (media.requiresReportedContentLength && transfer.reportedContentLength == null) {
+                storage.discard(pending)
+                persistFailureIfActive(downloadId, DownloadFailureCode.INTEGRITY)
+                return DownloadExecutionOutcome.PERSISTED_FAILURE
             }
 
             val expectedBytes = initial.totalBytes ?: transfer.reportedContentLength

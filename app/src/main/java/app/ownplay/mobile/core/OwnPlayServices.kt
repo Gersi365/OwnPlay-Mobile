@@ -1,6 +1,7 @@
 package app.ownplay.mobile.core
 
 import android.content.Context
+import kotlinx.coroutines.launch
 import app.ownplay.mobile.data.db.OwnPlayDatabase
 import app.ownplay.mobile.data.prefs.ActiveSourcePreferences
 import app.ownplay.mobile.data.security.CredentialStore
@@ -20,6 +21,7 @@ import app.ownplay.mobile.downloads.data.ManagedSourceRemovalDownloadCoordinator
 import app.ownplay.mobile.downloads.data.OkHttpDownloadTransferClient
 import app.ownplay.mobile.downloads.data.RoomDownloadRepository
 import app.ownplay.mobile.downloads.data.SourceBackedDownloadMediaResolver
+import app.ownplay.mobile.downloads.data.SourceBackedCatchUpDownloadMediaResolver
 import app.ownplay.mobile.downloads.data.WorkManagedDownloadRepository
 import app.ownplay.mobile.downloads.data.WorkManagerDownloadScheduler
 import app.ownplay.mobile.downloads.domain.DownloadPreferencesRepository
@@ -170,6 +172,13 @@ class OwnPlayServices private constructor(
                 m3uCatchUpResolver = m3uCatchUpResolver,
             )
             val liveRecordingRepository = SharedPreferencesLiveRecordingRepository(applicationContext)
+            val interruptedRecordings = liveRecordingRepository.recordings.value.filter {
+                it.status in setOf(
+                    app.ownplay.mobile.feature.live.domain.LiveRecordingStatus.STARTING,
+                    app.ownplay.mobile.feature.live.domain.LiveRecordingStatus.RECORDING,
+                    app.ownplay.mobile.feature.live.domain.LiveRecordingStatus.FINALIZING,
+                )
+            }
             val liveRecordingScheduler = AndroidLiveRecordingScheduler(
                 context = applicationContext,
                 repository = liveRecordingRepository,
@@ -277,6 +286,13 @@ class OwnPlayServices private constructor(
                 mediaResolver = SourceBackedDownloadMediaResolver(
                     libraryDao = libraryDao,
                     libraryPlaybackLocator = libraryPlaybackLocator,
+                    catchUpResolver = SourceBackedCatchUpDownloadMediaResolver(
+                        sourceDao = sourceDao,
+                        liveOrganizationDao = liveOrganizationDao,
+                        credentialStore = credentialStore,
+                        xtreamClient = xtreamClient,
+                        m3uCatchUpResolver = m3uCatchUpResolver,
+                    ),
                 ),
                 storage = downloadStorage,
                 transferClient = OkHttpDownloadTransferClient(),
@@ -301,12 +317,17 @@ class OwnPlayServices private constructor(
                 downloadStorage = downloadStorage,
                 downloadPreferencesRepository = downloadPreferencesRepository,
             )
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO).launch {
+                liveRecordingExecutor.recoverInterruptedRecordings(interruptedRecordings)
+            }
             val catchUpPlaybackResolver = SourceBackedCatchUpPlaybackMediaResolver(
                 sourceDao = sourceDao,
                 liveOrganizationDao = liveOrganizationDao,
                 credentialStore = credentialStore,
                 xtreamClient = xtreamClient,
                 m3uCatchUpResolver = m3uCatchUpResolver,
+                downloadRepository = downloadRepository,
+                downloadedMediaVerifier = downloadedMediaVerifier,
             )
             val catchUpProgressStore = RoomLiveCatchUpPlaybackProgressStore(libraryDao)
             val playbackEngine = Media3PlaybackEngine(applicationContext)

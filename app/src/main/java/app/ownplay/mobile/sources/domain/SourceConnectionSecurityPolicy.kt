@@ -5,6 +5,13 @@ import java.net.URI
 object SourceConnectionSecurityPolicy {
     private const val MAX_URL_LENGTH = 4_096
 
+    fun transportWarning(raw: String): String? =
+        if (parse(raw.trim())?.scheme.equals("http", ignoreCase = true)) {
+            "HTTP does not encrypt this connection. Credentials and media URLs can be visible on the network. Prefer your provider's HTTPS address when supported."
+        } else {
+            null
+        }
+
     fun normalizeXtreamBaseUrl(raw: String): ConnectionValidation {
         val value = raw.trim()
         if (value.isEmpty() || value.length > MAX_URL_LENGTH) {

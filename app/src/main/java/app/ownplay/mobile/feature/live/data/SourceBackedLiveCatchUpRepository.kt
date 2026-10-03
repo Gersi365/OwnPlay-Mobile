@@ -117,7 +117,11 @@ class SourceBackedLiveCatchUpRepository internal constructor(
             nowEpochSeconds = nowMillis() / 1_000L,
             archiveDurationDays = providerStream.catchUpDurationDays,
         )
-        return catalogWithProgress(sourceId, programs)
+        return catalogWithProgress(
+            sourceId = sourceId,
+            programs = programs,
+            downloadableProgramIds = programs.map(LiveCatchUpProgram::programId).toSet(),
+        )
     }
 
     private suspend fun loadM3uCatalog(
@@ -147,12 +151,23 @@ class SourceBackedLiveCatchUpRepository internal constructor(
             nowEpochSeconds = nowMillis() / 1_000L,
             archiveDurationDays = entry.catchUpDays,
         )
-        return catalogWithProgress(sourceId, programs)
+        val downloadableProgramIds = programs.asSequence()
+            .filter { program ->
+                m3uCatchUpResolver.downloadableExtension(
+                    entry = entry,
+                    startEpochSeconds = program.startEpochSeconds,
+                    endEpochSeconds = program.endEpochSeconds,
+                ) != null
+            }
+            .map(LiveCatchUpProgram::programId)
+            .toSet()
+        return catalogWithProgress(sourceId, programs, downloadableProgramIds)
     }
 
     private suspend fun catalogWithProgress(
         sourceId: SourceId,
         programs: List<LiveCatchUpProgram>,
+        downloadableProgramIds: Set<String> = emptySet(),
     ): LiveCatchUpCatalog {
         val progressById = libraryDao
             .getPlaybackProgressForKind(sourceId.value, MEDIA_KIND_CATCH_UP)
@@ -168,6 +183,7 @@ class SourceBackedLiveCatchUpRepository internal constructor(
                     completed = progress.completed,
                 )
             },
+            downloadableProgramIds = downloadableProgramIds,
         )
     }
 

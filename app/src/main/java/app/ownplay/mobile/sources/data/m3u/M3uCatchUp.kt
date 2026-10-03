@@ -4,6 +4,7 @@ import app.ownplay.mobile.data.security.SourceSecret
 import app.ownplay.mobile.sources.domain.ConnectionValidation
 import app.ownplay.mobile.sources.domain.SourceConnectionSecurityPolicy
 import java.util.concurrent.ConcurrentHashMap
+import java.net.URI
 
 internal class M3uCatchUpResolver(
     private val m3uClient: M3uClient,
@@ -44,6 +45,17 @@ internal class M3uCatchUpResolver(
         startEpochSeconds: Long,
         endEpochSeconds: Long,
     ): String? = M3uCatchUpTemplate.render(entry, startEpochSeconds, endEpochSeconds)
+
+    fun downloadableExtension(
+        entry: M3uEntry,
+        startEpochSeconds: Long,
+        endEpochSeconds: Long,
+    ): String? {
+        val uri = playbackUrl(entry, startEpochSeconds, endEpochSeconds) ?: return null
+        val extension = runCatching { URI(uri).path.substringAfterLast('.', "").lowercase() }
+            .getOrDefault("")
+        return extension.takeIf { it == "ts" || it == "mp4" }
+    }
 
     private companion object {
         const val CACHE_TTL_MS = 5 * 60 * 1_000L

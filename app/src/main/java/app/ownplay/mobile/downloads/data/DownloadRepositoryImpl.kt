@@ -54,7 +54,7 @@ class RoomDownloadRepository(
             }
             val reset = existing.copy(
                 title = request.title,
-                streamIdentity = request.contentId,
+                streamIdentity = request.sourceContentIdentity ?: request.contentId,
                 state = DownloadStatus.QUEUED.name,
                 bytesDownloaded = 0L,
                 totalBytes = request.expectedBytes,
@@ -78,7 +78,7 @@ class RoomDownloadRepository(
             mediaKind = request.mediaKind.name,
             contentId = request.contentId,
             title = request.title,
-            streamIdentity = request.contentId,
+            streamIdentity = request.sourceContentIdentity ?: request.contentId,
             state = DownloadStatus.QUEUED.name,
             bytesDownloaded = 0L,
             totalBytes = request.expectedBytes,
@@ -229,6 +229,7 @@ class RoomDownloadRepository(
             createdAtEpochMs = entity.createdAt,
             updatedAtEpochMs = entity.updatedAt,
             origin = integrity?.origin ?: DownloadOrigin.APP_MANAGED,
+            sourceContentIdentity = entity.streamIdentity,
         )
     }
 

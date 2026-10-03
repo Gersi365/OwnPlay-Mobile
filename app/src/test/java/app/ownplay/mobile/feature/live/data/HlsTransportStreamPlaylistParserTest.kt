@@ -51,6 +51,29 @@ class HlsTransportStreamPlaylistParserTest {
     }
 
     @Test
+    fun parsesStableMediaSequenceAndDiscontinuityIdentity() {
+        val playlist = HlsTransportStreamPlaylistParser.parse(
+            "https://fixture.invalid/live.m3u8",
+            """#EXTM3U
+                |#EXT-X-MEDIA-SEQUENCE:41
+                |#EXT-X-DISCONTINUITY-SEQUENCE:2
+                |#EXTINF:2,
+                |segment-41.ts?token=one
+                |#EXT-X-DISCONTINUITY
+                |#EXTINF:2,
+                |segment-42.ts?token=one
+            """.trimMargin(),
+        )
+
+        assertEquals(41L, playlist.segments[0].mediaSequence)
+        assertEquals(2L, playlist.segments[0].discontinuitySequence)
+        assertEquals("sequence:2:41", playlist.segments[0].identity)
+        assertEquals(42L, playlist.segments[1].mediaSequence)
+        assertEquals(3L, playlist.segments[1].discontinuitySequence)
+        assertEquals("sequence:3:42", playlist.segments[1].identity)
+    }
+
+    @Test
     fun refusesEncryptedAndFragmentedPlaylists() {
         assertThrows(IOException::class.java) {
             HlsTransportStreamPlaylistParser.parse(

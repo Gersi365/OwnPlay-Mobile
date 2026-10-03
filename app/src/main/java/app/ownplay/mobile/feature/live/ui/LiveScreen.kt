@@ -12,6 +12,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Column
@@ -26,8 +28,10 @@ import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
+import app.ownplay.mobile.design.rememberContextLazyListState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -49,7 +53,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.ownplay.mobile.MainActivity
@@ -73,6 +79,11 @@ import app.ownplay.mobile.feature.live.domain.ProviderLiveCatalogSnapshot
 import app.ownplay.mobile.feature.live.domain.LiveRecording
 import app.ownplay.mobile.feature.live.domain.LiveRecordingAction
 import app.ownplay.mobile.feature.live.domain.LiveRecordingPolicy
+import app.ownplay.mobile.feature.live.domain.LiveRecordingStopPolicy
+import app.ownplay.mobile.downloads.domain.CatchUpDownloadIdentity
+import app.ownplay.mobile.downloads.domain.DownloadMediaKind
+import app.ownplay.mobile.downloads.domain.DownloadRequest
+import app.ownplay.mobile.downloads.domain.DownloadRepository
 import app.ownplay.mobile.feature.live.data.LiveRecordingScheduleResult
 import app.ownplay.mobile.feature.library.data.LibraryArtworkLoader
 import app.ownplay.mobile.feature.library.ui.ArtworkPresentation
@@ -92,14 +103,19 @@ import java.util.Date
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.text.KeyboardOptions
 
 @Composable
 fun LiveScreen(
     modifier: Modifier = Modifier,
     onOpenSettings: () -> Unit = {},
+    onReturnToDownloads: () -> Unit = {},
 ) {
-    val application = LocalContext.current.applicationContext as OwnPlayApplication
+    val context = LocalContext.current
+    val application = context.applicationContext as OwnPlayApplication
     val services = remember(application) { application.services }
+    val playbackState by services.playbackSessionController.state.collectAsState()
+    val localPlaybackScope = rememberCoroutineScope()
     val activeSourceFlow = remember(services.sourceRepository) {
         services.sourceRepository.observeActiveSource()
     }
@@ -108,6 +124,30 @@ fun LiveScreen(
         initial = DisplayPreferences(),
     )
     val sourceStateHolder = rememberSaveableStateHolder()
+
+    val savedTvTarget = playbackState.target as? PlaybackTarget.CatchUp
+    if (
+        savedTvTarget?.let { it.localMediaUri != null || it.offlineDownloadId != null } == true &&
+        playbackState.presentation == PlaybackPresentation.FULLSCREEN
+    ) {
+        CatchUpFullscreenPresentation(
+            target = savedTvTarget,
+            playbackState = playbackState,
+            playbackSessionController = services.playbackSessionController,
+            playbackEngine = services.playbackEngine,
+            onPictureInPicture = {
+                (context.findLiveActivity() as? MainActivity)?.requestOwnPlayPictureInPicture()
+            },
+            onRetry = {
+                localPlaybackScope.launch { services.playbackSessionController.retryActiveTarget() }
+            },
+            onDismiss = {
+                services.playbackSessionController.clear()
+                onReturnToDownloads()
+            },
+        )
+        return
+    }
 
     val source = activeSource
     if (source == null) {
@@ -148,6 +188,7 @@ fun LiveScreen(
             catchUpRepository = services.liveCatchUpRepository,
             liveRecordingRepository = services.liveRecordingRepository,
             liveRecordingScheduler = services.liveRecordingScheduler,
+            downloadRepository = services.downloadRepository,
             playbackSessionController = services.playbackSessionController,
             playbackPreferencesRepository = services.playbackPreferencesRepository,
             playbackEngine = services.playbackEngine,
@@ -174,6 +215,12 @@ private enum class LiveBrowsePage {
     CATCH_UP,
 }
 
+private data class LiveRecordingDialogRequest(
+    val channelId: String,
+    val channelName: String,
+    val program: LiveProgram?,
+)
+
 @Composable
 private fun LiveSourceScreen(
     source: SourceSummary,
@@ -182,6 +229,7 @@ private fun LiveSourceScreen(
     catchUpRepository: LiveCatchUpRepository,
     liveRecordingRepository: app.ownplay.mobile.feature.live.domain.LiveRecordingRepository,
     liveRecordingScheduler: app.ownplay.mobile.feature.live.data.AndroidLiveRecordingScheduler,
+    downloadRepository: DownloadRepository,
     playbackSessionController: PlaybackSessionController,
     playbackPreferencesRepository: PlaybackPreferencesRepository,
     playbackEngine: Media3PlaybackEngine,
@@ -224,16 +272,25 @@ private fun LiveSourceScreen(
         mutableStateOf(LiveBrowsePage.HOME.name)
     }
     var playerReturnCategoryId by rememberSaveable(sourceId.value) { mutableStateOf<String?>(null) }
-    val categoryListState = rememberLazyListState()
-    val channelListState = rememberLazyListState()
-    val favoritesListState = rememberLazyListState()
-    val searchListState = rememberLazyListState()
-    val catchUpListState = rememberLazyListState()
+    var homeEntryId by rememberSaveable(sourceId.value) { mutableStateOf(0L) }
+    var categoryEntryId by rememberSaveable(sourceId.value) { mutableStateOf(0L) }
+    var favoritesEntryId by rememberSaveable(sourceId.value) { mutableStateOf(0L) }
+    var searchEntryId by rememberSaveable(sourceId.value) { mutableStateOf(0L) }
+    var catchUpEntryId by rememberSaveable(sourceId.value) { mutableStateOf(0L) }
+    val categoryListState = rememberContextLazyListState(sourceId.value, homeEntryId, "categories")
+    val channelListState = rememberContextLazyListState(sourceId.value, categoryEntryId, "channels", selectedProviderCategoryId)
+    val favoritesListState = rememberContextLazyListState(sourceId.value, favoritesEntryId, "favorites")
+    val searchListState = rememberContextLazyListState(sourceId.value, searchEntryId, "search", searchQuery)
+    val catchUpListState = rememberContextLazyListState(sourceId.value, catchUpEntryId, "catch-up")
     var catchUpRefreshRevision by rememberSaveable(sourceId.value) { mutableStateOf(0) }
     var catchUpChannelIds by remember(sourceId.value) { mutableStateOf<Set<String>>(emptySet()) }
     var catchUpChannelsLoading by remember(sourceId.value) { mutableStateOf(false) }
     var selectedCatchUpChannelId by rememberSaveable(sourceId.value) { mutableStateOf<String?>(null) }
     var pendingResumeProgram by remember { mutableStateOf<LiveCatchUpProgram?>(null) }
+    var recordingDialogRequest by remember { mutableStateOf<LiveRecordingDialogRequest?>(null) }
+    var recordingCatchUpProgram by remember { mutableStateOf<LiveCatchUpProgram?>(null) }
+    var recordingCatchUpFormatSupported by remember { mutableStateOf(false) }
+    var recordingCatchUpChecking by remember { mutableStateOf(false) }
     var operationMessage by remember { mutableStateOf<String?>(null) }
     var fullscreenAnchorIndex by rememberSaveable(sourceId.value) { mutableStateOf<Int?>(null) }
     var rememberedPlayerChannelId by rememberSaveable(sourceId.value) { mutableStateOf<String?>(null) }
@@ -333,6 +390,37 @@ private fun LiveSourceScreen(
     )
     val epgNowEpochSeconds = rememberEpgClock()
 
+    LaunchedEffect(recordingDialogRequest, catchUpRepository, sourceId) {
+        val request = recordingDialogRequest
+        val program = request?.program
+        val end = program?.endEpochSeconds
+        if (request == null || end == null || end > epgNowEpochSeconds) {
+            recordingCatchUpProgram = null
+            recordingCatchUpFormatSupported = false
+            recordingCatchUpChecking = false
+        } else {
+            recordingCatchUpProgram = null
+            recordingCatchUpFormatSupported = false
+            recordingCatchUpChecking = true
+            try {
+                val catalog = catchUpRepository.loadCatalog(sourceId, request.channelId)
+                val archived = catalog.programs.firstOrNull { candidate ->
+                    candidate.startEpochSeconds == program.startEpochSeconds &&
+                        candidate.endEpochSeconds == program.endEpochSeconds
+                }
+                recordingCatchUpProgram = archived
+                recordingCatchUpFormatSupported =
+                    archived?.programId?.let { it in catalog.downloadableProgramIds } == true
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                recordingCatchUpProgram = null
+            } finally {
+                recordingCatchUpChecking = false
+            }
+        }
+    }
+
     LaunchedEffect(page, sourceId, providerCatalog.channels.size) {
         if (page == LiveBrowsePage.CATCH_UP) {
             catchUpChannelsLoading = true
@@ -412,7 +500,7 @@ private fun LiveSourceScreen(
     fun openSearch(returnPage: LiveBrowsePage) {
         searchReturnPageName = returnPage.name
         searchReturnCategoryId = selectedProviderCategoryId
-        pageName = LiveBrowsePage.SEARCH.name
+        searchEntryId += 1L; pageName = LiveBrowsePage.SEARCH.name
     }
 
     fun leaveSearch() {
@@ -456,22 +544,44 @@ private fun LiveSourceScreen(
         }
     }
 
+    fun requestRecording(channelId: String, channelName: String, program: LiveProgram?) {
+        recordingDialogRequest = LiveRecordingDialogRequest(channelId, channelName, program)
+    }
+
     fun recordProgram(program: LiveProgram) {
         val channelId = playbackTarget?.channelId ?: return
-        val action = LiveRecordingPolicy.actionFor(program, epgNowEpochSeconds) ?: return
-        val start = program.startEpochSeconds ?: return
-        val end = program.endEpochSeconds ?: return
+        requestRecording(channelId, playbackChannelName ?: "Live channel", program)
+    }
+
+    fun beginRecording(
+        request: LiveRecordingDialogRequest,
+        requestedStart: Long,
+        requestedEnd: Long,
+        stopPolicy: LiveRecordingStopPolicy,
+    ) {
+        val now = System.currentTimeMillis() / 1_000L
+        if (requestedEnd <= now) {
+            operationMessage = "The program window has already ended."
+            recordingDialogRequest = null
+            return
+        }
+        val startsNow = requestedStart <= now
+        val start = if (startsNow) now else requestedStart
+        val end = app.ownplay.mobile.feature.live.domain.RecordingClockDeadlinePolicy
+            .confirmedEnd(requestedStart, requestedEnd, now, stopPolicy) ?: return
         val recording = LiveRecording(
-            recordingId = LiveRecordingPolicy.recordingId(sourceId.value, channelId, start),
+            recordingId = LiveRecordingPolicy.recordingId(sourceId.value, request.channelId, start),
             sourceId = sourceId.value,
-            channelId = channelId,
-            channelName = playbackChannelName ?: "Live channel",
-            title = program.title,
+            channelId = request.channelId,
+            channelName = request.channelName,
+            title = request.program?.title?.takeIf(String::isNotBlank) ?: request.channelName,
             startEpochSeconds = start,
             endEpochSeconds = end,
             status = app.ownplay.mobile.feature.live.domain.LiveRecordingStatus.SCHEDULED,
+            stopPolicy = stopPolicy,
+            deadlineEpochSeconds = end,
         )
-        if (action == LiveRecordingAction.RECORD_NOW) {
+        if (startsNow) {
             operationMessage = if (liveRecordingScheduler.startNow(recording)) {
                 "Recording started. See Downloads > Recordings."
             } else {
@@ -482,6 +592,8 @@ private fun LiveSourceScreen(
         when (liveRecordingScheduler.schedule(recording)) {
             LiveRecordingScheduleResult.SCHEDULED ->
                 operationMessage = "Recording scheduled."
+            LiveRecordingScheduleResult.ALREADY_EXISTS ->
+                operationMessage = "This recording is already scheduled or has already been saved."
             LiveRecordingScheduleResult.EXACT_ALARM_ACCESS_REQUIRED -> {
                 operationMessage = "Enable exact alarms to schedule recordings."
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -498,6 +610,7 @@ private fun LiveSourceScreen(
             LiveRecordingScheduleResult.FAILED ->
                 operationMessage = "The recording could not be scheduled."
         }
+        recordingDialogRequest = null
     }
 
     fun leaveCatchUpPlaybackToPlayer() {
@@ -530,7 +643,7 @@ private fun LiveSourceScreen(
             LiveBrowsePage.SEARCH -> leaveSearch()
             LiveBrowsePage.CATEGORY,
             LiveBrowsePage.FAVORITES,
-            -> pageName = LiveBrowsePage.HOME.name
+            -> { homeEntryId += 1L; pageName = LiveBrowsePage.HOME.name }
             LiveBrowsePage.HOME -> Unit
         }
     }
@@ -617,14 +730,14 @@ private fun LiveSourceScreen(
                                 selectedCatchUpChannelId = null
                                 catchUpReturnPageName = LiveBrowsePage.HOME.name
                                 operationMessage = null
-                                pageName = LiveBrowsePage.CATCH_UP.name
+                                catchUpEntryId += 1L; pageName = LiveBrowsePage.CATCH_UP.name
                             },
                             modifier = Modifier.heightIn(min = 48.dp),
                         ) {
                             Text("Catch-up")
                         }
                         TextButton(
-                            onClick = { pageName = LiveBrowsePage.FAVORITES.name },
+                            onClick = { favoritesEntryId += 1L; pageName = LiveBrowsePage.FAVORITES.name },
                             modifier = Modifier
                                 .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
                                 .semantics { contentDescription = "Favorites" },
@@ -657,7 +770,8 @@ private fun LiveSourceScreen(
                                     .heightIn(min = 48.dp)
                                     .clickable {
                                         selectedProviderCategoryId = category.categoryId
-                                        pageName = LiveBrowsePage.CATEGORY.name
+                                        scope.launch { channelListState.scrollToItem(0) }
+                                        categoryEntryId += 1L; pageName = LiveBrowsePage.CATEGORY.name
                                     },
                             ) {
                                 Row(
@@ -696,7 +810,7 @@ private fun LiveSourceScreen(
                         ?.let(categoryLabelById::get)
                         ?: "Live",
                     subtitle = categoryChannelIds.size.toString() + " channels",
-                    onBack = { pageName = LiveBrowsePage.HOME.name },
+                    onBack = { homeEntryId += 1L; pageName = LiveBrowsePage.HOME.name },
                     actions = {
                         TextButton(
                             onClick = { openSearch(LiveBrowsePage.CATEGORY) },
@@ -730,6 +844,13 @@ private fun LiveSourceScreen(
                                 artworkLoader = artworkLoader,
                                 onActivate = { openPlayer(channel.channelId, LiveBrowsePage.CATEGORY) },
                                 onFavorite = { toggleFavorite(channel.channelId) },
+                                onRecord = {
+                                    requestRecording(
+                                        channel.channelId,
+                                        LiveChannelDisplayPolicy.displayName(channel, preferTvgName, hideChannelPrefix, false),
+                                        guide.now,
+                                    )
+                                },
                             )
                         }
                     }
@@ -748,11 +869,19 @@ private fun LiveSourceScreen(
                 }
                 OutlinedTextField(
                     value = searchQuery,
-                    onValueChange = { searchQuery = it },
+                    onValueChange = {
+                        if (searchQuery != it) {
+                            searchQuery = it
+                            scope.launch { searchListState.scrollToItem(0) }
+                        }
+                    },
                     label = { Text("Search channels") },
                     trailingIcon = {
                         if (searchQuery.isNotBlank()) {
-                            TextButton(onClick = { searchQuery = "" }) {
+                            TextButton(onClick = {
+                                searchQuery = ""
+                                scope.launch { searchListState.scrollToItem(0) }
+                            }) {
                                 Text("Clear")
                             }
                         }
@@ -787,6 +916,13 @@ private fun LiveSourceScreen(
                                 artworkLoader = artworkLoader,
                                 onActivate = { openPlayer(channel.channelId, LiveBrowsePage.SEARCH) },
                                 onFavorite = { toggleFavorite(channel.channelId) },
+                                onRecord = {
+                                    requestRecording(
+                                        channel.channelId,
+                                        LiveChannelDisplayPolicy.displayName(channel, preferTvgName, hideChannelPrefix, false),
+                                        guide.now,
+                                    )
+                                },
                             )
                         }
                     }
@@ -800,7 +936,7 @@ private fun LiveSourceScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        TextButton(onClick = { pageName = LiveBrowsePage.HOME.name }) { Text("Back") }
+                        TextButton(onClick = { homeEntryId += 1L; pageName = LiveBrowsePage.HOME.name }) { Text("Back") }
                         Text(
                             "Favorites",
                             color = OwnPlayColors.TextPrimary,
@@ -838,6 +974,13 @@ private fun LiveSourceScreen(
                                 artworkLoader = artworkLoader,
                                 onActivate = { openPlayer(channel.channelId, LiveBrowsePage.FAVORITES) },
                                 onFavorite = { toggleFavorite(channel.channelId) },
+                                onRecord = {
+                                    requestRecording(
+                                        channel.channelId,
+                                        LiveChannelDisplayPolicy.displayName(channel, preferTvgName, hideChannelPrefix, false),
+                                        guide.now,
+                                    )
+                                },
                             )
                         }
                     }
@@ -886,7 +1029,9 @@ private fun LiveSourceScreen(
                         },
                     )
                     LiveFullEpg(
+                        sourceId = sourceId,
                         programs = fullGuide,
+                        channelId = playbackTarget.channelId,
                         nowEpochSeconds = epgNowEpochSeconds,
                         onRecordProgram = ::recordProgram,
                         modifier = Modifier.weight(1f),
@@ -1042,14 +1187,20 @@ private fun LiveSourceScreen(
                 scope.launch { playbackSessionController.retryActiveTarget() }
             },
             catchUpEnabled = catchUpCatalog.supported,
-            onRecordNow = { selectedGuide.now?.let(::recordProgram) },
+            onRecordNow = {
+                selectedGuide.now?.let(::recordProgram) ?: requestRecording(
+                    playbackTarget.channelId,
+                    playbackChannelName,
+                    null,
+                )
+            },
             onScheduleNext = { selectedGuide.next?.let(::recordProgram) },
             onCatchUp = {
                 catchUpRefreshRevision += 1
                 selectedCatchUpChannelId = playbackTarget.channelId
                 catchUpReturnPageName = LiveBrowsePage.PLAYER.name
                 operationMessage = null
-                pageName = LiveBrowsePage.CATCH_UP.name
+                catchUpEntryId += 1L; pageName = LiveBrowsePage.CATCH_UP.name
                 val exited = (context.findLiveActivity() as? MainActivity)
                     ?.exitLiveFullscreen()
                     ?: false
@@ -1103,9 +1254,61 @@ private fun LiveSourceScreen(
             onDismiss = playbackSessionController::returnToPreview,
         )
     }
+
+    recordingDialogRequest?.let { request ->
+        LiveRecordingOptionsDialog(
+            request = request,
+            nowEpochSeconds = epgNowEpochSeconds,
+            catchUpAvailable = recordingCatchUpProgram != null,
+            catchUpFormatSupported = recordingCatchUpFormatSupported,
+            catchUpChecking = recordingCatchUpChecking,
+            onDismiss = { recordingDialogRequest = null },
+            onRecord = { start, end, policy -> beginRecording(request, start, end, policy) },
+            onDownloadCatchUp = {
+                val archived = recordingCatchUpProgram
+                if (archived == null) {
+                    operationMessage = "This program is not available in the source archive."
+                } else {
+                    scope.launch {
+                        try {
+                            val identity = CatchUpDownloadIdentity(
+                                channelId = request.channelId,
+                                programId = archived.programId,
+                                startEpochSeconds = archived.startEpochSeconds,
+                                endEpochSeconds = archived.endEpochSeconds,
+                            )
+                            val item = downloadRepository.enqueue(
+                                DownloadRequest(
+                                    sourceId = sourceId,
+                                    mediaKind = DownloadMediaKind.CATCH_UP,
+                                    contentId = archived.programId,
+                                    title = archived.title,
+                                    sourceContentIdentity = identity.encode(),
+                                ),
+                            )
+                            operationMessage = when (item.status) {
+                                app.ownplay.mobile.downloads.domain.DownloadStatus.QUEUED,
+                                app.ownplay.mobile.downloads.domain.DownloadStatus.WAITING_FOR_WIFI,
+                                app.ownplay.mobile.downloads.domain.DownloadStatus.DOWNLOADING,
+                                app.ownplay.mobile.downloads.domain.DownloadStatus.COMPLETED,
+                                -> "Catch-up download added to Downloads."
+                                else -> "This catch-up format could not be queued."
+                            }
+                            recordingDialogRequest = null
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (_: Exception) {
+                            operationMessage = "The catch-up download could not be queued."
+                        }
+                    }
+                }
+            },
+        )
+    }
 }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 private fun LiveChannelRow(
     channel: LiveOrganizationChannel,
     guide: LiveNowNext,
@@ -1120,12 +1323,13 @@ private fun LiveChannelRow(
     artworkLoader: LibraryArtworkLoader,
     onActivate: () -> Unit,
     onFavorite: () -> Unit,
+    onRecord: () -> Unit,
 ) {
     Surface(
         color = OwnPlayColors.Surface,
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onActivate),
+            .combinedClickable(onClick = onActivate, onLongClick = onRecord),
     ) {
         Row(
             modifier = Modifier.padding(
@@ -1165,9 +1369,16 @@ private fun LiveChannelRow(
                 guide.now?.let { current ->
                     val progress = LiveGuidePolicy.progressFraction(current, nowEpochSeconds)
                     Text(
-                        text = currentProgramLine(current, nowEpochSeconds),
+                        text = current.title,
                         color = OwnPlayColors.TextSecondary,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = currentProgramLine(current, nowEpochSeconds),
+                        color = OwnPlayColors.TextMuted,
                         maxLines = 1,
+                        style = MaterialTheme.typography.bodySmall,
                     )
                     if (progress != null) {
                         LinearProgressIndicator(
@@ -1315,11 +1526,32 @@ private fun rememberLiveSchedule(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun LiveFullEpg(
+    sourceId: app.ownplay.mobile.sources.domain.SourceId,
     programs: List<LiveProgram>,
+    channelId: String,
     nowEpochSeconds: Long,
     onRecordProgram: (LiveProgram) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val listState = rememberContextLazyListState(sourceId.value, "epg", channelId)
+    var userHasScrolled by remember(sourceId, channelId) { mutableStateOf(false) }
+    var programmaticAnchor by remember(sourceId, channelId) { mutableStateOf(false) }
+    LaunchedEffect(listState, sourceId, channelId) {
+        snapshotFlow { listState.isScrollInProgress && !programmaticAnchor }
+            .collect { manualScroll -> if (manualScroll) userHasScrolled = true }
+    }
+    LaunchedEffect(channelId, programs) {
+        if (userHasScrolled || programs.isEmpty()) return@LaunchedEffect
+        val currentIndex = programs.indexOfFirst { program ->
+            val start = program.startEpochSeconds
+            val end = program.endEpochSeconds
+            start != null && end != null && start <= nowEpochSeconds && nowEpochSeconds < end
+        }
+        if (currentIndex >= 0) {
+            programmaticAnchor = true
+            try { listState.scrollToItem(currentIndex) } finally { programmaticAnchor = false }
+        }
+    }
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -1333,6 +1565,7 @@ private fun LiveFullEpg(
             Text("No EPG schedule is available for this channel.", color = OwnPlayColors.TextMuted)
         } else {
             LazyColumn(
+                state = listState,
                 modifier = Modifier.fillMaxWidth().weight(1f),
                 verticalArrangement = Arrangement.spacedBy(3.dp),
             ) {
@@ -1343,14 +1576,19 @@ private fun LiveFullEpg(
                     },
                 ) { program ->
                     val action = LiveRecordingPolicy.actionFor(program, nowEpochSeconds)
+                    val isCurrent = program.startEpochSeconds?.let { it <= nowEpochSeconds } == true &&
+                        program.endEpochSeconds?.let { nowEpochSeconds < it } == true
                     Surface(
-                        color = OwnPlayColors.Surface,
+                        color = if (isCurrent) OwnPlayColors.Accent.copy(alpha = 0.14f) else OwnPlayColors.Surface,
                         shape = OwnPlayShapes.Small,
                         modifier = Modifier
                             .fillMaxWidth()
+                            .semantics {
+                                if (isCurrent) stateDescription = "Current program"
+                            }
                             .combinedClickable(
                                 onClick = {},
-                                onLongClick = { if (action != null) onRecordProgram(program) },
+                                onLongClick = { onRecordProgram(program) },
                             ),
                     ) {
                         Row(
@@ -1401,6 +1639,177 @@ private fun LiveFullEpg(
             }
         }
     }
+}
+
+@Composable
+private fun LiveRecordingOptionsDialog(
+    request: LiveRecordingDialogRequest,
+    nowEpochSeconds: Long,
+    catchUpAvailable: Boolean,
+    catchUpFormatSupported: Boolean,
+    catchUpChecking: Boolean,
+    onDismiss: () -> Unit,
+    onRecord: (startEpochSeconds: Long, endEpochSeconds: Long, LiveRecordingStopPolicy) -> Unit,
+    onDownloadCatchUp: () -> Unit,
+) {
+    var durationMinutesText by remember(request) { mutableStateOf("60") }
+    val durationMinutes = durationMinutesText.toIntOrNull()?.takeIf { it in 1..300 }
+    val program = request.program
+    val start = program?.startEpochSeconds
+    val end = program?.endEpochSeconds
+    val validWindow = start != null && end != null && end > start
+    val current = validWindow && start!! <= nowEpochSeconds && nowEpochSeconds < end!!
+    val future = validWindow && start!! > nowEpochSeconds
+    val past = validWindow && end!! <= nowEpochSeconds
+    val zone = java.time.ZoneId.systemDefault()
+    val initialEnd = remember(request) {
+        java.time.Instant.ofEpochSecond(end ?: (nowEpochSeconds + 3_600L)).atZone(zone)
+    }
+    var customEnd by remember(request) { mutableStateOf(false) }
+    var endDate by remember(request) { mutableStateOf(initialEnd.toLocalDate().toString()) }
+    var endTime by remember(request) {
+        mutableStateOf(initialEnd.toLocalTime().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")))
+    }
+    val captureStart = if (future) start!! else nowEpochSeconds
+    val clockDeadline = app.ownplay.mobile.feature.live.domain.RecordingClockDeadlinePolicy.resolve(
+        endDate, endTime, zone, captureStart,
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Recording · ${request.channelName}") },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    program?.title?.takeIf(String::isNotBlank) ?: "No current EPG program",
+                    color = OwnPlayColors.TextPrimary,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                when {
+                    future -> Text("This program will be scheduled for its listed time.", color = OwnPlayColors.TextSecondary)
+                    current -> Text("Capture starts now; no earlier part of the program is included.", color = OwnPlayColors.TextSecondary)
+                    past -> Text(
+                        when {
+                            catchUpChecking -> "Checking the source archive…"
+                            catchUpAvailable && catchUpFormatSupported -> "This program is archived in a supported finite TS or MP4 format."
+                            catchUpAvailable -> "This program is archived, but its format cannot be downloaded safely."
+                            else -> "This program is not available in the source archive."
+                        },
+                        color = OwnPlayColors.TextSecondary,
+                    )
+                    else -> Text("Without EPG, choose a duration or stop the recording from its notification.", color = OwnPlayColors.TextSecondary)
+                }
+                if (current || !validWindow) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        listOf(30, 60, 90, 120, 240).forEach { minutes ->
+                            TextButton(onClick = { durationMinutesText = minutes.toString() }) {
+                                Text("${minutes}m")
+                            }
+                        }
+                    }
+                    OutlinedTextField(
+                        value = durationMinutesText,
+                        onValueChange = { value -> durationMinutesText = value.filter(Char::isDigit).take(3) },
+                        label = { Text("Duration in minutes (1–300)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                    )
+                    Text(
+                        "Android applies per-app background limits; a long capture can be stopped by the system.",
+                        color = OwnPlayColors.TextMuted,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                if (!past) {
+                    TextButton(onClick = { customEnd = !customEnd }) {
+                        Text(if (customEnd) "Use duration / EPG end" else "Choose end date and time")
+                    }
+                    if (customEnd) {
+                        OutlinedTextField(
+                            value = endDate,
+                            onValueChange = { endDate = it.take(10) },
+                            label = { Text("End date (YYYY-MM-DD)") },
+                            singleLine = true,
+                        )
+                        OutlinedTextField(
+                            value = endTime,
+                            onValueChange = { endTime = it.take(5) },
+                            label = { Text("End time (HH:mm)") },
+                            singleLine = true,
+                        )
+                        Text("Timezone: ${zone.id}", color = OwnPlayColors.TextMuted, style = MaterialTheme.typography.bodySmall)
+                        clockDeadline.error?.let { error ->
+                            Text(
+                                when (error) {
+                                    app.ownplay.mobile.feature.live.domain.RecordingClockError.INVALID_DATE_OR_TIME -> "Enter a valid date and 24-hour time."
+                                    app.ownplay.mobile.feature.live.domain.RecordingClockError.DST_GAP -> "This time does not exist because the clocks move forward."
+                                    app.ownplay.mobile.feature.live.domain.RecordingClockError.DST_OVERLAP -> "This time occurs twice when the clocks move back. Choose another time or use duration."
+                                    app.ownplay.mobile.feature.live.domain.RecordingClockError.NOT_AFTER_START -> "The end must be after the recording starts."
+                                    app.ownplay.mobile.feature.live.domain.RecordingClockError.TOO_LONG -> "Choose an end within 300 minutes of the recording start."
+                                },
+                                color = OwnPlayColors.Error,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            when {
+                customEnd && !past -> TextButton(
+                    enabled = clockDeadline.epochSeconds != null,
+                    onClick = {
+                        clockDeadline.epochSeconds?.let { deadline ->
+                            onRecord(captureStart, deadline, LiveRecordingStopPolicy.ABSOLUTE_TIME)
+                        }
+                    },
+                ) { Text(if (future) "Schedule until chosen time" else "Record until chosen time") }
+                future -> TextButton(
+                    onClick = { onRecord(start!!, end!!, LiveRecordingStopPolicy.PROGRAM_END) },
+                ) { Text("Schedule") }
+                current -> TextButton(
+                    onClick = { onRecord(nowEpochSeconds, end!!, LiveRecordingStopPolicy.PROGRAM_END) },
+                ) { Text("Until program end") }
+                past -> TextButton(enabled = catchUpAvailable && catchUpFormatSupported && !catchUpChecking, onClick = onDownloadCatchUp) {
+                    Text(
+                        when {
+                            catchUpChecking -> "Checking…"
+                            catchUpFormatSupported -> "Download Catch-up"
+                            catchUpAvailable -> "Unsupported format"
+                            else -> "Archive unavailable"
+                        },
+                    )
+                }
+                durationMinutes != null -> TextButton(
+                    onClick = {
+                        onRecord(
+                            nowEpochSeconds,
+                            nowEpochSeconds + durationMinutes * 60L,
+                            LiveRecordingStopPolicy.DEADLINE,
+                        )
+                    },
+                ) { Text("Record for ${durationMinutes}m") }
+                else -> TextButton(enabled = false, onClick = {}) { Text("Choose duration") }
+            }
+        },
+        dismissButton = {
+            Row {
+                if (current && !customEnd && durationMinutes != null) {
+                    TextButton(
+                        onClick = {
+                            onRecord(
+                                nowEpochSeconds,
+                                nowEpochSeconds + durationMinutes * 60L,
+                                LiveRecordingStopPolicy.DEADLINE,
+                            )
+                        },
+                    ) { Text("For ${durationMinutes}m") }
+                }
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+            }
+        },
+    )
 }
 
 @Composable
@@ -1466,7 +1875,7 @@ private fun rememberEpgClock(): Long {
 private fun currentProgramLine(program: LiveProgram, nowEpochSeconds: Long): String {
     val progress = LiveGuidePolicy.progressFraction(program, nowEpochSeconds)
         ?.let { value -> "${(value * 100).toInt()}%" }
-    return listOf(programTimeRange(program), progress, program.title)
+    return listOf(programTimeRange(program), progress?.let { "${it} complete" })
         .filterNotNull()
         .filter(String::isNotBlank)
         .joinToString(" • ")

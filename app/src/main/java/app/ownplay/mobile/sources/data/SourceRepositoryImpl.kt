@@ -79,6 +79,8 @@ class SourceRepositoryImpl(
 
         val existingSources = try {
             sourceDao.getAll()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (_: Exception) {
             return SourceMutationResult.Rejected(SourceMutationRejection.STORAGE_FAILURE)
         }
@@ -91,6 +93,8 @@ class SourceRepositoryImpl(
 
         val priorSelectedSourceId = try {
             activeSourceStore.currentSelectedSourceId()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (_: Exception) {
             return SourceMutationResult.Rejected(SourceMutationRejection.STORAGE_FAILURE)
         }
@@ -286,6 +290,8 @@ class SourceRepositoryImpl(
         refreshMutex.withLock {
             val source = try {
                 sourceDao.get(sourceId.value)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (_: Exception) {
                 return@withLock storageFailure()
             } ?: return@withLock SourceRefreshResult.Failure(
@@ -321,6 +327,8 @@ class SourceRepositoryImpl(
 
             val previous = try {
                 refreshStateDao.get(sourceId.value)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (_: Exception) {
                 return@withLock storageFailure()
             }

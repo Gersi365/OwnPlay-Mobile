@@ -112,7 +112,7 @@ class WorkManagedDownloadRepositoryTest {
 
 
     @Test
-    fun removingImportedCompletedRecordDeletesExternalFile() = runBlocking {
+    fun forgettingImportedCompletedRecordKeepsExternalFile() = runBlocking {
         val store = DownloadTestStore()
         val completed = store.completed()
         val row = requireNotNull(store.rows[completed.downloadId.value])
@@ -131,11 +131,26 @@ class WorkManagedDownloadRepositoryTest {
             available = { true },
             storage = storage,
         )
-        assertTrue(repository.remove(completed.downloadId))
-        assertEquals(
-            listOf("content://com.android.externalstorage.documents/document/primary%3ADownload%2FOwnPlay%20Downloads%2FMovie.mkv"),
-            storage.removedReferences,
+        assertTrue(repository.forget(completed.downloadId))
+        assertTrue(storage.removedReferences.isEmpty())
+        assertNull(store.repository.get(completed.downloadId))
+    }
+
+    @Test
+    fun deletingOwnPlayManagedCompletedRecordRemovesItsFile() = runBlocking {
+        val store = DownloadTestStore()
+        val completed = store.completed()
+        val reference = requireNotNull(completed.localReference)
+        val storage = RecordingStorage()
+        val repository = managed(
+            store = store,
+            scheduler = FakeScheduler(),
+            available = { true },
+            storage = storage,
         )
+
+        assertTrue(repository.remove(completed.downloadId))
+        assertEquals(listOf(reference), storage.removedReferences)
         assertNull(store.repository.get(completed.downloadId))
     }
 

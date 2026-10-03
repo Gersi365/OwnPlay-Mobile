@@ -20,10 +20,10 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
+import app.ownplay.mobile.design.rememberContextLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import app.ownplay.mobile.design.rememberContextLazyGridState
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
@@ -33,9 +33,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -60,6 +62,7 @@ import app.ownplay.mobile.feature.library.domain.LibraryMovieSummary
 import app.ownplay.mobile.feature.library.domain.LibrarySeriesSummary
 import app.ownplay.mobile.feature.library.domain.LibrarySortOption
 import app.ownplay.mobile.sources.domain.SourceSummary
+import kotlinx.coroutines.launch
 
 private enum class LibraryPage {
     HOME,
@@ -101,6 +104,7 @@ internal fun LibraryCatalogContent(
     var pageName by rememberSaveable(source.sourceId.value) {
         mutableStateOf(LibraryPage.HOME.name)
     }
+    var browseEntryId by rememberSaveable(source.sourceId.value) { mutableStateOf(0L) }
     var sortName by rememberSaveable(source.sourceId.value) {
         mutableStateOf(LibrarySortOption.PROVIDER_ORDER.name)
     }
@@ -202,18 +206,37 @@ internal fun LibraryCatalogContent(
         )
     }
 
-    val homeListState = rememberLazyListState()
-    val continueWatchingListState = rememberLazyListState()
-    val movieCategoryListState = rememberLazyListState()
-    val seriesCategoryListState = rememberLazyListState()
-    val movieGridState = rememberLazyGridState()
-    val seriesGridState = rememberLazyGridState()
-    val favoriteMoviesGridState = rememberLazyGridState()
-    val favoriteSeriesGridState = rememberLazyGridState()
-    val searchListState = rememberLazyListState()
+    val homeListState = rememberContextLazyListState(source.sourceId.value, browseEntryId, "home")
+    val continueWatchingListState = rememberContextLazyListState(source.sourceId.value, browseEntryId, "continue-watching")
+    val movieCategoryListState = rememberContextLazyListState(source.sourceId.value, browseEntryId, "movie-categories")
+    val seriesCategoryListState = rememberContextLazyListState(source.sourceId.value, browseEntryId, "series-categories")
+    val movieGridState = rememberContextLazyGridState(source.sourceId.value, browseEntryId, "movies", movieCategoryId, sortName)
+    val seriesGridState = rememberContextLazyGridState(source.sourceId.value, browseEntryId, "series", seriesCategoryId, sortName)
+    val favoriteMoviesGridState = rememberContextLazyGridState(source.sourceId.value, browseEntryId, "favorite-movies", favoriteKindName, sortName)
+    val favoriteSeriesGridState = rememberContextLazyGridState(source.sourceId.value, browseEntryId, "favorite-series", favoriteKindName, sortName)
+    val searchListState = rememberContextLazyListState(source.sourceId.value, browseEntryId, "search", searchQuery, sortName)
+    val scrollScope = rememberCoroutineScope()
+
+    fun resetCurrentResultsToTop() {
+        scrollScope.launch {
+            when (page) {
+                LibraryPage.MOVIE_GRID -> movieGridState.scrollToItem(0)
+                LibraryPage.SERIES_GRID -> seriesGridState.scrollToItem(0)
+                LibraryPage.FAVORITES -> {
+                    if (favoriteKind == LibraryFavoriteKind.MOVIES) {
+                        favoriteMoviesGridState.scrollToItem(0)
+                    } else {
+                        favoriteSeriesGridState.scrollToItem(0)
+                    }
+                }
+                LibraryPage.SEARCH -> searchListState.scrollToItem(0)
+                else -> Unit
+            }
+        }
+    }
 
     BackHandler(enabled = page != LibraryPage.HOME) {
-        pageName = when (page) {
+        browseEntryId += 1L; pageName = when (page) {
             LibraryPage.MOVIE_GRID -> {
                 if (hasMovieCategories) LibraryPage.MOVIE_CATEGORIES.name else LibraryPage.HOME.name
             }
@@ -224,6 +247,7 @@ internal fun LibraryCatalogContent(
         }
     }
 
+    key(browseEntryId) {
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -255,7 +279,7 @@ internal fun LibraryCatalogContent(
                         )
                     }
                     TextButton(
-                        onClick = { pageName = LibraryPage.SEARCH.name },
+                        onClick = { browseEntryId += 1L; pageName = LibraryPage.SEARCH.name },
                         modifier = Modifier.heightIn(min = 48.dp),
                     ) {
                         Text("Search")
@@ -265,13 +289,13 @@ internal fun LibraryCatalogContent(
             LibraryPage.CONTINUE_WATCHING -> {
                 LibraryPageHeader(
                     title = "Continue Watching",
-                    onBack = { pageName = LibraryPage.HOME.name },
+                    onBack = { browseEntryId += 1L; pageName = LibraryPage.HOME.name },
                 )
             }
             LibraryPage.MOVIE_CATEGORIES -> {
                 LibraryPageHeader(
                     title = "Movies",
-                    onBack = { pageName = LibraryPage.HOME.name },
+                    onBack = { browseEntryId += 1L; pageName = LibraryPage.HOME.name },
                 )
             }
             LibraryPage.MOVIE_GRID -> {
@@ -281,7 +305,7 @@ internal fun LibraryCatalogContent(
                         ?.let(movieCategoryLabelById::get)
                         ?: "Movies",
                     onBack = {
-                        pageName = if (hasMovieCategories) {
+                        browseEntryId += 1L; pageName = if (hasMovieCategories) {
                             LibraryPage.MOVIE_CATEGORIES.name
                         } else {
                             LibraryPage.HOME.name
@@ -290,13 +314,18 @@ internal fun LibraryCatalogContent(
                 )
                 LibrarySortControls(
                     selected = sort,
-                    onSelected = { sortName = it.name },
+                    onSelected = {
+                        if (sortName != it.name) {
+                            sortName = it.name
+                            resetCurrentResultsToTop()
+                        }
+                    },
                 )
             }
             LibraryPage.SERIES_CATEGORIES -> {
                 LibraryPageHeader(
                     title = "Series",
-                    onBack = { pageName = LibraryPage.HOME.name },
+                    onBack = { browseEntryId += 1L; pageName = LibraryPage.HOME.name },
                 )
             }
             LibraryPage.SERIES_GRID -> {
@@ -306,7 +335,7 @@ internal fun LibraryCatalogContent(
                         ?.let(seriesCategoryLabelById::get)
                         ?: "Series",
                     onBack = {
-                        pageName = if (hasSeriesCategories) {
+                        browseEntryId += 1L; pageName = if (hasSeriesCategories) {
                             LibraryPage.SERIES_CATEGORIES.name
                         } else {
                             LibraryPage.HOME.name
@@ -315,23 +344,34 @@ internal fun LibraryCatalogContent(
                 )
                 LibrarySortControls(
                     selected = sort,
-                    onSelected = { sortName = it.name },
+                    onSelected = {
+                        if (sortName != it.name) {
+                            sortName = it.name
+                            resetCurrentResultsToTop()
+                        }
+                    },
                 )
             }
             LibraryPage.FAVORITES -> {
                 LibraryPageHeader(
                     title = "Favorites",
-                    onBack = { pageName = LibraryPage.HOME.name },
+                    onBack = { browseEntryId += 1L; pageName = LibraryPage.HOME.name },
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     FilterChip(
                         selected = favoriteKind == LibraryFavoriteKind.MOVIES,
-                        onClick = { favoriteKindName = LibraryFavoriteKind.MOVIES.name },
+                        onClick = {
+                            favoriteKindName = LibraryFavoriteKind.MOVIES.name
+                            scrollScope.launch { favoriteMoviesGridState.scrollToItem(0) }
+                        },
                         label = { Text("Movies") },
                     )
                     FilterChip(
                         selected = favoriteKind == LibraryFavoriteKind.SERIES,
-                        onClick = { favoriteKindName = LibraryFavoriteKind.SERIES.name },
+                        onClick = {
+                            favoriteKindName = LibraryFavoriteKind.SERIES.name
+                            scrollScope.launch { favoriteSeriesGridState.scrollToItem(0) }
+                        },
                         label = { Text("Series") },
                     )
                 }
@@ -339,15 +379,23 @@ internal fun LibraryCatalogContent(
             LibraryPage.SEARCH -> {
                 LibraryPageHeader(
                     title = "Search Library",
-                    onBack = { pageName = LibraryPage.HOME.name },
+                    onBack = { browseEntryId += 1L; pageName = LibraryPage.HOME.name },
                 )
                 OutlinedTextField(
                     value = searchQuery,
-                    onValueChange = onSearchQueryChange,
+                    onValueChange = { query ->
+                        if (query != searchQuery) {
+                            onSearchQueryChange(query)
+                            scrollScope.launch { searchListState.scrollToItem(0) }
+                        }
+                    },
                     label = { Text("Movies and Series") },
                     trailingIcon = {
                         if (searchQuery.isNotBlank()) {
-                            TextButton(onClick = { onSearchQueryChange("") }) {
+                            TextButton(onClick = {
+                                onSearchQueryChange("")
+                                scrollScope.launch { searchListState.scrollToItem(0) }
+                            }) {
                                 Text("Clear")
                             }
                         }
@@ -382,10 +430,11 @@ internal fun LibraryCatalogContent(
                     onOpenMovie = onOpenMovie,
                     onOpenSeries = onOpenSeries,
                     onToggleFavorite = onToggleFavorite,
-                    onShowContinueWatching = { pageName = LibraryPage.CONTINUE_WATCHING.name },
+                    onShowContinueWatching = { browseEntryId += 1L; pageName = LibraryPage.CONTINUE_WATCHING.name },
                     onShowMovies = {
                         movieCategoryId = null
-                        pageName = if (hasMovieCategories) {
+                        scrollScope.launch { movieGridState.scrollToItem(0) }
+                        browseEntryId += 1L; pageName = if (hasMovieCategories) {
                             LibraryPage.MOVIE_CATEGORIES.name
                         } else {
                             LibraryPage.MOVIE_GRID.name
@@ -393,13 +442,14 @@ internal fun LibraryCatalogContent(
                     },
                     onShowSeries = {
                         seriesCategoryId = null
-                        pageName = if (hasSeriesCategories) {
+                        scrollScope.launch { seriesGridState.scrollToItem(0) }
+                        browseEntryId += 1L; pageName = if (hasSeriesCategories) {
                             LibraryPage.SERIES_CATEGORIES.name
                         } else {
                             LibraryPage.SERIES_GRID.name
                         }
                     },
-                    onShowFavorites = { pageName = LibraryPage.FAVORITES.name },
+                    onShowFavorites = { browseEntryId += 1L; pageName = LibraryPage.FAVORITES.name },
                 )
                 LibraryPage.CONTINUE_WATCHING -> LibraryContinueWatchingAllContent(
                     items = catalog.continueWatching,
@@ -423,7 +473,8 @@ internal fun LibraryCatalogContent(
                     emptyMessage = "No Movie categories are available from this source.",
                     onOpen = { category ->
                         movieCategoryId = category.categoryId
-                        pageName = LibraryPage.MOVIE_GRID.name
+                        scrollScope.launch { movieGridState.scrollToItem(0) }
+                        browseEntryId += 1L; pageName = LibraryPage.MOVIE_GRID.name
                     },
                 )
                 LibraryPage.MOVIE_GRID -> LibraryMovieGridContent(
@@ -448,7 +499,8 @@ internal fun LibraryCatalogContent(
                     emptyMessage = "No Series categories are available from this source.",
                     onOpen = { category ->
                         seriesCategoryId = category.categoryId
-                        pageName = LibraryPage.SERIES_GRID.name
+                        scrollScope.launch { seriesGridState.scrollToItem(0) }
+                        browseEntryId += 1L; pageName = LibraryPage.SERIES_GRID.name
                     },
                 )
                 LibraryPage.SERIES_GRID -> LibrarySeriesGridContent(
@@ -490,6 +542,7 @@ internal fun LibraryCatalogContent(
                 )
             }
         }
+    }
     }
 }
 

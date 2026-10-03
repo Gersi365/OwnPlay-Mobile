@@ -1,10 +1,16 @@
 package app.ownplay.mobile.feature.playback.data
 
+import android.net.Uri
 import app.ownplay.mobile.data.db.LiveChannelEntity
 import app.ownplay.mobile.data.db.LiveOrganizationDao
 import app.ownplay.mobile.data.db.SourceDao
 import app.ownplay.mobile.data.security.CredentialStore
 import app.ownplay.mobile.data.security.SourceSecret
+import app.ownplay.mobile.downloads.data.DownloadedMediaVerifier
+import app.ownplay.mobile.downloads.domain.DownloadId
+import app.ownplay.mobile.downloads.domain.DownloadMediaKind
+import app.ownplay.mobile.downloads.domain.DownloadRepository
+import app.ownplay.mobile.downloads.domain.DownloadStatus
 import app.ownplay.mobile.feature.playback.domain.CatchUpPlaybackMediaResolver
 import app.ownplay.mobile.feature.playback.domain.PlaybackTarget
 import app.ownplay.mobile.feature.playback.domain.PreparedPlaybackAlternative
@@ -22,8 +28,35 @@ internal class SourceBackedCatchUpPlaybackMediaResolver(
     private val credentialStore: CredentialStore,
     private val xtreamClient: XtreamClient,
     private val m3uCatchUpResolver: M3uCatchUpResolver,
+    private val downloadRepository: DownloadRepository? = null,
+    private val downloadedMediaVerifier: DownloadedMediaVerifier? = null,
 ) : CatchUpPlaybackMediaResolver {
     override suspend fun resolve(target: PlaybackTarget.CatchUp): PreparedPlaybackMedia? {
+        target.localMediaUri?.let { reference ->
+            val uri = runCatching { Uri.parse(reference) }.getOrNull() ?: return null
+            if (uri.scheme != "content" && uri.scheme != "file") return null
+            return PreparedPlaybackMedia(uri = uri.toString())
+        }
+        target.offlineDownloadId?.let { id ->
+            val downloadId = runCatching { DownloadId(id) }.getOrNull() ?: return null
+            val repository = downloadRepository ?: return null
+            val item = repository.get(downloadId) ?: return null
+            if (
+                item.sourceId != target.sourceId ||
+                item.mediaKind != DownloadMediaKind.CATCH_UP ||
+                item.contentId != target.programId ||
+                item.status != DownloadStatus.COMPLETED ||
+                item.verifiedBytes == null ||
+                item.verifiedBytes != item.bytesDownloaded
+            ) return null
+            val verifier = downloadedMediaVerifier ?: return null
+            if (!verifier.verify(item)) {
+                repository.fail(downloadId, app.ownplay.mobile.downloads.domain.DownloadFailureCode.INTEGRITY)
+                return null
+            }
+            return item.localReference?.let(::PreparedPlaybackMedia)
+        }
+
         val source = sourceDao.get(target.sourceId.value) ?: return null
         if (!source.enabled) return null
         val channel = liveOrganizationDao.getAvailableChannel(

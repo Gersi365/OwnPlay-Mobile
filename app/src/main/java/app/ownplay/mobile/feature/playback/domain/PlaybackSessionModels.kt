@@ -80,6 +80,8 @@ sealed interface PlaybackTarget {
         val title: String,
         val startEpochSeconds: Long,
         val endEpochSeconds: Long,
+        val offlineDownloadId: String? = null,
+        val localMediaUri: String? = null,
     ) : PlaybackTarget {
         init {
             require(channelId.isNotBlank()) { "Catch-up channel id must not be blank" }
@@ -87,6 +89,12 @@ sealed interface PlaybackTarget {
             require(title.isNotBlank()) { "Catch-up title must not be blank" }
             require(startEpochSeconds > 0L) { "Catch-up start must be positive" }
             require(endEpochSeconds > startEpochSeconds) { "Catch-up end must follow start" }
+            require(offlineDownloadId == null || offlineDownloadId.isNotBlank()) {
+                "Offline catch-up download id must not be blank"
+            }
+            require(localMediaUri == null || localMediaUri.isNotBlank()) {
+                "Local media URI must not be blank"
+            }
         }
     }
 

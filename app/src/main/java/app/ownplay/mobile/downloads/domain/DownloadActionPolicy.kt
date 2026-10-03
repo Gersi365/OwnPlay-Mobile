@@ -4,8 +4,10 @@ enum class DownloadUserAction {
     DOWNLOAD,
     PAUSE,
     RESUME,
+    CANCEL,
     RETRY,
     PLAY_OFFLINE,
+    FORGET,
     REMOVE,
 }
 
@@ -50,6 +52,14 @@ class DownloadActionHandler(private val repository: DownloadRepository) {
                     current.contentId != request.contentId
                 )
         ) return false
+        if (action == DownloadUserAction.CANCEL) {
+            return current != null && DownloadNotificationPolicy.canCancel(current.status) &&
+                repository.cancel(current.downloadId)
+        }
+        if (action == DownloadUserAction.FORGET) {
+            return current != null && DownloadUserActionPolicy.canRemove(current.status) &&
+                repository.forget(current.downloadId)
+        }
         if (action == DownloadUserAction.REMOVE) {
             return current != null && DownloadUserActionPolicy.canRemove(current.status) &&
                 repository.remove(current.downloadId)
@@ -60,7 +70,11 @@ class DownloadActionHandler(private val repository: DownloadRepository) {
                 repository.enqueue(request).status == DownloadStatus.QUEUED
             DownloadUserAction.PAUSE -> current != null && repository.pause(current.downloadId)
             DownloadUserAction.RESUME -> current != null && repository.resume(current.downloadId)
-            DownloadUserAction.PLAY_OFFLINE, DownloadUserAction.REMOVE -> false
+            DownloadUserAction.CANCEL,
+            DownloadUserAction.FORGET,
+            DownloadUserAction.PLAY_OFFLINE,
+            DownloadUserAction.REMOVE,
+            -> false
         }
     }
 }

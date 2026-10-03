@@ -4,7 +4,6 @@ import android.app.PendingIntent
 import android.app.PictureInPictureParams
 import android.app.RemoteAction
 import android.content.Intent
-import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
@@ -74,6 +73,8 @@ class MainActivity : ComponentActivity() {
     }
     private val downloadDetailsNavigation = MutableStateFlow<DownloadDetailsNavigation?>(null)
     private val sourceSettingsNavigation = MutableStateFlow<SourceId?>(null)
+    private val openRecordingsRequest = MutableStateFlow(0L)
+    private var recordingNavigationSequence = 0L
     private val ownPlayApplication: OwnPlayApplication
         get() = application as OwnPlayApplication
 
@@ -81,6 +82,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         acceptDownloadNavigation(intent)
+        acceptRecordingsNavigation(intent)
         acceptSourceSettingsNavigation(intent)
 
         lifecycleScope.launch {
@@ -110,6 +112,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val downloadNavigation by downloadDetailsNavigation.collectAsState()
             val sourceSettingsRequest by sourceSettingsNavigation.collectAsState()
+            val recordingsRequest by openRecordingsRequest.collectAsState()
             OwnPlayTheme {
                 OwnPlayApp(
                     downloadDetailsNavigation = downloadNavigation,
@@ -119,6 +122,12 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                     sourceSettingsNavigation = sourceSettingsRequest,
+                    openRecordingsRequestId = recordingsRequest,
+                    onOpenRecordingsRequestConsumed = {
+                        if (openRecordingsRequest.value == recordingsRequest) {
+                            openRecordingsRequest.value = 0L
+                        }
+                    },
                     onSourceSettingsNavigationConsumed = {
                         if (sourceSettingsNavigation.value == sourceSettingsRequest) {
                             sourceSettingsNavigation.value = null
@@ -133,6 +142,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         acceptDownloadNavigation(intent)
+        acceptRecordingsNavigation(intent)
         acceptSourceSettingsNavigation(intent)
     }
 
@@ -158,6 +168,12 @@ class MainActivity : ComponentActivity() {
             mediaKind = mediaKind,
             contentId = contentId,
         )
+    }
+
+    private fun acceptRecordingsNavigation(intent: Intent?) {
+        if (intent?.action != DownloadNotificationNavigationContract.ACTION_OPEN_RECORDINGS) return
+        recordingNavigationSequence += 1L
+        openRecordingsRequest.value = recordingNavigationSequence
     }
 
     private fun acceptSourceSettingsNavigation(intent: Intent?) {
@@ -272,16 +288,10 @@ class MainActivity : ComponentActivity() {
             state.target != null && state.presentation == PlaybackPresentation.FULLSCREEN
 
         if (fullscreen) {
-            if (requestedOrientation != ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE) {
-                requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-            }
             controller.systemBarsBehavior =
                 WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             controller.hide(WindowInsetsCompat.Type.systemBars())
         } else if (state.presentation != PlaybackPresentation.PICTURE_IN_PICTURE) {
-            if (requestedOrientation != ActivityInfo.SCREEN_ORIENTATION_PORTRAIT) {
-                requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-            }
             if (!isInPictureInPictureMode) {
                 controller.show(WindowInsetsCompat.Type.systemBars())
             }
@@ -340,4 +350,3 @@ class MainActivity : ComponentActivity() {
         const val PIP_PLAY_PAUSE_REQUEST_CODE = 7101
     }
 }
-

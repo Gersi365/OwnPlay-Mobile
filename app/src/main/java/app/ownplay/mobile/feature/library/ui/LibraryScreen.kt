@@ -162,6 +162,11 @@ fun LibraryScreen(
                     episodeId = request.contentId,
                 )
             }
+            DownloadMediaKind.CATCH_UP -> {
+                onDownloadDetailsNavigationConsumed()
+                onReturnFromDownloadDetails?.invoke()
+                null
+            }
         }
     }
 

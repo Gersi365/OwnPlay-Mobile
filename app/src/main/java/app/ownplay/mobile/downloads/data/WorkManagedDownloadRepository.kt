@@ -131,6 +131,7 @@ internal class WorkManagedDownloadRepository(
         scheduler.cancel(downloadId)
         if (
             existing.status == DownloadStatus.COMPLETED &&
+            existing.origin == DownloadOrigin.APP_MANAGED &&
             existing.localReference != null &&
             !storage.removePublished(existing.localReference)
         ) {
@@ -142,6 +143,17 @@ internal class WorkManagedDownloadRepository(
             destinationAssignments.remove(downloadId)
         }
         return removed
+    }
+
+    override suspend fun forget(downloadId: DownloadId): Boolean {
+        if (delegate.get(downloadId) == null) return false
+        scheduler.cancel(downloadId)
+        val forgotten = delegate.remove(downloadId)
+        if (forgotten) {
+            notifications.cancelAll(downloadId)
+            destinationAssignments.remove(downloadId)
+        }
+        return forgotten
     }
 
     private suspend fun reconcileCompletedOutput(item: DownloadItem): DownloadItem {

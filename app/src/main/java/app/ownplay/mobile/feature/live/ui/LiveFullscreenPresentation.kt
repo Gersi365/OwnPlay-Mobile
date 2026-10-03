@@ -337,6 +337,16 @@ internal fun LiveFullscreenPresentation(
                                         },
                                     )
                                 }
+                                if (guide.now == null) {
+                                    FullscreenControlButton(
+                                        label = "Record",
+                                        enabled = true,
+                                        onClick = {
+                                            registerInteraction()
+                                            onRecordNow()
+                                        },
+                                    )
+                                }
                                 guide.next?.let { next ->
                                     Text(
                                         text = "Next ${fullscreenProgramTimeRange(next)} • ${next.title}",

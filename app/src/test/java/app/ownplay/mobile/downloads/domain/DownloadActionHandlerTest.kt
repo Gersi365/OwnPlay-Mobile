@@ -65,7 +65,7 @@ class DownloadActionHandlerTest {
         val item = store.completed()
         assertFalse(handler.execute(DownloadUserAction.PLAY_OFFLINE, store.request, item.downloadId))
         assertEquals(item, store.repository.get(item.downloadId))
-        assertTrue(handler.execute(DownloadUserAction.REMOVE, store.request, item.downloadId))
+        assertTrue(handler.execute(DownloadUserAction.FORGET, store.request, item.downloadId))
         assertNull(store.repository.get(item.downloadId))
     }
 }

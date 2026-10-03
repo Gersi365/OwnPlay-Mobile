@@ -18,6 +18,7 @@ data class LiveCatchUpProgram(
 data class LiveCatchUpCatalog(
     val supported: Boolean,
     val programs: List<LiveCatchUpProgram> = emptyList(),
+    val downloadableProgramIds: Set<String> = emptySet(),
 )
 
 interface LiveCatchUpRepository {

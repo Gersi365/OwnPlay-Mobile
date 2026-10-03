@@ -64,8 +64,8 @@ internal fun LibraryDownloadActions(
     val notificationPermissionPrompted by permissionPreferences.prompted.collectAsState(initial = false)
     var busy by remember(request.sourceId, request.mediaKind, request.contentId) { mutableStateOf(false) }
     var failed by remember(request.sourceId, request.mediaKind, request.contentId) { mutableStateOf(false) }
-    var removeConfirmationOpen by remember(request.sourceId, request.mediaKind, request.contentId) {
-        mutableStateOf(false)
+    var pendingRemovalAction by remember(request.sourceId, request.mediaKind, request.contentId) {
+        mutableStateOf<DownloadUserAction?>(null)
     }
     var pendingPermissionAction by remember(request.sourceId, request.mediaKind, request.contentId) {
         mutableStateOf<DownloadUserAction?>(null)
@@ -127,30 +127,38 @@ internal fun LibraryDownloadActions(
         }
     }
 
-    if (removeConfirmationOpen) {
+    pendingRemovalAction?.let { removalAction ->
+        val forgetting = removalAction == DownloadUserAction.FORGET
         AlertDialog(
-            onDismissRequest = { if (!busy) removeConfirmationOpen = false },
-            title = { Text("Delete offline file?") },
+            onDismissRequest = { if (!busy) pendingRemovalAction = null },
+            title = { Text(if (forgetting) "Forget from OwnPlay?" else "Delete physical file?") },
             text = {
                 Text(
-                    "This will remove the item from OwnPlay and permanently delete any local file associated with it. Do you want to continue?",
+                    if (forgetting) {
+                        "This removes OwnPlay's entry and keeps the file on this device."
+                    } else {
+                        "This permanently deletes the OwnPlay-managed file and its entry from this device."
+                    },
                 )
             },
             confirmButton = {
                 TextButton(
                     enabled = !busy,
                     onClick = {
-                        removeConfirmationOpen = false
-                        dispatch(DownloadUserAction.REMOVE)
+                        pendingRemovalAction = null
+                        dispatch(removalAction)
                     },
                 ) {
-                    Text("Remove and delete file", color = OwnPlayColors.Error)
+                    Text(
+                        if (forgetting) "Forget" else "Delete file",
+                        color = if (forgetting) OwnPlayColors.TextPrimary else OwnPlayColors.Error,
+                    )
                 }
             },
             dismissButton = {
                 TextButton(
                     enabled = !busy,
-                    onClick = { removeConfirmationOpen = false },
+                    onClick = { pendingRemovalAction = null },
                 ) {
                     Text("Cancel")
                 }
@@ -186,10 +194,20 @@ internal fun LibraryDownloadActions(
             ) {
                 TextButton(
                     enabled = !busy,
-                    onClick = { removeConfirmationOpen = true },
+                    onClick = { pendingRemovalAction = DownloadUserAction.FORGET },
                     modifier = Modifier.heightIn(min = 48.dp),
                 ) {
-                    Text("Remove", color = OwnPlayColors.Error)
+                    Text("Forget from OwnPlay")
+                }
+                if (
+                    item != null && item.status == DownloadStatus.COMPLETED &&
+                    item.origin == DownloadOrigin.APP_MANAGED
+                ) {
+                    TextButton(
+                        enabled = !busy,
+                        onClick = { pendingRemovalAction = DownloadUserAction.REMOVE },
+                        modifier = Modifier.heightIn(min = 48.dp),
+                    ) { Text("Delete file", color = OwnPlayColors.Error) }
                 }
             }
         }
@@ -207,6 +225,7 @@ internal fun offlinePlaybackTarget(sourceId: SourceId, item: DownloadItem): Play
     return when (item.mediaKind) {
         DownloadMediaKind.MOVIE -> PlaybackTarget.Movie(sourceId, item.contentId, item.downloadId.value)
         DownloadMediaKind.EPISODE -> PlaybackTarget.Episode(sourceId, item.contentId, item.downloadId.value)
+        DownloadMediaKind.CATCH_UP -> null
     }
 }
 
@@ -217,8 +236,10 @@ internal fun downloadActionLabel(
     DownloadUserAction.DOWNLOAD -> "Download"
     DownloadUserAction.PAUSE -> "Pause"
     DownloadUserAction.RESUME -> "Resume"
+    DownloadUserAction.CANCEL -> "Cancel"
     DownloadUserAction.RETRY -> "Retry"
     DownloadUserAction.PLAY_OFFLINE -> if (offlineResumeAvailable) "Resume Offline" else "Play Offline"
+    DownloadUserAction.FORGET -> "Forget from OwnPlay"
     DownloadUserAction.REMOVE -> "Remove"
 }
 
@@ -230,6 +251,7 @@ internal fun hasOfflineResumeProgress(
     val expectedKind = when (mediaKind) {
         DownloadMediaKind.MOVIE -> LibraryContentKind.MOVIE
         DownloadMediaKind.EPISODE -> LibraryContentKind.EPISODE
+        DownloadMediaKind.CATCH_UP -> return false
     }
     return continueWatching.any { item ->
         item.contentKind == expectedKind && item.contentId == contentId

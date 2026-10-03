@@ -244,6 +244,10 @@ class PlaybackSessionController internal constructor(
 
     fun reconcileActiveSource(activeSourceId: SourceId?) {
         val target = mutableState.value.target ?: return
+        if (
+            target is PlaybackTarget.CatchUp &&
+            (target.localMediaUri != null || target.offlineDownloadId != null)
+        ) return
         if (activeSourceId != target.sourceId) {
             clear()
         }
