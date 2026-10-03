@@ -43,7 +43,7 @@ build_tools="$android_home/build-tools/36.0.0"
 script_dir="$(cd -- "$(dirname -- "$0")" && pwd -P)"
 [[ -s "$script_dir/private-drive-bridge.py" && -s "$script_dir/sign-verified-v37.sh" ]] ||
   fail "nonsecret signing components missing"
-[[ "$(git hash-object -- "$script_dir/private-drive-bridge.py")" == "b51d08b7ae3e9c811595048e5675e7810b16fd58" ]] ||
+[[ "$(git hash-object -- "$script_dir/private-drive-bridge.py")" == "bf51ae6febc4e1ac4eba8072563a15a87645b73d" ]] ||
   fail "verified canonical private Drive bridge version mismatch"
 [[ "$(git hash-object -- "$script_dir/sign-verified-v37.sh")" == "cb2db8ec3095f594906127b308f9996e166ea4d3" ]] ||
   fail "verified canonical QA signer stage version mismatch"

@@ -22,10 +22,10 @@ from pathlib import Path
 
 HOST = "https://www.googleapis.com"
 ROOT = "1K4laogfioYHgnwXRzIEFzlUiweZ7-3_F"
-BUILD_PARENT = "10PNx--XlYzrpuUKZnRWFqw5K823UIoTR"  # 07_BUILD_ARTIFACTS
-QA_PARENT = "18LOFaWlM0TCSYvctOpLGIDMWwGCDbiez"  # QA Builds
-OUTPUT_PARENT = "1AspdPq1R8Wy4LuvhRqPHvD2GzongdFlB"  # dedicated signed-output child
-INPUT_ID = "14pU63AlVNTXXqZoZZWTc0dQrRAoTf1Cf"
+BUILD_PARENT = "1TYXJbt70YO3Y60Tlcfh_MeIJs7rZWCft"  # 07_BUILD_ARTIFACTS
+QA_PARENT = "11c69tA6CROAk9m3MiIDjGOTbv7yiWbdX"  # QA Builds
+OUTPUT_PARENT = "1YShs0N0XR0U7jxQ-PmSCRfypqRGmY5Yj"  # dedicated signed-output child
+INPUT_ID = "1J_Uzr3yV77R2AvP_5mhSqtZMFJLOuYHK"
 INPUT_NAME = "OwnPlay-QA-v37-presign-unsigned-run-37101235385.zip"
 INPUT_MIME = "application/zip"
 APK_MIME = "application/vnd.android.package-archive"
