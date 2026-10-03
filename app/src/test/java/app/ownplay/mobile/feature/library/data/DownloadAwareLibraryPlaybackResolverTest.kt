@@ -53,14 +53,24 @@ class DownloadAwareLibraryPlaybackResolverTest {
 
     @Test
     fun completedMovieAndEpisodeResolveOnlyTheirLocalReference() = runBlocking {
-        for (kind in DownloadMediaKind.entries) {
+        for (kind in listOf(DownloadMediaKind.MOVIE, DownloadMediaKind.EPISODE)) {
             val item = store.completed(store.request.copy(mediaKind = kind))
             val target = when (kind) {
                 DownloadMediaKind.MOVIE -> PlaybackTarget.Movie(item.sourceId, item.contentId, item.downloadId.value)
                 DownloadMediaKind.EPISODE -> PlaybackTarget.Episode(item.sourceId, item.contentId, item.downloadId.value)
+                DownloadMediaKind.CATCH_UP -> error("Catch-up uses its own playback target, not Library playback")
             }
             assertEquals(item.localReference, resolver().resolve(target)?.uri)
         }
+        assertTrue(onlineTargets.isEmpty())
+    }
+
+    @Test
+    fun aCatchUpDownloadCannotBeOpenedAsAnOfflineMovieOrEpisode() = runBlocking {
+        val item = store.completed(store.request.copy(mediaKind = DownloadMediaKind.CATCH_UP))
+        val resolver = resolver { error("A Catch-up item must not reach Library file verification") }
+        assertNull(resolver.resolve(PlaybackTarget.Movie(item.sourceId, item.contentId, item.downloadId.value)))
+        assertNull(resolver.resolve(PlaybackTarget.Episode(item.sourceId, item.contentId, item.downloadId.value)))
         assertTrue(onlineTargets.isEmpty())
     }
 
