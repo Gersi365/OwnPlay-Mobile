@@ -259,7 +259,7 @@ internal object LiveRecordingDueOrderPolicy {
             )
 }
 
-class AndroidLiveRecordingScheduler(
+class AndroidLiveRecordingScheduler internal constructor(
     context: Context,
     private val repository: LiveRecordingRepository,
     private val liveCapacityCoordinator: LiveCapacityCoordinator? = null,
