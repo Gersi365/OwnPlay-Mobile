@@ -40,11 +40,18 @@ class LiveCapacityCoordinator(
         val peers = leases.values.filter { it.accountKey == account && it.leaseId != recordingLeaseId(recordingId) }
         // A recording on the channel already owned by Live attaches to that DVR session.
         // It must not acquire a second provider slot or open a second provider ingress.
-        if (sharedSessionAvailable && peers.any {
-                it.kind == LiveCapacityLeaseKind.PLAYBACK && it.channelId == channelId
+        val sameChannelPlaybackActive = peers.any {
+            it.kind == LiveCapacityLeaseKind.PLAYBACK && it.channelId == channelId
+        }
+        if (sameChannelPlaybackActive) {
+            return@synchronized if (sharedSessionAvailable) {
+                LiveCapacityAdmission(allowed = true)
+            } else {
+                LiveCapacityAdmission(
+                    allowed = false,
+                    failureReasonCode = LiveRecordingFailureCodes.LIVE_SLOT_USED_BY_PLAYBACK,
+                )
             }
-        ) {
-            return@synchronized LiveCapacityAdmission(allowed = true)
         }
         val limit = metadata.maxConnections(sourceId)?.takeIf { it > 0 } ?: 1
         if (peers.size >= limit) {
