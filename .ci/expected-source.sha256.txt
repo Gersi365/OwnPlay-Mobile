@@ -2,7 +2,7 @@
 # Candidate archive: OwnPlay-unified-dvr-compilefix-candidate-20261007T121150Z.zip
 # Candidate archive SHA-256: 841af86000b3ace2a0346ab9e1825e06849e4817a9cdf70f7c8600525100e5a0
 # Candidate archive bytes: 4160934
-# Source manifest SHA-256: c19172f377941d180867ef4a38b3489010d37457db5c2e6219c9bda13f9383ea
+# Source manifest SHA-256: 4460e4d1c6e8a2543ddaa197cd8cba4f7c48cac1489aff0667531476a94f77fc
 # Source files: 324
 a32cb3c10018efb27d2c3599ecd7b2423cf4205820c8426b27473c84c038cfd7  ./.github/workflows/live-validation.yml
 8d25096f339e8792378589b642f57c00fb039c48fee33f0b3a47465a951d061f  ./.gitignore
@@ -132,7 +132,7 @@ f6dff849c68e45e747e32000b352452a574a5d47fcad203b6a052e220c2c8d0d  ./app/src/main
 c00dc15d08f2837de04a36907f015fabaacdc2e133fa0dab06cd1ad4c8fa5e38  ./app/src/main/java/app/ownplay/mobile/feature/live/data/RoomLiveCatchUpPlaybackProgressStore.kt
 4e2dc72fcea82a7c68dfdf438b955106042dadc7b3ba1a834a4b7ab15cbb62e1  ./app/src/main/java/app/ownplay/mobile/feature/live/data/SourceBackedLiveCatchUpRepository.kt
 3077c4f08addaaac0335d0b8f6db0e7d4d843cbb3cd4147fdeb7e72b33e62aa4  ./app/src/main/java/app/ownplay/mobile/feature/live/data/SourceBackedLiveGuideRepository.kt
-7c7cb7144c4be33d54a2bd8c5daec55a1e5976417879d5d9280cbb754d38e9a2  ./app/src/main/java/app/ownplay/mobile/feature/live/domain/LiveCapacityCoordinator.kt
+d3291a84079aa87e9ff13c8472ce6dac58d5cc164d54b37d1f685be3b1fca166  ./app/src/main/java/app/ownplay/mobile/feature/live/domain/LiveCapacityCoordinator.kt
 f97403ad975ff1e15b293dd3c8b1ddabdf65e65d7f2bf91425d7e367c938d6cd  ./app/src/main/java/app/ownplay/mobile/feature/live/domain/LiveCatchUpModels.kt
 bf6b5c86c6d0f4ac761c8a46c5d99b946624056dbffacb4bc70becc7ab910d71  ./app/src/main/java/app/ownplay/mobile/feature/live/domain/LiveGuideModels.kt
 51db9077a69831170fcd988b52697cfee62cee9014241255181072cf5bb7a9dc  ./app/src/main/java/app/ownplay/mobile/feature/live/domain/LiveGuidePolicy.kt
