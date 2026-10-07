@@ -1,4 +1,4 @@
-name: OwnPlay Unified DVR exact-source diagnostic
+name: OwnPlay Unified DVR compile-fix validation
 
 on:
   push:
@@ -10,10 +10,26 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ownplay-unified-dvr-compilefix-validation
+  cancel-in-progress: false
+
 jobs:
-  diagnose:
+  validate:
+    if: github.repository_id == '1400670851' && github.event.repository.private == false
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 45
+    env:
+      SOURCE_REF: a37efc616edbcbff0aaff1883b7316c9542ab8b3
+      EXPECTED_SOURCE_FILE_COUNT: '324'
+      EXPECTED_DRIVE_FILE_ID: 1wDj7REHyn0RRs_wj4uFtsSm1hpJWpb53
+      EXPECTED_SOURCE_ZIP_SHA256: 841af86000b3ace2a0346ab9e1825e06849e4817a9cdf70f7c8600525100e5a0
+      DRIVE_SOURCE_MANIFEST_SHA256: c19172f377941d180867ef4a38b3489010d37457db5c2e6219c9bda13f9383ea
+      EXPECTED_VERSION_CODE: '44'
+      EXPECTED_VERSION_NAME: 0.1.0-dev
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+
     steps:
       - name: Check out CI metadata
         uses: actions/checkout@v4
@@ -23,29 +39,112 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
 
-      - name: Check out repaired candidate
+      - name: Check out exact repaired candidate
         uses: actions/checkout@v4
         with:
-          ref: a37efc616edbcbff0aaff1883b7316c9542ab8b3
+          ref: ${{ env.SOURCE_REF }}
           path: src
           persist-credentials: false
           fetch-depth: 1
 
-      - name: Compare every candidate file with Drive sidecar
+      - name: Verify exact Drive source identity file by file
         shell: bash
         run: |
           set -euo pipefail
           cd src
+          test "$(git rev-parse HEAD)" = "$SOURCE_REF"
+          test "$(git ls-files | wc -l)" -eq "$EXPECTED_SOURCE_FILE_COUNT"
           grep -v '^#' ../ci/.ci/expected-source.sha256.txt > "$RUNNER_TEMP/expected.sha256"
-          sha256sum -c "$RUNNER_TEMP/expected.sha256" > "$RUNNER_TEMP/check.log" 2>&1 || true
-          grep -v ': OK$' "$RUNNER_TEMP/check.log" || true
+          test "$(wc -l < "$RUNNER_TEMP/expected.sha256")" -eq "$EXPECTED_SOURCE_FILE_COUNT"
+          sha256sum -c "$RUNNER_TEMP/expected.sha256"
+          echo "DRIVE_SOURCE_MANIFEST_SHA256=$DRIVE_SOURCE_MANIFEST_SHA256"
+          echo "All 324 source files match the Drive sidecar byte-for-byte."
+
+      - name: Select Java 21
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$JAVA_HOME_21_X64/bin/java"
+          echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+          echo "$JAVA_HOME_21_X64/bin" >> "$GITHUB_PATH"
+
+      - name: Verify Android SDK 36
+        shell: bash
+        run: |
+          set -euo pipefail
+          java -version
+          test -f "$ANDROID_HOME/platforms/android-36/android.jar"
+          test -x "$ANDROID_HOME/build-tools/36.0.0/aapt2"
+          test -x "$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          test -s "$ANDROID_HOME/licenses/android-sdk-license"
+
+      - name: Set up pinned Gradle 9.6
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+          cache-disabled: true
+
+      - name: Validate source hygiene
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd src
+          cp "$RUNNER_TEMP/expected.sha256" "$RUNNER_TEMP/SOURCE_TREE_SHA256.txt"
+          export OWNPLAY_SOURCE_MANIFEST="$RUNNER_TEMP/SOURCE_TREE_SHA256.txt"
+          bash tools/validate-source-no-apk.sh
+
+      - name: Verify package metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd src
+          grep -F 'applicationId = "app.ownplay.mobile"' app/build.gradle.kts
+          grep -F "versionCode = $EXPECTED_VERSION_CODE" app/build.gradle.kts
+          grep -F "versionName = \"$EXPECTED_VERSION_NAME\"" app/build.gradle.kts
+          grep -F 'targetSdk = 36' app/build.gradle.kts
+
+      - name: Compile test lint and assemble unsigned release
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd src
+          gradle --no-daemon --no-build-cache \
+            :app:compileDebugKotlin \
+            :app:testDebugUnitTest \
+            :app:compileDebugAndroidTestKotlin \
+            :app:lintDebug \
+            :app:assembleRelease \
+            :app:lintVitalRelease
+
+      - name: Verify DVR tests and unsigned release
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd src
+          test -s app/build/test-results/testDebugUnitTest/TEST-app.ownplay.mobile.feature.live.data.LiveDvrSessionManagerTest.xml
+          test -s app/build/test-results/testDebugUnitTest/TEST-app.ownplay.mobile.feature.live.data.LiveDvrPlaybackIntegrationTest.xml
           python3 - <<'PY'
-          import hashlib, pathlib, subprocess
-          paths=sorted(p.decode() for p in subprocess.check_output(['git','ls-files','-z']).split(b'\0') if p)
-          m=''.join(hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()+'  ./'+p+'\n' for p in paths)
-          print('ACTUAL_FILE_COUNT='+str(len(paths)))
-          print('ACTUAL_MANIFEST_SHA256='+hashlib.sha256(m.encode()).hexdigest())
+          import pathlib, xml.etree.ElementTree as ET
+          reports=list(pathlib.Path('app/build/test-results/testDebugUnitTest').glob('TEST-*.xml'))
+          totals=dict(tests=0,failures=0,errors=0,skipped=0)
+          for report in reports:
+              root=ET.parse(report).getroot()
+              for k in totals:
+                  totals[k]+=int(root.attrib.get(k,0))
+          print('UNIT_TEST_REPORT_COUNT='+str(len(reports)))
+          print('UNIT_TEST_TOTALS='+str(totals))
+          if totals['failures'] or totals['errors']:
+              raise SystemExit('unit tests failed')
           PY
-          if ! sha256sum -c "$RUNNER_TEMP/expected.sha256" >/dev/null 2>&1; then
-            exit 2
+          APK=app/build/outputs/apk/release/app-release-unsigned.apk
+          test -s "$APK"
+          unzip -t "$APK" >/dev/null
+          "$ANDROID_HOME/build-tools/36.0.0/aapt2" dump badging "$APK" > "$RUNNER_TEMP/apk-badging.txt"
+          grep -F "package: name='app.ownplay.mobile' versionCode='$EXPECTED_VERSION_CODE' versionName='$EXPECTED_VERSION_NAME'" "$RUNNER_TEMP/apk-badging.txt"
+          if "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify "$APK" >/dev/null 2>&1; then
+            echo 'ERROR: expected unsigned release artifact' >&2
+            exit 1
           fi
+          sha256sum "$APK"
+          stat --format='UNSIGNED_APK_BYTES=%s' "$APK"
+          echo 'No signing and no artifact upload performed.'
