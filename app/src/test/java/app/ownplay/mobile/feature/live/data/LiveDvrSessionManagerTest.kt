@@ -7,6 +7,7 @@ import app.ownplay.mobile.feature.playback.domain.LivePlaybackSource
 import app.ownplay.mobile.feature.playback.domain.LivePlaybackSourceResolver
 import app.ownplay.mobile.feature.playback.domain.PlaybackTarget
 import app.ownplay.mobile.feature.playback.domain.PreparedPlaybackMedia
+import app.ownplay.mobile.feature.playback.domain.PreparedPlaybackAlternative
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
@@ -355,6 +356,73 @@ class LiveDvrSessionManagerTest {
             manager.detachPlayback(SOURCE, CHANNEL)
             assertEquals(0, capacity.activeLeaseCount(SOURCE))
         } finally {
+            manager.close()
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun startupFailureFallsBackSequentiallyWithoutOpeningParallelProviderIngress() = runBlocking {
+        val directory = Files.createTempDirectory("ownplay-dvr-startup-fallback-test").toFile()
+        val capacity = LiveCapacityCoordinator(Metadata())
+        val attempts = mutableListOf<Pair<String, Boolean>>()
+        val fallbackStarted = CompletableDeferred<Unit>()
+        val ingress = object : LiveDvrIngressClient {
+            override suspend fun capture(
+                uri: String,
+                isHls: Boolean,
+                startEpochMillis: Long,
+                endEpochMillis: Long,
+                output: OutputStream,
+                onProgress: suspend (Long) -> Unit,
+            ) {
+                attempts += uri to isHls
+                if (attempts.size == 1) {
+                    throw LiveRecordingCaptureFailureException(
+                        LiveRecordingFailureCategory.SOURCE_UNAVAILABLE,
+                        "primary transport unavailable",
+                    )
+                }
+                fallbackStarted.complete(Unit)
+                val packet = ByteArray(188) { index -> if (index == 0) 0x47 else index.toByte() }
+                var total = 0L
+                while (true) {
+                    output.write(packet)
+                    total += packet.size
+                    onProgress(total)
+                    delay(5L)
+                }
+            }
+        }
+        val manager = manager(directory, ingress, capacity)
+        val media = PreparedPlaybackMedia(
+            uri = "https://provider.invalid/live.ts",
+            mimeType = LiveDvrSessionManager.MPEG_TS_MIME_TYPE,
+            fallback = PreparedPlaybackAlternative(
+                uri = "https://provider.invalid/live.m3u8",
+                mimeType = "application/vnd.apple.mpegurl",
+            ),
+            usesProviderConnection = true,
+        )
+        try {
+            assertTrue(capacity.acquirePlayback(SOURCE, CHANNEL).allowed)
+            assertNotNull(manager.attachPlayback(SOURCE, CHANNEL, media))
+            withTimeout(2_000L) { fallbackStarted.await() }
+            withTimeout(2_000L) {
+                while ((manager.snapshot(SOURCE, CHANNEL)?.retainedBytes ?: 0L) == 0L) delay(5L)
+            }
+
+            assertEquals(
+                listOf(
+                    "https://provider.invalid/live.ts" to false,
+                    "https://provider.invalid/live.m3u8" to true,
+                ),
+                attempts.take(2),
+            )
+            assertEquals(2, manager.snapshot(SOURCE, CHANNEL)?.providerIngressOpenCount)
+            assertTrue(manager.hasSession(SOURCE, CHANNEL))
+        } finally {
+            manager.detachPlayback(SOURCE, CHANNEL)
             manager.close()
             directory.deleteRecursively()
         }
