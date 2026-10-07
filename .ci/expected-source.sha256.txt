@@ -1,12 +1,12 @@
-# OwnPlay Mobile unified DVR compile-fix source SHA-256 sidecar
-# Candidate archive: OwnPlay-unified-dvr-compilefix-candidate-20261007T121150Z.zip
-# Candidate archive SHA-256: 841af86000b3ace2a0346ab9e1825e06849e4817a9cdf70f7c8600525100e5a0
-# Candidate archive bytes: 4160934
-# Source manifest SHA-256: 4460e4d1c6e8a2543ddaa197cd8cba4f7c48cac1489aff0667531476a94f77fc
+﻿# OwnPlay Mobile unified DVR compile-fix source SHA-256 sidecar
+# Candidate archive: OwnPlay-v45-source-unified-dvr-final-20261007T124000Z.zip
+# Candidate archive SHA-256: 2e2fc98ef4f8f0fbfef9cc6a66eecfad0cb0fd209587529eae78a2c52e8a1946
+# Candidate archive bytes: 4156685
+# Source manifest SHA-256: bb6b51558695dc07c4eeb6433d6422e2ca6c6be4ab447ef9bb9628201b82b23f
 # Source files: 324
 a32cb3c10018efb27d2c3599ecd7b2423cf4205820c8426b27473c84c038cfd7  ./.github/workflows/live-validation.yml
 8d25096f339e8792378589b642f57c00fb039c48fee33f0b3a47465a951d061f  ./.gitignore
-46bab67bbeeb019e501165f13dc075f782c25c1e681593cb7bb759b0e3438779  ./app/build.gradle.kts
+9d9e561bbffb3c98a184dd81cb93c0fb394b4d52715858d5cbda65dcd14a717c  ./app/build.gradle.kts
 3997eab5910483a4b7ab2928def2894379b2d9664ac54291c488669380f98734  ./app/libs/media3-decoder-ffmpeg-1.11.0-ffmpeg6.0.aar
 3cbd2d29396bf0a41c0228bcb60ab763300aed8a1c5f4a72b491a13dad7e5ea0  ./app/proguard-rules.pro
 71acb8e5c2ad6a40b3d6f41ab7840a0804eaed50dd70d2be443f50f2c0122597  ./app/schemas/app.ownplay.mobile.data.db.OwnPlayDatabase/1.json
