@@ -47,6 +47,25 @@ class LiveCapacityCoordinatorTest {
     }
 
     @Test
+    fun sameChannelRecordingSharesOnlyAnAlreadyActiveDvrSession() {
+        val coordinator = LiveCapacityCoordinator(Metadata(limits = mapOf("source" to 1)))
+        assertTrue(coordinator.acquirePlayback("source", "same-channel").allowed)
+
+        val deniedWithoutSession = coordinator.acquireRecording(
+            "source", "recording-without-session", "same-channel", 2L,
+        )
+        val shared = coordinator.acquireRecording(
+            "source", "recording-with-session", "same-channel", 3L,
+            sharedSessionAvailable = true,
+        )
+
+        assertFalse(deniedWithoutSession.allowed)
+        assertTrue(shared.allowed)
+        assertEquals(1, coordinator.activeLeaseCount("source"))
+        assertEquals(LiveCapacityCoordinator.PLAYBACK_LEASE_ID, coordinator.sessionLeaseId("source", "same-channel"))
+    }
+
+    @Test
     fun playbackRequestsSameChannelFinalizationBeforeTakingTheProviderLease() {
         val coordinator = LiveCapacityCoordinator(Metadata(limits = mapOf("source" to 3)))
         coordinator.acquireRecording("source", "record", "same-channel", 2L)

@@ -34,6 +34,7 @@ import app.ownplay.mobile.feature.live.domain.LiveRecordingFailureCodes
 import app.ownplay.mobile.feature.live.domain.LiveRecordingFailureStages
 import app.ownplay.mobile.feature.live.domain.LiveRecordingScheduleArmedStates
 import app.ownplay.mobile.feature.live.domain.LiveCapacityCoordinator
+import app.ownplay.mobile.feature.playback.domain.LiveDvrSessionGateway
 import app.ownplay.mobile.sources.domain.SourceId
 import app.ownplay.mobile.sources.domain.SourceRepository
 import java.util.concurrent.atomic.AtomicBoolean
@@ -262,6 +263,7 @@ class AndroidLiveRecordingScheduler(
     context: Context,
     private val repository: LiveRecordingRepository,
     private val liveCapacityCoordinator: LiveCapacityCoordinator? = null,
+    private val liveDvrSessionGateway: LiveDvrSessionGateway? = null,
 ) {
     private val applicationContext = context.applicationContext
     private val alarmManager = applicationContext.getSystemService(AlarmManager::class.java)
@@ -536,6 +538,7 @@ class AndroidLiveRecordingScheduler(
             recordingId = recording.recordingId,
             channelId = recording.channelId,
             scheduledAtEpochMs = recording.scheduledAtEpochMs ?: System.currentTimeMillis(),
+            sharedSessionAvailable = liveDvrSessionGateway != null,
         ) ?: return true
         if (admission.allowed) return true
         val code = admission.failureReasonCode ?: LiveRecordingFailureCodes.LIVE_SLOT_USED_BY_RECORDING
@@ -984,6 +987,8 @@ class LiveRecordingService : Service() {
             .build()
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                // The recording service downloads a provider stream into a local file; dataSync
+                // describes that transfer and remains subject to Android and Play policy limits.
                 startForeground(
                     NOTIFICATION_ID,
                     notification,

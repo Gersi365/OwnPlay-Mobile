@@ -47,6 +47,8 @@ import app.ownplay.mobile.feature.live.data.SourceBackedLiveGuideRepository
 import app.ownplay.mobile.feature.live.data.RoomLiveOrganizationRepository
 import app.ownplay.mobile.feature.live.data.AndroidLiveRecordingScheduler
 import app.ownplay.mobile.feature.live.data.LiveRecordingCaptureExecutor
+import app.ownplay.mobile.feature.live.data.LiveRecordingCaptureClient
+import app.ownplay.mobile.feature.live.data.LiveDvrSessionManager
 import app.ownplay.mobile.feature.live.data.LiveCapacityMetadataStore
 import app.ownplay.mobile.feature.live.data.LiveRecordingRemovalManager
 import app.ownplay.mobile.feature.live.data.RecordingAwareSourceRepository
@@ -85,6 +87,7 @@ import app.ownplay.mobile.sources.data.m3u.OkHttpM3uXmltvClient
 import app.ownplay.mobile.sources.data.xtream.OkHttpXtreamClient
 import app.ownplay.mobile.sources.data.xtream.XtreamClient
 import app.ownplay.mobile.sources.domain.SourceRepository
+import java.io.File
 
 class OwnPlayServices private constructor(
     val database: OwnPlayDatabase,
@@ -104,6 +107,7 @@ class OwnPlayServices private constructor(
     internal val liveRecordingScheduler: AndroidLiveRecordingScheduler,
     internal val liveRecordingRemovalManager: LiveRecordingRemovalManager,
     internal val liveRecordingExecutor: LiveRecordingCaptureExecutor,
+    internal val liveDvrSessionManager: LiveDvrSessionManager,
     val libraryRepository: LibraryRepository,
     val downloadRepository: DownloadRepository,
     internal val downloadPresentationMetadataResolver: DownloadPresentationMetadataResolver,
@@ -121,6 +125,7 @@ class OwnPlayServices private constructor(
 ) {
     internal fun releasePlayback() {
         playbackSessionController.release()
+        liveDvrSessionManager.close()
     }
 
     companion object {
@@ -148,6 +153,19 @@ class OwnPlayServices private constructor(
             val xtreamClient = OkHttpXtreamClient(transport)
             val liveCapacityMetadata = LiveCapacityMetadataStore(applicationContext)
             val liveCapacityCoordinator = LiveCapacityCoordinator(liveCapacityMetadata)
+            val playbackSourceResolver = SourceBackedLivePlaybackSourceResolver(
+                sourceDao = sourceDao,
+                liveOrganizationDao = liveOrganizationDao,
+                credentialStore = credentialStore,
+            )
+            val livePlaybackMediaPreparer = DefaultLivePlaybackMediaPreparer()
+            val liveDvrSessionManager = LiveDvrSessionManager(
+                sessionDirectory = File(applicationContext.cacheDir, "live-dvr"),
+                sourceResolver = playbackSourceResolver,
+                mediaPreparer = livePlaybackMediaPreparer,
+                ingressClient = LiveRecordingCaptureClient(),
+                capacityCoordinator = liveCapacityCoordinator,
+            )
             val catalogLoader = DefaultSourceCatalogLoader(
                 xtreamClient = xtreamClient,
                 m3uClient = m3uClient,
@@ -194,6 +212,7 @@ class OwnPlayServices private constructor(
                 context = applicationContext,
                 repository = liveRecordingRepository,
                 liveCapacityCoordinator = liveCapacityCoordinator,
+                liveDvrSessionGateway = liveDvrSessionManager,
             )
             liveRecordingScheduler.restoreScheduledAlarms()
             val libraryDetailRefresher = SourceBackedLibrarySeriesDetailRefresher(
@@ -330,16 +349,13 @@ class OwnPlayServices private constructor(
             val libraryPlaybackProgressStore = RoomLibraryPlaybackProgressStore(
                 dao = libraryDao,
             )
-            val playbackSourceResolver = SourceBackedLivePlaybackSourceResolver(
-                sourceDao = sourceDao,
-                liveOrganizationDao = liveOrganizationDao,
-                credentialStore = credentialStore,
-            )
             val liveRecordingExecutor = LiveRecordingCaptureExecutor(
                 repository = liveRecordingRepository,
                 sourceResolver = playbackSourceResolver,
+                mediaPreparer = livePlaybackMediaPreparer,
                 downloadStorage = downloadStorage,
                 downloadPreferencesRepository = downloadPreferencesRepository,
+                liveDvrSessionGateway = liveDvrSessionManager,
                 liveCapacityCoordinator = liveCapacityCoordinator,
             )
             kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO).launch {
@@ -357,11 +373,11 @@ class OwnPlayServices private constructor(
                 downloadedMediaVerifier = downloadedMediaVerifier,
             )
             val catchUpProgressStore = RoomLiveCatchUpPlaybackProgressStore(libraryDao)
-            val playbackEngine = Media3PlaybackEngine(applicationContext)
+            val playbackEngine = Media3PlaybackEngine(applicationContext, liveDvrSessionManager)
             val playbackEngineAdapter = Media3PlaybackEngineAdapter(playbackEngine)
             val playbackSessionController = PlaybackSessionController(
                 sourceResolver = playbackSourceResolver,
-                mediaPreparer = DefaultLivePlaybackMediaPreparer(),
+                mediaPreparer = livePlaybackMediaPreparer,
                 playbackEngine = playbackEngineAdapter,
                 libraryMediaResolver = libraryMediaResolver,
                 catchUpMediaResolver = catchUpPlaybackResolver,
@@ -369,6 +385,7 @@ class OwnPlayServices private constructor(
                 libraryProgressStore = libraryPlaybackProgressStore,
                 catchUpProgressStore = catchUpProgressStore,
                 liveCapacityCoordinator = liveCapacityCoordinator,
+                liveDvrSessionGateway = liveDvrSessionManager,
                 onRecordingPreemptedByPlayback = { recordingIds ->
                     liveRecordingScheduler.preemptForPlaybackAndAwait(recordingIds)
                 },
@@ -392,6 +409,7 @@ class OwnPlayServices private constructor(
                 liveRecordingScheduler = liveRecordingScheduler,
                 liveRecordingRemovalManager = liveRecordingRemovalManager,
                 liveRecordingExecutor = liveRecordingExecutor,
+                liveDvrSessionManager = liveDvrSessionManager,
                 libraryRepository = libraryRepository,
                 downloadRepository = downloadRepository,
                 downloadPresentationMetadataResolver = downloadPresentationMetadataResolver,

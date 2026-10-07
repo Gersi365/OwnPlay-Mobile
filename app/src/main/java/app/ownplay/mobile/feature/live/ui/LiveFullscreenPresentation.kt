@@ -22,12 +22,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -40,6 +42,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,12 +58,14 @@ import app.ownplay.mobile.design.OwnPlayColors
 import app.ownplay.mobile.design.OwnPlayShapes
 import app.ownplay.mobile.feature.playback.data.Media3PlaybackEngine
 import app.ownplay.mobile.feature.playback.domain.PlaybackReadiness
+import app.ownplay.mobile.feature.playback.domain.LiveDvrTimelineSnapshot
 import app.ownplay.mobile.feature.playback.domain.PlaybackSessionController
 import app.ownplay.mobile.feature.playback.domain.PlaybackSessionState
 import app.ownplay.mobile.feature.playback.ui.PlaybackTrackControlsOverlay
 import app.ownplay.mobile.feature.playback.ui.PlaybackVideoContentMode
 import app.ownplay.mobile.feature.playback.ui.PlaybackVideoSurface
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.math.abs
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -88,6 +93,7 @@ internal fun LiveFullscreenPresentation(
     val density = LocalDensity.current
     val switchThresholdPx = with(density) { 64.dp.toPx() }
     val directionThresholdPx = with(density) { 28.dp.toPx() }
+    val playbackScope = rememberCoroutineScope()
 
     var contentMode by remember { mutableStateOf(PlaybackVideoContentMode.FIT) }
     var controlsVisible by remember { mutableStateOf(true) }
@@ -105,6 +111,10 @@ internal fun LiveFullscreenPresentation(
     var lastChannelSwitchAtMs by remember { mutableLongStateOf(0L) }
     var gestureFeedback by remember { mutableStateOf<String?>(null) }
     var showPreparingIndicator by remember { mutableStateOf(false) }
+    var dvrClockEpochMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    val dvrTimeline = remember(dvrClockEpochMillis, playbackState.target, playbackState.readiness) {
+        playbackSessionController.liveDvrTimelineSnapshot()
+    }
 
     fun registerInteraction() {
         controlsVisible = true
@@ -113,6 +123,12 @@ internal fun LiveFullscreenPresentation(
 
     LaunchedEffect(playerVolume) {
         localVolume = playerVolume.coerceIn(0f, 1f)
+    }
+    LaunchedEffect(playbackState.target) {
+        while (true) {
+            delay(1_000L)
+            dvrClockEpochMillis = System.currentTimeMillis()
+        }
     }
     LaunchedEffect(playbackState.readiness) {
         showPreparingIndicator = false
@@ -329,6 +345,26 @@ internal fun LiveFullscreenPresentation(
                                         },
                                     )
                                     FullscreenControlButton(
+                                        label = if (playbackState.playWhenReady) "Pause" else "Resume",
+                                        enabled = playbackState.readiness == PlaybackReadiness.PREPARED,
+                                        onClick = {
+                                            registerInteraction()
+                                            if (playbackState.playWhenReady) {
+                                                playbackSessionController.pause()
+                                            } else {
+                                                playbackSessionController.play()
+                                            }
+                                        },
+                                    )
+                                    FullscreenControlButton(
+                                        label = "Go Live",
+                                        enabled = playbackState.readiness == PlaybackReadiness.PREPARED,
+                                        onClick = {
+                                            registerInteraction()
+                                            playbackScope.launch { playbackSessionController.goLive() }
+                                        },
+                                    )
+                                    FullscreenControlButton(
                                         label = "PiP",
                                         enabled = playbackState.readiness == PlaybackReadiness.PREPARED,
                                         onClick = {
@@ -365,6 +401,14 @@ internal fun LiveFullscreenPresentation(
                                         inline = true,
                                     )
                                 }
+                                LiveDvrSeekControl(
+                                    snapshot = dvrTimeline,
+                                    onSeek = { epochMillis ->
+                                        playbackScope.launch {
+                                            playbackSessionController.seekLiveDvrToEpoch(epochMillis)
+                                        }
+                                    },
+                                )
                             }
                         }
                     }
@@ -437,6 +481,79 @@ internal fun LiveFullscreenPresentation(
 }
 
 @Composable
+private fun LiveDvrSeekControl(
+    snapshot: LiveDvrTimelineSnapshot?,
+    onSeek: (Long) -> Unit,
+) {
+    val value = snapshot ?: return
+    val start = value.retainedStartEpochMillis ?: return
+    val edge = value.liveEdgeEpochMillis ?: return
+    if (!value.seekable || edge <= start) return
+
+    val span = (edge - start).coerceAtLeast(1L)
+    var selectedEpochMillis by remember(value.sessionId, start) {
+        mutableLongStateOf(value.currentPlaybackEpochMillis ?: edge)
+    }
+    var dragging by remember(value.sessionId) { mutableStateOf(false) }
+    LaunchedEffect(value.sessionId, start, edge, value.currentPlaybackEpochMillis, dragging) {
+        if (!dragging) {
+            selectedEpochMillis = (value.currentPlaybackEpochMillis ?: edge).coerceIn(start, edge)
+        }
+    }
+
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp),
+        verticalArrangement = Arrangement.spacedBy(0.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("DVR", color = OwnPlayColors.TextPrimary, style = MaterialTheme.typography.labelLarge)
+            val behindLive = (edge - selectedEpochMillis).coerceAtLeast(0L)
+            Text(
+                text = if (behindLive == 0L) "Live edge" else "${formatDvrDuration(behindLive)} behind Live",
+                color = OwnPlayColors.TextMuted,
+                style = MaterialTheme.typography.labelMedium,
+            )
+        }
+        Slider(
+            value = (selectedEpochMillis - start).coerceIn(0L, span).toFloat(),
+            onValueChange = { offset ->
+                dragging = true
+                selectedEpochMillis = (start + offset.toLong()).coerceIn(start, edge)
+            },
+            onValueChangeFinished = {
+                val target = selectedEpochMillis.coerceIn(start, edge)
+                dragging = false
+                onSeek(target)
+            },
+            valueRange = 0f..span.toFloat(),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text("Oldest retained", color = OwnPlayColors.TextMuted, style = MaterialTheme.typography.labelSmall)
+            Text("Live", color = OwnPlayColors.TextMuted, style = MaterialTheme.typography.labelSmall)
+        }
+    }
+}
+
+private fun formatDvrDuration(durationMs: Long): String {
+    val seconds = durationMs.coerceAtLeast(0L) / 1_000L
+    val hours = seconds / 3_600L
+    val minutes = (seconds % 3_600L) / 60L
+    val remainder = seconds % 60L
+    return if (hours > 0L) {
+        "%d:%02d:%02d".format(hours, minutes, remainder)
+    } else {
+        "%d:%02d".format(minutes, remainder)
+    }
+}
+
 private fun FullscreenControlButton(
     label: String,
     enabled: Boolean = true,

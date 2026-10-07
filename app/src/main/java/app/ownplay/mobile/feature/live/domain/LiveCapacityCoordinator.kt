@@ -34,14 +34,17 @@ class LiveCapacityCoordinator(
         recordingId: String,
         channelId: String,
         scheduledAtEpochMs: Long,
+        sharedSessionAvailable: Boolean = false,
     ): LiveCapacityAdmission = synchronized(lock) {
         val account = metadata.accountKey(sourceId)
         val peers = leases.values.filter { it.accountKey == account && it.leaseId != recordingLeaseId(recordingId) }
-        if (peers.any { it.kind == LiveCapacityLeaseKind.PLAYBACK && it.channelId == channelId }) {
-            return@synchronized LiveCapacityAdmission(
-                allowed = false,
-                failureReasonCode = LiveRecordingFailureCodes.LIVE_SLOT_USED_BY_PLAYBACK,
-            )
+        // A recording on the channel already owned by Live attaches to that DVR session.
+        // It must not acquire a second provider slot or open a second provider ingress.
+        if (sharedSessionAvailable && peers.any {
+                it.kind == LiveCapacityLeaseKind.PLAYBACK && it.channelId == channelId
+            }
+        ) {
+            return@synchronized LiveCapacityAdmission(allowed = true)
         }
         val limit = metadata.maxConnections(sourceId)?.takeIf { it > 0 } ?: 1
         if (peers.size >= limit) {
@@ -67,12 +70,25 @@ class LiveCapacityCoordinator(
      * User-selected playback may request recording preemption, but a recording lease remains
      * reserved until capture finalization is confirmed and the caller retries admission.
      */
-    fun acquirePlayback(sourceId: String, channelId: String, leaseId: String = PLAYBACK_LEASE_ID): LiveCapacityAdmission =
+    fun acquirePlayback(
+        sourceId: String,
+        channelId: String,
+        leaseId: String = PLAYBACK_LEASE_ID,
+        sharedSessionAvailable: Boolean = false,
+    ): LiveCapacityAdmission =
         synchronized(lock) {
             val account = metadata.accountKey(sourceId)
             val previous = leases[leaseId]
             val peers = leases.values.filter { it.accountKey == account && it.leaseId != leaseId }
             val limit = metadata.maxConnections(sourceId)?.takeIf { it > 0 } ?: 1
+            // UI playback attaches to the already-running scheduled DVR session on this exact
+            // channel. The session's recording lease remains the single provider lease owner.
+            if (sharedSessionAvailable && peers.any {
+                    it.kind == LiveCapacityLeaseKind.RECORDING && it.channelId == channelId
+                }
+            ) {
+                return@synchronized LiveCapacityAdmission(allowed = true)
+            }
             val recordingsToFinalize = mutableListOf<String>()
             var projected = peers.size + 1
             val sameChannelRecordings = peers.filter {
@@ -123,6 +139,15 @@ class LiveCapacityCoordinator(
     fun activeLeaseCount(sourceId: String): Int = synchronized(lock) {
         val account = metadata.accountKey(sourceId)
         leases.values.count { it.accountKey == account }
+    }
+
+    /** Returns the single provider lease that owns an active channel session, if any. */
+    fun sessionLeaseId(sourceId: String, channelId: String): String? = synchronized(lock) {
+        val account = metadata.accountKey(sourceId)
+        leases.values.firstOrNull {
+            it.sourceId == sourceId && it.accountKey == account && it.channelId == channelId &&
+                it.kind in setOf(LiveCapacityLeaseKind.PLAYBACK, LiveCapacityLeaseKind.RECORDING)
+        }?.leaseId
     }
 
     private fun recordingLeaseId(recordingId: String) = RECORDING_LEASE_PREFIX + recordingId

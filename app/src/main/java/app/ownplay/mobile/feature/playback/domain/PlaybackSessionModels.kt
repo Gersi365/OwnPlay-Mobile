@@ -1,6 +1,7 @@
 package app.ownplay.mobile.feature.playback.domain
 
 import app.ownplay.mobile.sources.domain.SourceId
+import java.io.OutputStream
 
 enum class PlaybackPresentation {
     NONE,
@@ -376,6 +377,9 @@ internal data class PreparedPlaybackMedia(
     internal val mimeType: String? = null,
     internal val fallback: PreparedPlaybackAlternative? = null,
     internal val usesProviderConnection: Boolean = false,
+    /** DVR session metadata used by the controller; the URI remains the Media3 data-source contract. */
+    internal val liveDvrSessionId: String? = null,
+    internal val liveDvrStartEpochMillis: Long? = null,
 ) {
     init {
         require(uri.isNotBlank()) { "Prepared playback URI must not be blank" }
@@ -395,6 +399,63 @@ internal interface LivePlaybackSourceResolver {
 internal interface LivePlaybackMediaPreparer {
     fun prepare(source: LivePlaybackSource): PreparedPlaybackMedia?
 }
+
+/** The provider-ingress and retained-media owner shared by Live playback and recording. */
+internal interface LiveDvrSessionGateway : LiveDvrDataSourceProvider {
+    fun hasSession(sourceId: String, channelId: String): Boolean
+
+    suspend fun attachPlayback(
+        sourceId: String,
+        channelId: String,
+        media: PreparedPlaybackMedia,
+    ): PreparedPlaybackMedia?
+
+    /** Reattach Media3 to a retained HLS segment boundary without changing session ownership. */
+    fun seekPlayback(sourceId: String, channelId: String, targetEpochMillis: Long): PreparedPlaybackMedia?
+
+    /** Reattach Media3 to the newest complete retained segment, or the current byte edge if not indexed. */
+    fun goLive(sourceId: String, channelId: String): PreparedPlaybackMedia?
+
+    fun playbackTimeline(sourceId: String, channelId: String): LiveDvrTimelineSnapshot?
+
+    /** Returns true when the DVR owner handled detachment and its capacity lease. */
+    fun detachPlayback(sourceId: String, channelId: String): Boolean
+
+    suspend fun captureForRecording(
+        sourceId: String,
+        channelId: String,
+        recordingId: String,
+        endEpochMillis: Long,
+        media: PreparedPlaybackMedia,
+        output: OutputStream,
+        onProgress: (Long) -> Unit,
+    )
+
+    /** Keep the session lease until the existing two-phase output finalization is terminal. */
+    fun completeRecording(recordingId: String): Boolean
+}
+
+internal interface LiveDvrDataSourceProvider {
+    fun openReadHandle(sessionId: String, position: Long): LiveDvrReadHandle?
+    fun openLiveReadHandle(sessionId: String): LiveDvrReadHandle?
+}
+
+internal interface LiveDvrReadHandle : AutoCloseable {
+    val availableLength: Long
+    val ended: Boolean
+    val startEpochMillis: Long?
+    fun read(buffer: ByteArray, offset: Int, length: Int): Int
+}
+
+internal data class LiveDvrTimelineSnapshot(
+    val sessionId: String,
+    val retainedStartEpochMillis: Long?,
+    val liveEdgeEpochMillis: Long?,
+    val playbackAnchorEpochMillis: Long?,
+    val playbackAnchorObserved: Boolean = false,
+    val seekable: Boolean,
+    val currentPlaybackEpochMillis: Long? = null,
+)
 
 internal interface LibraryPlaybackMediaResolver {
     suspend fun resolve(target: PlaybackTarget.Library): PreparedPlaybackMedia?

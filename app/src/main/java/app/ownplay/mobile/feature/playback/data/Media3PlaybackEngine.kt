@@ -14,6 +14,7 @@ import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
@@ -30,6 +31,7 @@ import app.ownplay.mobile.feature.playback.domain.PlaybackEngineTracks
 import app.ownplay.mobile.feature.playback.domain.PlaybackPositionSnapshot
 import app.ownplay.mobile.feature.playback.domain.PlaybackProgressEngine
 import app.ownplay.mobile.feature.playback.domain.PreparedPlaybackMedia
+import app.ownplay.mobile.feature.playback.domain.LiveDvrDataSourceProvider
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -42,24 +44,28 @@ import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 
 @androidx.annotation.OptIn(markerClass = [UnstableApi::class])
-class Media3PlaybackEngine internal constructor(context: Context) {
+class Media3PlaybackEngine internal constructor(
+    context: Context,
+    liveDvrDataSourceProvider: LiveDvrDataSourceProvider? = null,
+) {
     private val applicationContext = context.applicationContext
     private val renderersFactory = DefaultRenderersFactory(applicationContext)
         .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
         .setEnableDecoderFallback(true)
+    private val playbackDataSourceFactory: DataSource.Factory = liveDvrDataSourceProvider?.let {
+        LiveDvrDataSourceFactory(applicationContext, it)
+    } ?: DefaultDataSource.Factory(
+        applicationContext,
+        DefaultHttpDataSource.Factory()
+            // Keep explicitly configured HTTP sources working, while
+            // preventing credential-bearing HTTPS URLs from silently
+            // downgrading through a cross-protocol redirect.
+            .setAllowCrossProtocolRedirects(false),
+    )
     private val player = ExoPlayer.Builder(applicationContext, renderersFactory)
         .setMediaSourceFactory(
             DefaultMediaSourceFactory(applicationContext)
-                .setDataSourceFactory(
-                    DefaultDataSource.Factory(
-                        applicationContext,
-                        DefaultHttpDataSource.Factory()
-                            // Keep explicitly configured HTTP sources working, while
-                            // preventing credential-bearing HTTPS URLs from silently
-                            // downgrading through a cross-protocol redirect.
-                            .setAllowCrossProtocolRedirects(false),
-                    ),
-                ),
+                .setDataSourceFactory(playbackDataSourceFactory),
         )
         .build()
     private var attachedSurfaceView: SurfaceView? = null

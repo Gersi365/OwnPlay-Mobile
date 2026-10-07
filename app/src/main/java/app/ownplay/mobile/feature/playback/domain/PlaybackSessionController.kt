@@ -31,6 +31,7 @@ class PlaybackSessionController internal constructor(
     private val libraryProgressStore: LibraryPlaybackProgressStore? = null,
     private val catchUpProgressStore: CatchUpPlaybackProgressStore? = null,
     private val liveCapacityCoordinator: LiveCapacityCoordinator? = null,
+    private val liveDvrSessionGateway: LiveDvrSessionGateway? = null,
     private val onRecordingPreemptedByPlayback: suspend (List<String>) -> Boolean = { true },
     reconnectDispatcher: CoroutineDispatcher = Dispatchers.Main.immediate,
     private val reconnectDelay: suspend (Long) -> Unit = { delay(it) },
@@ -53,6 +54,8 @@ class PlaybackSessionController internal constructor(
     private var presentationBeforePictureInPicture: PlaybackPresentation? = null
     private var activeLiveLeaseSourceId: String? = null
     private var activeLiveLeaseChannelId: String? = null
+    private var activeLiveDvrSessionId: String? = null
+    private var activeLiveDvrAnchorEpochMillis: Long? = null
 
     val state: StateFlow<PlaybackSessionState> = mutableState.asStateFlow()
 
@@ -78,7 +81,7 @@ class PlaybackSessionController internal constructor(
             beginNewSessionAttempt()
 
             replaceTargetMedia(target) {
-                sourceResolver.resolve(target)?.let(mediaPreparer::prepare)
+                prepareLiveMedia(target)
             }
         }
     }
@@ -234,6 +237,51 @@ class PlaybackSessionController internal constructor(
         return true
     }
 
+    /** Seeks Live DVR by UTC media time; the session owner maps it to a retained segment boundary. */
+    suspend fun seekLiveDvrToEpoch(targetEpochMillis: Long): Boolean = mutex.withLock {
+        if (targetEpochMillis <= 0L) return@withLock false
+        val target = mutableState.value.target as? PlaybackTarget.LiveChannel ?: return@withLock false
+        val media = liveDvrSessionGateway?.seekPlayback(
+            sourceId = target.sourceId.value,
+            channelId = target.channelId,
+            targetEpochMillis = targetEpochMillis,
+        ) ?: return@withLock false
+        reattachLiveDvrMedia(target, media)
+    }
+
+    /** Returns to the latest safe retained segment without reopening the provider transport. */
+    suspend fun goLive(): Boolean = mutex.withLock {
+        val target = mutableState.value.target as? PlaybackTarget.LiveChannel ?: return@withLock false
+        val media = liveDvrSessionGateway?.goLive(
+            sourceId = target.sourceId.value,
+            channelId = target.channelId,
+        ) ?: return@withLock false
+        reattachLiveDvrMedia(target, media)
+    }
+
+    internal fun liveDvrTimelineSnapshot(): LiveDvrTimelineSnapshot? {
+        val target = mutableState.value.target as? PlaybackTarget.LiveChannel ?: return null
+        val snapshot = liveDvrSessionGateway?.playbackTimeline(
+            sourceId = target.sourceId.value,
+            channelId = target.channelId,
+        ) ?: return null
+        val anchor = if (activeLiveDvrSessionId == snapshot.sessionId) {
+            if (snapshot.playbackAnchorObserved) {
+                snapshot.playbackAnchorEpochMillis
+            } else {
+                activeLiveDvrAnchorEpochMillis ?: snapshot.playbackAnchorEpochMillis
+            }
+        } else {
+            snapshot.playbackAnchorEpochMillis
+        }
+        val playbackPosition = runCatching { playbackProgressEngine?.positionSnapshot()?.positionMs }.getOrNull()
+        val currentEpoch = anchor?.let { start -> playbackPosition?.let { safeEpochAdd(start, it) } }
+        return snapshot.copy(
+            playbackAnchorEpochMillis = anchor,
+            currentPlaybackEpochMillis = currentEpoch,
+        )
+    }
+
     fun setSpeed(speed: Float): Boolean {
         val current = mutableState.value
         if (current.target !is PlaybackTarget.Library) return false
@@ -266,7 +314,7 @@ class PlaybackSessionController internal constructor(
 
         val replaced = when (target) {
             is PlaybackTarget.LiveChannel -> replaceTargetMedia(target) {
-                sourceResolver.resolve(target)?.let(mediaPreparer::prepare)
+                prepareLiveMedia(target)
             }
 
             is PlaybackTarget.CatchUp -> replaceTargetMedia(target) {
@@ -452,6 +500,8 @@ class PlaybackSessionController internal constructor(
 
         return try {
             activeMediaRevision = playbackEngine.replace(media.primaryOnly())
+            activeLiveDvrSessionId = media.liveDvrSessionId
+            activeLiveDvrAnchorEpochMillis = media.liveDvrStartEpochMillis
             if (!mutableState.value.playWhenReady) playbackEngine.pause()
             playbackEngine.setSpeed(mutableState.value.speed)
             true
@@ -477,6 +527,8 @@ class PlaybackSessionController internal constructor(
             val admission = coordinator.acquirePlayback(
                 sourceId = target.sourceId.value,
                 channelId = resourceId,
+                sharedSessionAvailable = target is PlaybackTarget.LiveChannel &&
+                    liveDvrSessionGateway != null,
             )
             if (admission.allowed) {
                 activeLiveLeaseSourceId = target.sourceId.value
@@ -690,7 +742,7 @@ class PlaybackSessionController internal constructor(
                     if (!isCurrentSession(target, generation)) return@launch
 
                     val replaced = replaceTargetMedia(target, generation) {
-                        sourceResolver.resolve(target)?.let(mediaPreparer::prepare)
+                        prepareLiveMedia(target)
                     }
                     if (!replaced || !isCurrentSession(target, generation)) return@launch
                     if (!liveReconnectFailurePending) return@launch
@@ -731,6 +783,7 @@ class PlaybackSessionController internal constructor(
     }
 
     private fun beginNewSessionAttempt() {
+        releaseLiveLease()
         sessionGeneration += 1L
         liveReconnectJob?.cancel()
         liveReconnectJob = null
@@ -849,7 +902,35 @@ class PlaybackSessionController internal constructor(
         activeMediaRevision = null
         activeFallbackMedia = null
         fallbackAttempted = false
+        activeLiveDvrSessionId = null
+        activeLiveDvrAnchorEpochMillis = null
     }
+
+    private fun reattachLiveDvrMedia(
+        target: PlaybackTarget.LiveChannel,
+        media: PreparedPlaybackMedia,
+    ): Boolean {
+        if (!isCurrentSession(target, sessionGeneration)) return false
+        if (media.liveDvrSessionId == null) return false
+        val playWhenReady = mutableState.value.playWhenReady
+        return try {
+            activeFallbackMedia = null
+            fallbackAttempted = false
+            activeMediaRevision = playbackEngine.replace(media.primaryOnly())
+            activeLiveDvrSessionId = media.liveDvrSessionId
+            activeLiveDvrAnchorEpochMillis = media.liveDvrStartEpochMillis
+            if (playWhenReady) playbackEngine.play() else playbackEngine.pause()
+            if (mutableState.value.endedNaturally) {
+                mutableState.value = mutableState.value.copy(endedNaturally = false)
+            }
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun safeEpochAdd(epochMillis: Long, deltaMillis: Long): Long? =
+        runCatching { Math.addExact(epochMillis, deltaMillis) }.getOrNull()
 
     private fun recoverCancelledTarget(target: PlaybackTarget, generation: Long) {
         if (!isCurrentSession(target, generation)) return
@@ -866,11 +947,28 @@ class PlaybackSessionController internal constructor(
     }
 
     private fun releaseLiveLease() {
-        if (activeLiveLeaseSourceId != null) {
-            liveCapacityCoordinator?.release(LiveCapacityCoordinator.PLAYBACK_LEASE_ID)
+        val sourceId = activeLiveLeaseSourceId
+        val channelId = activeLiveLeaseChannelId
+        if (sourceId != null) {
+            val handledByDvr = channelId?.let { liveDvrSessionGateway?.detachPlayback(sourceId, it) == true } ?: false
+            if (!handledByDvr) liveCapacityCoordinator?.release(LiveCapacityCoordinator.PLAYBACK_LEASE_ID)
         }
         activeLiveLeaseSourceId = null
         activeLiveLeaseChannelId = null
+    }
+
+    private suspend fun prepareLiveMedia(target: PlaybackTarget.LiveChannel): PreparedPlaybackMedia? {
+        val source = sourceResolver.resolve(target) ?: return null
+        val providerMedia = mediaPreparer.prepare(source) ?: return null
+        return if (liveDvrSessionGateway == null) {
+            providerMedia
+        } else {
+            liveDvrSessionGateway.attachPlayback(
+                sourceId = target.sourceId.value,
+                channelId = target.channelId,
+                media = providerMedia,
+            )
+        }
     }
 }
 

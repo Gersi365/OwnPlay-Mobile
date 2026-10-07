@@ -12,9 +12,10 @@ import app.ownplay.mobile.feature.live.domain.LiveRecordingTransitionPolicy
 import app.ownplay.mobile.feature.live.domain.LiveCapacityCoordinator
 import app.ownplay.mobile.feature.live.domain.LiveRecordingFailureCodes
 import app.ownplay.mobile.feature.live.domain.LiveRecordingFailureStages
-import app.ownplay.mobile.feature.playback.data.DefaultLivePlaybackMediaPreparer
 import app.ownplay.mobile.feature.playback.data.SourceBackedLivePlaybackSourceResolver
 import app.ownplay.mobile.feature.playback.domain.PlaybackTarget
+import app.ownplay.mobile.feature.playback.domain.LiveDvrSessionGateway
+import app.ownplay.mobile.feature.playback.domain.LivePlaybackMediaPreparer
 import app.ownplay.mobile.sources.domain.SourceId
 import java.io.IOException
 import java.net.SocketTimeoutException
@@ -118,12 +119,12 @@ private fun String.safeMessage(): String = when (this) {
 internal class LiveRecordingCaptureExecutor(
     private val repository: LiveRecordingRepository,
     private val sourceResolver: SourceBackedLivePlaybackSourceResolver,
+    private val mediaPreparer: LivePlaybackMediaPreparer,
     private val downloadStorage: app.ownplay.mobile.downloads.data.DownloadStorage,
     private val downloadPreferencesRepository: DownloadPreferencesRepository,
+    private val liveDvrSessionGateway: LiveDvrSessionGateway,
     private val liveCapacityCoordinator: LiveCapacityCoordinator? = null,
 ) {
-    private val mediaPreparer = DefaultLivePlaybackMediaPreparer()
-    private val captureClient = LiveRecordingCaptureClient()
     private val finalizationCommitter = LiveRecordingFinalizationCommitter(repository, downloadStorage)
     private val recoveryCoordinator = LiveRecordingRecoveryCoordinator(repository, downloadStorage)
 
@@ -174,6 +175,7 @@ internal class LiveRecordingCaptureExecutor(
             recordingId = recordingId,
             channelId = scheduled.channelId,
             scheduledAtEpochMs = scheduled.scheduledAtEpochMs ?: captureRequested * 1_000L,
+            sharedSessionAvailable = true,
         )
         if (admission?.allowed == false) {
             val reason = admission.failureReasonCode ?: LiveRecordingFailureCodes.LIVE_SLOT_USED_BY_RECORDING
@@ -270,14 +272,15 @@ internal class LiveRecordingCaptureExecutor(
             }
 
             withContext(Dispatchers.IO) {
-                captureClient.capture(
-                    uri = selected.first,
-                    isHls = selected.second,
-                    startEpochMillis = captureRequested * 1_000L,
+                liveDvrSessionGateway.captureForRecording(
+                    sourceId = scheduled.sourceId,
+                    channelId = scheduled.channelId,
+                    recordingId = recordingId,
                     endEpochMillis = scheduled.deadlineEpochSeconds * 1_000L,
+                    media = prepared,
                     output = validatingOutput!!,
                     onProgress = { bytes ->
-                        val current = repository.get(recordingId) ?: return@capture
+                        val current = repository.get(recordingId) ?: return@captureForRecording
                         if (bytes - current.progressBytes >= PROGRESS_BYTES_STEP) {
                             repository.update(recordingId) { LiveRecordingTransitionPolicy.progress(it, bytes) }
                         }
@@ -424,7 +427,8 @@ internal class LiveRecordingCaptureExecutor(
             false
             }
         } finally {
-            liveCapacityCoordinator?.releaseRecording(recordingId)
+            val dvrOwnedLease = liveDvrSessionGateway.completeRecording(recordingId)
+            if (!dvrOwnedLease) liveCapacityCoordinator?.releaseRecording(recordingId)
         }
     }
 
@@ -542,17 +546,17 @@ internal class LiveRecordingCaptureClient(
     streamClient: OkHttpClient = OkHttpClient.Builder()
         .readTimeout(0, TimeUnit.MILLISECONDS)
         .build(),
-) {
+) : LiveDvrIngressClient {
     private val playlistClient = playlistClient.withCrossSchemeRedirectsDisabled()
     private val streamClient = streamClient.withCrossSchemeRedirectsDisabled()
 
-    suspend fun capture(
+    override suspend fun capture(
         uri: String,
         isHls: Boolean,
         startEpochMillis: Long,
         endEpochMillis: Long,
         output: OutputStream,
-        onProgress: suspend (Long) -> Unit = {},
+        onProgress: suspend (Long) -> Unit,
     ) {
         if (isHls) {
             captureHls(uri, startEpochMillis, endEpochMillis, output, onProgress)
@@ -675,7 +679,23 @@ internal class LiveRecordingCaptureClient(
                     "This HLS stream cannot be recorded safely.",
                 )
                 }
-                totalBytes += fetchSegment(segment.uri, output, totalBytes, onProgress)
+                val boundaryOutput = output as? LiveDvrSegmentBoundaryOutput
+                val accepted = boundaryOutput?.beginSegment(
+                    LiveDvrIngressSegment(
+                        identity = segment.identity,
+                        durationMs = (segment.durationSeconds * 1_000.0).toLong().coerceAtLeast(1L),
+                        programTimeEpochMs = segment.programDateTimeEpochMillis,
+                        discontinuitySequence = segment.discontinuitySequence,
+                    ),
+                ) ?: true
+                if (!accepted) continue
+                var completedSegment = false
+                try {
+                    totalBytes += fetchSegment(segment.uri, output, totalBytes, onProgress)
+                    completedSegment = true
+                } finally {
+                    boundaryOutput?.endSegment(completedSegment)
+                }
             }
             initial = false
             completedPlaylist = playlist.endList
