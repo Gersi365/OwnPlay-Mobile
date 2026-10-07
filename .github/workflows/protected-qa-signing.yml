@@ -124,10 +124,13 @@ jobs:
           gradle-version: '9.6.0'
           cache-disabled: true
 
-      - name: Regenerate manifest and validate canonical source
+      - name: Verify exact canonical tree and validate source hygiene
         shell: bash
+        env:
+          EXPECTED_TREE_SHA: 10904cad824ee91c9d72f7cb4d017bba37f272b2
         run: |
           set -euo pipefail
+          test "$(git rev-parse HEAD^{tree})" = "$EXPECTED_TREE_SHA"
           python3 - <<'PY'
           import hashlib, os, pathlib, subprocess
           paths = sorted(
@@ -140,13 +143,10 @@ jobs:
               hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() + '  ./' + p + '\n'
               for p in paths
           )
-          actual = hashlib.sha256(manifest.encode()).hexdigest()
-          expected = os.environ['EXPECTED_MANIFEST_SHA256']
-          if actual != expected:
-              raise SystemExit(f'canonical manifest mismatch: {actual} != {expected}')
           path = pathlib.Path(os.environ['RUNNER_TEMP']) / 'SOURCE_TREE_SHA256.txt'
           path.write_text(manifest)
-          print('SOURCE_MANIFEST_SHA256=' + actual)
+          print('CANONICAL_TREE_SHA=' + os.environ['EXPECTED_TREE_SHA'])
+          print('DRIVE_SOURCE_MANIFEST_SHA256=' + os.environ['EXPECTED_MANIFEST_SHA256'])
           print('SOURCE_FILE_COUNT=' + str(len(paths)))
           PY
           export OWNPLAY_SOURCE_MANIFEST="$RUNNER_TEMP/SOURCE_TREE_SHA256.txt"
