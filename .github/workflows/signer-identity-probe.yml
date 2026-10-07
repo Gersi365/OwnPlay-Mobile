@@ -1,0 +1,34 @@
+name: OwnPlay QA signer identity probe
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    environment: qa-signing
+    steps:
+      - name: Restore existing environment signer
+        shell: bash
+        env:
+          P12_B64: ${{ secrets.OWNPLAY_QA_V37_P12_B64 }}
+          STORE_PASS: ${{ secrets.OWNPLAY_QA_V37_PASS }}
+          KEY_ALIAS: ${{ secrets.OWNPLAY_QA_V37_ALIAS }}
+        run: |
+          set -euo pipefail
+          test -n "$P12_B64"
+          test -n "$STORE_PASS"
+          test -n "$KEY_ALIAS"
+          printf '%s' "$P12_B64" | base64 --decode > "$RUNNER_TEMP/signer.p12"
+          chmod 600 "$RUNNER_TEMP/signer.p12"
+          keytool -exportcert             -keystore "$RUNNER_TEMP/signer.p12"             -storetype PKCS12             -storepass "$STORE_PASS"             -alias "$KEY_ALIAS"             -file "$RUNNER_TEMP/signer-cert.der"
+          actual="$(sha256sum "$RUNNER_TEMP/signer-cert.der" | awk '{print $1}')"
+          echo "SIGNER_CERT_SHA256=$actual"
+          if [ "$actual" = "4503daece496e8b4ee6cf2d95de90325a327dd9f0e6cd153242c25a10f44de08" ]; then
+            echo "CURRENT_SIGNER_IDENTITY_MATCH=YES"
+          else
+            echo "CURRENT_SIGNER_IDENTITY_MATCH=NO"
+          fi
