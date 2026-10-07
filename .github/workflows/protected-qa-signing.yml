@@ -7,32 +7,32 @@ on:
         description: Exact canonical mirror ref to sign
         required: true
         type: string
-        default: mirror/v44-125787f9
+        default: mirror/v45-bb6b5155
       expected_manifest_sha256:
         description: Canonical SOURCE_TREE manifest SHA-256
         required: true
         type: string
-        default: 125787f9bdb84eb0af67703d1e52e30097fc406c7cc0bf592508af3996892b43
+        default: bb6b51558695dc07c4eeb6433d6422e2ca6c6be4ab447ef9bb9628201b82b23f
       expected_source_file_count:
         description: Exact canonical source file count
         required: true
         type: string
-        default: '320'
+        default: '324'
       expected_drive_file_id:
         description: Canonical Drive source archive ID
         required: true
         type: string
-        default: 1pp44oYyZIKoJfO6zW1HjUYbWgQcU4ynU
+        default: 19aC4SPl3rfi8T5W0d227igRD3VFCYkV_
       expected_source_zip_sha256:
         description: Canonical Drive source ZIP SHA-256
         required: true
         type: string
-        default: d0d77e1437c1690b2a2f00f8a860a74dc40fc0321c5656dc615de3371eadd68d
+        default: 2e2fc98ef4f8f0fbfef9cc6a66eecfad0cb0fd209587529eae78a2c52e8a1946
       version_code:
         description: Expected Android versionCode
         required: true
         type: string
-        default: '44'
+        default: '45'
       version_name:
         description: Expected Android versionName
         required: true
