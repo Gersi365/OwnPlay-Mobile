@@ -7,12 +7,12 @@ on:
         description: Exact canonical mirror ref to sign
         required: true
         type: string
-        default: mirror/v45-bb6b5155
+        default: mirror/v46-e2b12180
       expected_manifest_sha256:
         description: Canonical SOURCE_TREE manifest SHA-256
         required: true
         type: string
-        default: bb6b51558695dc07c4eeb6433d6422e2ca6c6be4ab447ef9bb9628201b82b23f
+        default: e2b12180f097271b83ff70675b0d163ea774b1daab90d23719affe3aabf9993e
       expected_source_file_count:
         description: Exact canonical source file count
         required: true
@@ -22,17 +22,17 @@ on:
         description: Canonical Drive source archive ID
         required: true
         type: string
-        default: 19aC4SPl3rfi8T5W0d227igRD3VFCYkV_
+        default: 1132VgLBtacbAwH3QGy4Lh66vUj9Uk3a3
       expected_source_zip_sha256:
         description: Canonical Drive source ZIP SHA-256
         required: true
         type: string
-        default: 2e2fc98ef4f8f0fbfef9cc6a66eecfad0cb0fd209587529eae78a2c52e8a1946
+        default: 2f0c79814bb49342b3a46879453881e0cd229f5ab4f82ad50049bad403f02019
       version_code:
         description: Expected Android versionCode
         required: true
         type: string
-        default: '45'
+        default: '46'
       version_name:
         description: Expected Android versionName
         required: true
@@ -127,7 +127,7 @@ jobs:
       - name: Verify exact canonical tree and validate source hygiene
         shell: bash
         env:
-          EXPECTED_TREE_SHA: 10904cad824ee91c9d72f7cb4d017bba37f272b2
+          EXPECTED_TREE_SHA: c80966be73ef55283464b656cb4ab957e7e32794
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD^{tree})" = "$EXPECTED_TREE_SHA"
