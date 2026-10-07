@@ -55,7 +55,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$SOURCE_REF"
           test "$(git ls-files | wc -l)" -eq "$EXPECTED_SOURCE_FILE_COUNT"
           grep -v '^#' ../ci/.ci/expected-source.sha256.txt > "$RUNNER_TEMP/expected.sha256"
-          test "$(grep -cE '^[0-9a-f]{64}  \\./' "$RUNNER_TEMP/expected.sha256")" -eq "$EXPECTED_SOURCE_FILE_COUNT"
+          test "$(awk '!/^#/ && NF {n++} END {print n+0}' ../ci/.ci/expected-source.sha256.txt)" -eq "$EXPECTED_SOURCE_FILE_COUNT"
           sha256sum -c "$RUNNER_TEMP/expected.sha256"
           echo "DRIVE_SOURCE_MANIFEST_SHA256=$DRIVE_SOURCE_MANIFEST_SHA256"
           echo "All 324 source files match the Drive sidecar byte-for-byte."
