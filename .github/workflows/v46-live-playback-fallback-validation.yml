@@ -1,0 +1,138 @@
+name: OwnPlay v46 Live playback fallback validation
+
+on:
+  push:
+    branches:
+      - ci/v46-live-playback-fallback
+    paths:
+      - .github/workflows/v46-live-playback-fallback-validation.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ownplay-v46-live-playback-fallback-validation
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: github.repository_id == '1400670851' && github.event.repository.private == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      SOURCE_REF: c5e44c2e71cacc4f712540984d8636b3301a7690
+      EXPECTED_TREE_SHA: c80966be73ef55283464b656cb4ab957e7e32794
+      EXPECTED_SOURCE_FILE_COUNT: '324'
+      EXPECTED_VERSION_CODE: '46'
+      EXPECTED_VERSION_NAME: 0.1.0-dev
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+
+    steps:
+      - name: Check out exact v46 candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_REF }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Verify exact candidate identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'Gersi365/OwnPlay-Mobile'
+          test "$(git rev-parse HEAD)" = "$SOURCE_REF"
+          test "$(git rev-parse HEAD^{tree})" = "$EXPECTED_TREE_SHA"
+          test "$(git ls-files | wc -l)" -eq "$EXPECTED_SOURCE_FILE_COUNT"
+          test -z "$(git status --porcelain)"
+
+      - name: Select Java 21
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$JAVA_HOME_21_X64/bin/java"
+          echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+          echo "$JAVA_HOME_21_X64/bin" >> "$GITHUB_PATH"
+
+      - name: Verify Android SDK 36
+        shell: bash
+        run: |
+          set -euo pipefail
+          java -version
+          test -f "$ANDROID_HOME/platforms/android-36/android.jar"
+          test -x "$ANDROID_HOME/build-tools/36.0.0/aapt2"
+          test -x "$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          test -s "$ANDROID_HOME/licenses/android-sdk-license"
+
+      - name: Set up pinned Gradle 9.6
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+          cache-disabled: true
+
+      - name: Validate source hygiene
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, os, pathlib, subprocess
+          paths=sorted(p.decode() for p in subprocess.check_output(['git','ls-files','-z']).split(b'\0') if p)
+          if len(paths) != int(os.environ['EXPECTED_SOURCE_FILE_COUNT']):
+              raise SystemExit('source file count mismatch')
+          manifest=''.join(hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()+'  ./'+p+'\n' for p in paths)
+          out=pathlib.Path(os.environ['RUNNER_TEMP'])/'SOURCE_TREE_SHA256.txt'
+          out.write_text(manifest)
+          print('GIT_SOURCE_MANIFEST_SHA256='+hashlib.sha256(manifest.encode()).hexdigest())
+          print('SOURCE_FILE_COUNT='+str(len(paths)))
+          PY
+          export OWNPLAY_SOURCE_MANIFEST="$RUNNER_TEMP/SOURCE_TREE_SHA256.txt"
+          bash tools/validate-source-no-apk.sh
+
+      - name: Verify package metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'applicationId = "app.ownplay.mobile"' app/build.gradle.kts
+          grep -F "versionCode = $EXPECTED_VERSION_CODE" app/build.gradle.kts
+          grep -F "versionName = \"$EXPECTED_VERSION_NAME\"" app/build.gradle.kts
+          grep -F 'targetSdk = 36' app/build.gradle.kts
+
+      - name: Compile test lint and assemble unsigned release
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle --no-daemon --no-build-cache             :app:compileDebugKotlin             :app:testDebugUnitTest             :app:compileDebugAndroidTestKotlin             :app:lintDebug             :app:assembleRelease             :app:lintVitalRelease
+
+      - name: Verify regression coverage and unsigned release
+        shell: bash
+        run: |
+          set -euo pipefail
+          REPORT=app/build/test-results/testDebugUnitTest/TEST-app.ownplay.mobile.feature.live.data.LiveDvrSessionManagerTest.xml
+          test -s "$REPORT"
+          grep -Fq 'startupFailureFallsBackSequentiallyWithoutOpeningParallelProviderIngress' "$REPORT"
+          test -s app/build/test-results/testDebugUnitTest/TEST-app.ownplay.mobile.feature.live.data.LiveDvrPlaybackIntegrationTest.xml
+          python3 - <<'PY'
+          import pathlib, xml.etree.ElementTree as ET
+          reports=list(pathlib.Path('app/build/test-results/testDebugUnitTest').glob('TEST-*.xml'))
+          totals=dict(tests=0,failures=0,errors=0,skipped=0)
+          for report in reports:
+              root=ET.parse(report).getroot()
+              for k in totals:
+                  totals[k]+=int(root.attrib.get(k,0))
+          print('UNIT_TEST_REPORT_COUNT='+str(len(reports)))
+          print('UNIT_TEST_TOTALS='+str(totals))
+          if totals['failures'] or totals['errors']:
+              raise SystemExit('unit tests failed')
+          PY
+          APK=app/build/outputs/apk/release/app-release-unsigned.apk
+          test -s "$APK"
+          unzip -t "$APK" >/dev/null
+          "$ANDROID_HOME/build-tools/36.0.0/aapt2" dump badging "$APK" > "$RUNNER_TEMP/apk-badging.txt"
+          grep -F "package: name='app.ownplay.mobile' versionCode='$EXPECTED_VERSION_CODE' versionName='$EXPECTED_VERSION_NAME'" "$RUNNER_TEMP/apk-badging.txt"
+          if "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify "$APK" >/dev/null 2>&1; then
+            echo 'ERROR: expected unsigned release artifact' >&2
+            exit 1
+          fi
+          sha256sum "$APK"
+          stat --format='UNSIGNED_APK_BYTES=%s' "$APK"
+          echo 'No signing and no artifact upload performed.'
