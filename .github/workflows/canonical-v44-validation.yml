@@ -55,6 +55,22 @@ jobs:
           echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
           echo "$JAVA_HOME_21_X64/bin" >> "$GITHUB_PATH"
 
+      - name: Verify preinstalled Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          java -version
+          test -f "$ANDROID_HOME/platforms/android-36/android.jar"
+          test -x "$ANDROID_HOME/build-tools/36.0.0/aapt2"
+          test -x "$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          test -s "$ANDROID_HOME/licenses/android-sdk-license"
+
+      - name: Set up pinned Gradle without Actions cache
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+          cache-disabled: true
+
       - name: Regenerate and verify canonical source manifest
         shell: bash
         run: |
@@ -91,22 +107,6 @@ jobs:
           grep -F 'applicationId = "app.ownplay.mobile"' app/build.gradle.kts
           grep -F "versionCode = $EXPECTED_VERSION_CODE" app/build.gradle.kts
           grep -F "versionName = \"$EXPECTED_VERSION_NAME\"" app/build.gradle.kts
-
-      - name: Verify preinstalled Android SDK
-        shell: bash
-        run: |
-          set -euo pipefail
-          java -version
-          test -f "$ANDROID_HOME/platforms/android-36/android.jar"
-          test -x "$ANDROID_HOME/build-tools/36.0.0/aapt2"
-          test -x "$ANDROID_HOME/build-tools/36.0.0/apksigner"
-          test -s "$ANDROID_HOME/licenses/android-sdk-license"
-
-      - name: Set up pinned Gradle without Actions cache
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '9.6.0'
-          cache-disabled: true
 
       - name: Compile, test, lint and assemble unsigned release
         shell: bash
