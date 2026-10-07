@@ -67,9 +67,13 @@ jobs:
           expected = os.environ['EXPECTED_MANIFEST_SHA256']
           if actual != expected:
               raise SystemExit(f'canonical manifest mismatch: {actual} != {expected}')
+          manifest_path = pathlib.Path(os.environ['RUNNER_TEMP']) / 'SOURCE_TREE_SHA256.txt'
+          manifest_path.write_text(manifest)
           print('SOURCE_MANIFEST_SHA256=' + actual)
           print('SOURCE_FILE_COUNT=' + str(len(paths)))
+          print('SOURCE_MANIFEST_PATH=' + str(manifest_path))
           PY
+          export OWNPLAY_SOURCE_MANIFEST="$RUNNER_TEMP/SOURCE_TREE_SHA256.txt"
           bash tools/validate-source-no-apk.sh
 
       - name: Verify package and version source metadata
