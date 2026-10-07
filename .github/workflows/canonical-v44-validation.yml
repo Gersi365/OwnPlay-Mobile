@@ -47,6 +47,14 @@ jobs:
           grep -Fx "VERSION_CODE=$EXPECTED_VERSION_CODE" <<<"$message"
           test -z "$(git status --porcelain)"
 
+      - name: Select Java 21 for source validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$JAVA_HOME_21_X64/bin/java"
+          echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+          echo "$JAVA_HOME_21_X64/bin" >> "$GITHUB_PATH"
+
       - name: Regenerate and verify canonical source manifest
         shell: bash
         run: |
@@ -84,13 +92,11 @@ jobs:
           grep -F "versionCode = $EXPECTED_VERSION_CODE" app/build.gradle.kts
           grep -F "versionName = \"$EXPECTED_VERSION_NAME\"" app/build.gradle.kts
 
-      - name: Verify preinstalled Java and Android SDK
+      - name: Verify preinstalled Android SDK
         shell: bash
         run: |
           set -euo pipefail
-          test -x "$JAVA_HOME_21_X64/bin/java"
-          echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
-          echo "$JAVA_HOME_21_X64/bin" >> "$GITHUB_PATH"
+          java -version
           test -f "$ANDROID_HOME/platforms/android-36/android.jar"
           test -x "$ANDROID_HOME/build-tools/36.0.0/aapt2"
           test -x "$ANDROID_HOME/build-tools/36.0.0/apksigner"
