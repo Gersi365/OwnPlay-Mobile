@@ -1,0 +1,260 @@
+name: OwnPlay protected QA signing
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Exact canonical mirror ref to sign
+        required: true
+        type: string
+        default: mirror/v44-125787f9
+      expected_manifest_sha256:
+        description: Canonical SOURCE_TREE manifest SHA-256
+        required: true
+        type: string
+        default: 125787f9bdb84eb0af67703d1e52e30097fc406c7cc0bf592508af3996892b43
+      expected_source_file_count:
+        description: Exact canonical source file count
+        required: true
+        type: string
+        default: '320'
+      expected_drive_file_id:
+        description: Canonical Drive source archive ID
+        required: true
+        type: string
+        default: 1pp44oYyZIKoJfO6zW1HjUYbWgQcU4ynU
+      expected_source_zip_sha256:
+        description: Canonical Drive source ZIP SHA-256
+        required: true
+        type: string
+        default: d0d77e1437c1690b2a2f00f8a860a74dc40fc0321c5656dc615de3371eadd68d
+      version_code:
+        description: Expected Android versionCode
+        required: true
+        type: string
+        default: '44'
+      version_name:
+        description: Expected Android versionName
+        required: true
+        type: string
+        default: 0.1.0-dev
+      confirm_sign:
+        description: Explicitly authorize protected QA signing for this run
+        required: true
+        type: boolean
+        default: false
+      upload_signed_artifact:
+        description: Upload signed APK to GitHub Actions for one day
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ownplay-protected-qa-signing
+  cancel-in-progress: false
+
+jobs:
+  sign:
+    if: ${{ inputs.confirm_sign == true }}
+    runs-on: ubuntu-24.04
+    environment: qa-signing
+    timeout-minutes: 60
+    env:
+      SOURCE_REF: ${{ inputs.source_ref }}
+      EXPECTED_MANIFEST_SHA256: ${{ inputs.expected_manifest_sha256 }}
+      EXPECTED_SOURCE_FILE_COUNT: ${{ inputs.expected_source_file_count }}
+      EXPECTED_DRIVE_FILE_ID: ${{ inputs.expected_drive_file_id }}
+      EXPECTED_SOURCE_ZIP_SHA256: ${{ inputs.expected_source_zip_sha256 }}
+      EXPECTED_VERSION_CODE: ${{ inputs.version_code }}
+      EXPECTED_VERSION_NAME: ${{ inputs.version_name }}
+      EXPECTED_CERT_SHA256: 4503daece496e8b4ee6cf2d95de90325a327dd9f0e6cd153242c25a10f44de08
+      EXPECTED_P12_SHA256: d166e93dfcef2171dfe157f90d76e9801a9f3e79b2760f12e9912c74650577a9
+      SIGNER_ALIAS: ownplay-qa-v38-clean
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+
+    steps:
+      - name: Check out exact canonical mirror without persisted credentials
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_REF }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Verify signing request and canonical provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'Gersi365/OwnPlay-Mobile'
+          test "$GITHUB_REF" = 'refs/heads/main'
+          [[ "$SOURCE_REF" =~ ^mirror/v[0-9]+-[0-9a-f]{8,64}$ ]]
+          [[ "$EXPECTED_VERSION_CODE" =~ ^[0-9]+$ ]]
+          [ "$EXPECTED_VERSION_CODE" -ge 38 ]
+          message="$(git show -s --format=%B HEAD)"
+          grep -Fx "SOURCE_MANIFEST_SHA256=$EXPECTED_MANIFEST_SHA256" <<<"$message"
+          grep -Fx "SOURCE_FILE_COUNT=$EXPECTED_SOURCE_FILE_COUNT" <<<"$message"
+          grep -Fx "CANONICAL_DRIVE_FILE_ID=$EXPECTED_DRIVE_FILE_ID" <<<"$message"
+          grep -Fx "SOURCE_ZIP_SHA256=$EXPECTED_SOURCE_ZIP_SHA256" <<<"$message"
+          grep -Fx "VERSION_CODE=$EXPECTED_VERSION_CODE" <<<"$message"
+          test -z "$(git status --porcelain)"
+
+      - name: Select Java 21
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$JAVA_HOME_21_X64/bin/java"
+          echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+          echo "$JAVA_HOME_21_X64/bin" >> "$GITHUB_PATH"
+
+      - name: Verify preinstalled Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f "$ANDROID_HOME/platforms/android-36/android.jar"
+          test -x "$ANDROID_HOME/build-tools/36.0.0/aapt2"
+          test -x "$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          test -s "$ANDROID_HOME/licenses/android-sdk-license"
+
+      - name: Set up pinned Gradle without Actions cache
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+          cache-disabled: true
+
+      - name: Regenerate manifest and validate canonical source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, os, pathlib, subprocess
+          paths = sorted(
+              p.decode() for p in subprocess.check_output(['git', 'ls-files', '-z']).split(b'\0') if p
+          )
+          expected_count = int(os.environ['EXPECTED_SOURCE_FILE_COUNT'])
+          if len(paths) != expected_count:
+              raise SystemExit(f'file count mismatch: {len(paths)} != {expected_count}')
+          manifest = ''.join(
+              hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() + '  ./' + p + '\n'
+              for p in paths
+          )
+          actual = hashlib.sha256(manifest.encode()).hexdigest()
+          expected = os.environ['EXPECTED_MANIFEST_SHA256']
+          if actual != expected:
+              raise SystemExit(f'canonical manifest mismatch: {actual} != {expected}')
+          path = pathlib.Path(os.environ['RUNNER_TEMP']) / 'SOURCE_TREE_SHA256.txt'
+          path.write_text(manifest)
+          print('SOURCE_MANIFEST_SHA256=' + actual)
+          print('SOURCE_FILE_COUNT=' + str(len(paths)))
+          PY
+          export OWNPLAY_SOURCE_MANIFEST="$RUNNER_TEMP/SOURCE_TREE_SHA256.txt"
+          bash tools/validate-source-no-apk.sh
+
+      - name: Verify package and requested version
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'applicationId = "app.ownplay.mobile"' app/build.gradle.kts
+          grep -F "versionCode = $EXPECTED_VERSION_CODE" app/build.gradle.kts
+          grep -F "versionName = \"$EXPECTED_VERSION_NAME\"" app/build.gradle.kts
+
+      - name: Build unsigned release
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle --no-daemon --no-build-cache :app:assembleRelease :app:lintVitalRelease
+          APK=app/build/outputs/apk/release/app-release-unsigned.apk
+          test -s "$APK"
+          if "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify "$APK" >/dev/null 2>&1; then
+            echo 'ERROR: expected unsigned release before protected signing' >&2
+            exit 1
+          fi
+
+      - name: Restore and verify protected signer
+        shell: bash
+        env:
+          SIGNING_P12_B64: ${{ secrets.OWNPLAY_QA_SIGNING_P12_B64 }}
+          SIGNING_PASS: ${{ secrets.OWNPLAY_QA_SIGNING_PASS }}
+        run: |
+          set -euo pipefail
+          test -n "$SIGNING_P12_B64"
+          test -n "$SIGNING_PASS"
+          KS="$RUNNER_TEMP/ownplay-qa-signing.p12"
+          CERT="$RUNNER_TEMP/ownplay-qa-signing.cert.der"
+          printf '%s' "$SIGNING_P12_B64" | base64 --decode > "$KS"
+          chmod 600 "$KS"
+          p12_sha="$(sha256sum "$KS" | awk '{print $1}')"
+          test "$p12_sha" = "$EXPECTED_P12_SHA256"
+          keytool -exportcert \
+            -keystore "$KS" \
+            -storetype PKCS12 \
+            -storepass "$SIGNING_PASS" \
+            -alias "$SIGNER_ALIAS" \
+            -file "$CERT"
+          cert_sha="$(sha256sum "$CERT" | awk '{print $1}')"
+          test "$cert_sha" = "$EXPECTED_CERT_SHA256"
+          echo "PROTECTED_SIGNER_CERT_SHA256=$cert_sha"
+          echo "PROTECTED_SIGNER_IDENTITY=PASS"
+
+      - name: Sign and verify QA APK
+        shell: bash
+        env:
+          SIGNING_PASS: ${{ secrets.OWNPLAY_QA_SIGNING_PASS }}
+        run: |
+          set -euo pipefail
+          BT="$ANDROID_HOME/build-tools/36.0.0"
+          KS="$RUNNER_TEMP/ownplay-qa-signing.p12"
+          IN=app/build/outputs/apk/release/app-release-unsigned.apk
+          mkdir -p qa-output
+          OUT="qa-output/OwnPlay-QA-v$EXPECTED_VERSION_CODE-signed.apk"
+          "$BT/apksigner" sign \
+            --ks "$KS" \
+            --ks-type PKCS12 \
+            --ks-key-alias "$SIGNER_ALIAS" \
+            --ks-pass env:SIGNING_PASS \
+            --key-pass env:SIGNING_PASS \
+            --v1-signing-enabled false \
+            --v2-signing-enabled true \
+            --v3-signing-enabled true \
+            --v4-signing-enabled false \
+            --out "$OUT" \
+            "$IN"
+          "$BT/apksigner" verify --verbose --print-certs "$OUT" > "$RUNNER_TEMP/signature-verify.txt"
+          grep -Fq 'Verified using v1 scheme (JAR signing): false' "$RUNNER_TEMP/signature-verify.txt"
+          grep -Fq 'Verified using v2 scheme (APK Signature Scheme v2): true' "$RUNNER_TEMP/signature-verify.txt"
+          grep -Fq 'Verified using v3 scheme (APK Signature Scheme v3): true' "$RUNNER_TEMP/signature-verify.txt"
+          grep -Fq 'Verified using v4 scheme (APK Signature Scheme v4): false' "$RUNNER_TEMP/signature-verify.txt"
+          grep -Fq "Signer #1 certificate SHA-256 digest: $EXPECTED_CERT_SHA256" "$RUNNER_TEMP/signature-verify.txt"
+          "$BT/aapt2" dump badging "$OUT" > "$RUNNER_TEMP/signed-badging.txt"
+          grep -F "package: name='app.ownplay.mobile' versionCode='$EXPECTED_VERSION_CODE' versionName='$EXPECTED_VERSION_NAME'" "$RUNNER_TEMP/signed-badging.txt"
+          signed_sha="$(sha256sum "$OUT" | awk '{print $1}')"
+          signed_size="$(stat --format='%s' "$OUT")"
+          {
+            echo "PACKAGE=app.ownplay.mobile"
+            echo "VERSION_CODE=$EXPECTED_VERSION_CODE"
+            echo "VERSION_NAME=$EXPECTED_VERSION_NAME"
+            echo "SOURCE_REF=$SOURCE_REF"
+            echo "SOURCE_COMMIT=$(git rev-parse HEAD)"
+            echo "SOURCE_MANIFEST_SHA256=$EXPECTED_MANIFEST_SHA256"
+            echo "CANONICAL_DRIVE_FILE_ID=$EXPECTED_DRIVE_FILE_ID"
+            echo "SOURCE_ZIP_SHA256=$EXPECTED_SOURCE_ZIP_SHA256"
+            echo "SIGNER_CERT_SHA256=$EXPECTED_CERT_SHA256"
+            echo "SIGNED_APK_SHA256=$signed_sha"
+            echo "SIGNED_APK_BYTES=$signed_size"
+          } > qa-output/SIGNED_QA_METADATA.txt
+          echo "SIGNED_APK_SHA256=$signed_sha"
+          echo "SIGNED_APK_BYTES=$signed_size"
+          echo "PROTECTED_QA_SIGNING=PASS"
+
+      - name: Upload signed QA artifact for one day
+        if: ${{ inputs.upload_signed_artifact == true }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: OwnPlay-QA-v${{ inputs.version_code }}-signed
+          path: |
+            qa-output/OwnPlay-QA-v${{ inputs.version_code }}-signed.apk
+            qa-output/SIGNED_QA_METADATA.txt
+          if-no-files-found: error
+          retention-days: 1
