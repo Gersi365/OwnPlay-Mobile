@@ -554,6 +554,7 @@ private fun formatDvrDuration(durationMs: Long): String {
     }
 }
 
+@Composable
 private fun FullscreenControlButton(
     label: String,
     enabled: Boolean = true,
