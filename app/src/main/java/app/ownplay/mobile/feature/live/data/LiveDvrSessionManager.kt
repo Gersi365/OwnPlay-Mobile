@@ -193,7 +193,8 @@ internal class LiveDvrSessionManager(
         channelId: String,
         media: PreparedPlaybackMedia,
     ): PreparedPlaybackMedia? {
-        val selected = selectMedia(media) ?: return null
+        val candidates = selectMediaCandidates(media)
+        if (candidates.isEmpty()) return null
         val key = SessionKey(sourceId, channelId)
         var created: Session? = null
         val session = synchronized(gate) {
@@ -218,7 +219,7 @@ internal class LiveDvrSessionManager(
                 }
             }
         }
-        created?.let { startIngest(it, selected) }
+        created?.let { startIngest(it, candidates) }
         return playbackMedia(session, session.store.latestSafeLivePoint())
     }
 
@@ -276,11 +277,13 @@ internal class LiveDvrSessionManager(
         output: OutputStream,
         onProgress: (Long) -> Unit,
     ) {
-        val selected = selectMedia(media)
-            ?: throw LiveRecordingCaptureFailureException(
+        val candidates = selectMediaCandidates(media)
+        if (candidates.isEmpty()) {
+            throw LiveRecordingCaptureFailureException(
                 LiveRecordingFailureCategory.UNSUPPORTED_FORMAT,
                 "This live stream format cannot be recorded safely.",
             )
+        }
         val key = SessionKey(sourceId, channelId)
         var created: Session? = null
         val session = synchronized(gate) {
@@ -310,7 +313,7 @@ internal class LiveDvrSessionManager(
         synchronized(session.lock) {
             session.recordingSinks[recordingId] = RecordingSink(output, onProgress)
         }
-        created?.let { startIngest(it, selected) }
+        created?.let { startIngest(it, candidates) }
 
         try {
             while (System.currentTimeMillis() < endEpochMillis) {
@@ -415,7 +418,8 @@ internal class LiveDvrSessionManager(
         }
     }
 
-    private fun startIngest(session: Session, selected: SelectedMedia) {
+    private fun startIngest(session: Session, candidates: List<SelectedMedia>) {
+        require(candidates.isNotEmpty()) { "Live DVR ingress requires at least one media candidate." }
         synchronized(session.lock) {
             if (session.captureJob?.isActive == true) return
             session.generation += 1L
@@ -425,7 +429,7 @@ internal class LiveDvrSessionManager(
             session.state = LiveDvrSessionState.STARTING
             session.terminalSignal = CompletableDeferred()
             session.captureJob = scope.launch {
-                runIngest(session, firstGeneration, selected)
+                runIngest(session, firstGeneration, candidates)
             }
         }
     }
@@ -433,14 +437,17 @@ internal class LiveDvrSessionManager(
     private suspend fun runIngest(
         session: Session,
         initialGeneration: Long,
-        initialMedia: SelectedMedia,
+        initialCandidates: List<SelectedMedia>,
     ) {
         var generation = initialGeneration
-        var media = initialMedia
+        var candidates = initialCandidates
+        var candidateIndex = 0
+        var media = candidates[candidateIndex]
         var retries = 0
         while (scope.isActive && isCurrent(session, generation)) {
             session.providerIngressOpenCount += 1
             session.state = if (retries == 0) LiveDvrSessionState.STARTING else LiveDvrSessionState.RECONNECTING
+            val retainedLengthBeforeAttempt = session.store.length
             var ingressReady = false
             try {
                 ingressClient.capture(
@@ -468,6 +475,21 @@ internal class LiveDvrSessionManager(
                 throw cancelled
             } catch (error: Throwable) {
                 if (!isCurrent(session, generation)) return
+                val wroteNoBytes = session.store.length == retainedLengthBeforeAttempt
+                val fallback = if (
+                    wroteNoBytes && canTryCompatibilityFallback(error)
+                ) {
+                    candidates.getOrNull(candidateIndex + 1)
+                } else {
+                    null
+                }
+                if (fallback != null) {
+                    candidateIndex += 1
+                    media = fallback
+                    retries = 0
+                    session.state = LiveDvrSessionState.STARTING
+                    continue
+                }
                 if (retries >= MAX_RECONNECTS || !isRetryable(error)) {
                     finishSession(session, generation, error)
                     return
@@ -477,18 +499,20 @@ internal class LiveDvrSessionManager(
                 delay(RECONNECT_BACKOFF_MS[retries - 1])
                 if (!isCurrent(session, generation)) return
                 val target = PlaybackTarget.LiveChannel(SourceId(session.key.sourceId), session.key.channelId)
-                val resolved = try {
-                    sourceResolver.resolve(target)
+                val refreshed = try {
+                    sourceResolver.resolve(target)?.let(mediaPreparer::prepare)?.let(::selectMediaCandidates)
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (_: Exception) {
                     null
                 }
-                media = resolved?.let(mediaPreparer::prepare)?.let(::selectMedia)
-                    ?: run {
-                        finishSession(session, generation, error)
-                        return
-                    }
+                val refreshedCandidates = refreshed?.takeIf { it.isNotEmpty() } ?: run {
+                    finishSession(session, generation, error)
+                    return
+                }
+                candidates = refreshedCandidates
+                candidateIndex = candidateIndex.coerceAtMost(candidates.lastIndex)
+                media = candidates[candidateIndex]
                 synchronized(session.lock) {
                     if (session.terminal || session.generation != generation) return
                     session.generation += 1L
@@ -500,6 +524,15 @@ internal class LiveDvrSessionManager(
                 }
             }
         }
+    }
+
+    private fun canTryCompatibilityFallback(error: Throwable): Boolean = when (error) {
+        is LiveRecordingCaptureFailureException -> error.category in setOf(
+            LiveRecordingFailureCategory.NETWORK,
+            LiveRecordingFailureCategory.SOURCE_UNAVAILABLE,
+            LiveRecordingFailureCategory.UNSUPPORTED_FORMAT,
+        )
+        else -> error is IOException
     }
 
     private fun isRetryable(error: Throwable): Boolean = when (error) {
@@ -605,12 +638,12 @@ internal class LiveDvrSessionManager(
         capacityCoordinator.release(session.capacityLeaseId)
     }
 
-    private fun selectMedia(media: PreparedPlaybackMedia): SelectedMedia? {
+    private fun selectMediaCandidates(media: PreparedPlaybackMedia): List<SelectedMedia> {
         val candidates = listOfNotNull(
             PreparedPlaybackAlternative(media.uri, media.mimeType),
             media.fallback,
         )
-        return candidates.firstNotNullOfOrNull { candidate ->
+        return candidates.mapNotNull { candidate ->
             when {
                 LiveRecordingCaptureClient.isHls(candidate.uri, candidate.mimeType) ->
                     SelectedMedia(candidate.uri, true)
@@ -618,7 +651,7 @@ internal class LiveDvrSessionManager(
                     SelectedMedia(candidate.uri, false)
                 else -> null
             }
-        }
+        }.distinct()
     }
 
     private fun isDirectTransportStream(uri: String, mimeType: String?): Boolean {
