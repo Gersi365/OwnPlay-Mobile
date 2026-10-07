@@ -1,0 +1,93 @@
+name: OwnPlay v40 validation
+
+on:
+  push:
+    branches:
+      - ownplay-v40-20261005-validation
+
+permissions:
+  contents: read
+
+jobs:
+  validate-v40:
+    if: github.repository_id == '1400670851' && github.event.repository.private == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+    steps:
+      - name: Check out exact source without persisted credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Verify preinstalled Java and Android SDK
+        run: |
+          set -euo pipefail
+          test -x "$JAVA_HOME_21_X64/bin/java"
+          echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+          echo "$JAVA_HOME_21_X64/bin" >> "$GITHUB_PATH"
+          test -f "$ANDROID_HOME/platforms/android-36/android.jar"
+          test -x "$ANDROID_HOME/build-tools/36.0.0/aapt2"
+          test -x "$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          test -s "$ANDROID_HOME/licenses/android-sdk-license"
+          echo "Using runner-preinstalled SDK and its existing license records."
+
+      - name: Set up pinned Gradle without Actions cache
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+          cache-disabled: true
+
+      - name: Verify canonical manifest and validate source
+        run: |
+          set -euo pipefail
+          export OWNPLAY_SOURCE_MANIFEST="$RUNNER_TEMP/OWNPLAY_SOURCE_TREE_SHA256.txt"
+          python3 - <<'PY'
+          import hashlib, os, pathlib, re, subprocess
+          paths = sorted(p.decode() for p in subprocess.check_output(['git', 'ls-files', '-z']).split(b'\0') if p)
+          manifest = ''.join(hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() + '  ./' + p + '\n' for p in paths)
+          actual = hashlib.sha256(manifest.encode()).hexdigest()
+          message = subprocess.check_output(['git', 'show', '-s', '--format=%B', 'HEAD']).decode()
+          match = re.search(r'^SOURCE_MANIFEST_SHA256=([0-9a-f]{64})$', message, re.M)
+          if not match or match.group(1) != actual:
+              raise SystemExit('Canonical source manifest mismatch')
+          pathlib.Path(os.environ['OWNPLAY_SOURCE_MANIFEST']).write_text(manifest)
+          print('SOURCE_MANIFEST_SHA256=' + actual)
+          print('SOURCE_FILE_COUNT=' + str(len(paths)))
+          PY
+          bash tools/validate-source-no-apk.sh
+
+      - name: Summarize executed unit tests
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import pathlib, xml.etree.ElementTree as ET
+          reports = list(pathlib.Path('app/build/test-results/testDebugUnitTest').glob('TEST-*.xml'))
+          totals = dict(tests=0, failures=0, errors=0, skipped=0)
+          for report in reports:
+              root = ET.parse(report).getroot()
+              for key in totals:
+                  totals[key] += int(root.attrib.get(key, 0))
+          print('UNIT_TEST_REPORT_COUNT=' + str(len(reports)))
+          print('UNIT_TEST_TOTALS=' + str(totals))
+          PY
+
+      - name: Assemble unsigned v40 and verify metadata
+        run: |
+          set -euo pipefail
+          gradle --no-daemon --no-build-cache :app:assembleRelease
+          APK=app/build/outputs/apk/release/app-release-unsigned.apk
+          test -s "$APK"
+          unzip -t "$APK" > /dev/null
+          "$ANDROID_HOME/build-tools/36.0.0/aapt2" dump badging "$APK" > "$RUNNER_TEMP/apk-badging.txt"
+          head -n 1 "$RUNNER_TEMP/apk-badging.txt"
+          grep -F "name='app.ownplay.mobile' versionCode='40' versionName='0.1.0-dev'" "$RUNNER_TEMP/apk-badging.txt"
+          if "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify "$APK" > /dev/null 2>&1; then
+            echo "ERROR: Expected an unsigned artifact."
+            exit 1
+          fi
+          sha256sum "$APK"
+          stat --format='UNSIGNED_APK_BYTES=%s' "$APK"
+          echo "Unsigned APK exists only on this ephemeral runner. No signing, cache upload or artifact storage is used."
