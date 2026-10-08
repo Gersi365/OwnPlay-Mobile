@@ -560,6 +560,7 @@ class LiveDvrSessionManagerTest {
         val capacity = LiveCapacityCoordinator(Metadata())
         val attempts = mutableListOf<Pair<String, Boolean>>()
         val fallbackStarted = CompletableDeferred<Unit>()
+        val allowFallbackSegment = CompletableDeferred<Unit>()
         val ingress = object : LiveDvrIngressClient {
             override suspend fun capture(
                 uri: String,
@@ -582,12 +583,25 @@ class LiveDvrSessionManagerTest {
                     )
                 }
                 fallbackStarted.complete(Unit)
-                val packet = ByteArray(188) { index -> if (index == 0) 0x47 else index.toByte() }
+                allowFallbackSegment.await()
+                val boundaries = output as LiveDvrSegmentBoundaryOutput
+                val packet = ByteArray(188 * 4) { index -> if (index % 188 == 0) 0x47 else 0 }
                 var total = 0L
+                var sequence = 0L
                 while (true) {
-                    output.write(packet)
-                    total += packet.size
-                    onProgress(total)
+                    val segment = LiveDvrIngressSegment(
+                        identity = "startup-fallback-$sequence",
+                        durationMs = 10_000L,
+                        programTimeEpochMs = BASE_EPOCH_MS + sequence * 10_000L,
+                        discontinuitySequence = 0L,
+                    )
+                    if (boundaries.beginSegment(segment)) {
+                        output.write(packet)
+                        boundaries.endSegment(complete = true)
+                        total += packet.size
+                        onProgress(total)
+                    }
+                    sequence += 1L
                     delay(5L)
                 }
             }
@@ -606,6 +620,8 @@ class LiveDvrSessionManagerTest {
             assertTrue(capacity.acquirePlayback(SOURCE, CHANNEL).allowed)
             assertNotNull(manager.attachPlayback(SOURCE, CHANNEL, media))
             withTimeout(2_000L) { fallbackStarted.await() }
+            assertEquals(0L, manager.snapshot(SOURCE, CHANNEL)?.retainedBytes)
+            allowFallbackSegment.complete(Unit)
             withTimeout(2_000L) {
                 while ((manager.snapshot(SOURCE, CHANNEL)?.retainedBytes ?: 0L) == 0L) delay(5L)
             }
@@ -741,6 +757,9 @@ class LiveDvrSessionManagerTest {
             }
             recordingAttached.complete(Unit)
             withTimeout(2_000L) { firstFailure.await() }
+            withTimeout(2_000L) {
+                while (manager.snapshot(SOURCE, CHANNEL)?.state != LiveDvrSessionState.RECONNECTING) delay(1L)
+            }
             manager.detachPlayback(SOURCE, CHANNEL)
             recording.cancelAndJoin()
             assertTrue(manager.completeRecording(recordingId))
