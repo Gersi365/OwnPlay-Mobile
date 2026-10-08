@@ -1,0 +1,77 @@
+name: OwnPlay v47 candidate validation
+
+on:
+  push:
+    branches:
+      - candidate/v47-live-remediation-20261008T015532Z
+
+permissions:
+  contents: read
+
+jobs:
+  validate-v47-candidate:
+    if: github.repository_id == '1400670851' && github.event.repository.private == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+    steps:
+      - name: Check out exact candidate source without persisted credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Verify preinstalled Java and Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$JAVA_HOME_21_X64/bin/java"
+          echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+          echo "$JAVA_HOME_21_X64/bin" >> "$GITHUB_PATH"
+          test -f "$ANDROID_HOME/platforms/android-36/android.jar"
+          test -x "$ANDROID_HOME/build-tools/36.0.0/aapt2"
+          test -x "$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          test -s "$ANDROID_HOME/licenses/android-sdk-license"
+          echo "Using runner-preinstalled SDK and its existing license records."
+
+      - name: Set up pinned Gradle without Actions cache
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+          cache-disabled: true
+
+      - name: Verify exact candidate and run repository source validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          export OWNPLAY_SOURCE_MANIFEST="$RUNNER_TEMP/OWNPLAY_SOURCE_TREE_SHA256.txt"
+          python3 - <<'PY'
+          import hashlib, os, pathlib, subprocess
+          paths = sorted(p.decode() for p in subprocess.check_output(['git', 'ls-files', '-z']).split(b'\0') if p)
+          manifest = ''.join(hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() + '  ./' + p + '\n' for p in paths)
+          pathlib.Path(os.environ['OWNPLAY_SOURCE_MANIFEST']).write_text(manifest)
+          print('CANDIDATE_SOURCE_MANIFEST_SHA256=' + hashlib.sha256(manifest.encode()).hexdigest())
+          print('SOURCE_FILE_COUNT=' + str(len(paths)))
+          PY
+          bash tools/validate-source-no-apk.sh
+
+      - name: Assemble unsigned v47 and verify metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle --no-daemon --no-build-cache :app:assembleRelease
+          APK=app/build/outputs/apk/release/app-release-unsigned.apk
+          test -s "$APK"
+          unzip -t "$APK" > /dev/null
+          "$ANDROID_HOME/build-tools/36.0.0/aapt2" dump badging "$APK" > "$RUNNER_TEMP/apk-badging.txt"
+          head -n 1 "$RUNNER_TEMP/apk-badging.txt"
+          grep -F "name='app.ownplay.mobile' versionCode='47' versionName='0.1.0-dev'" "$RUNNER_TEMP/apk-badging.txt"
+          if "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify "$APK" > /dev/null 2>&1; then
+            echo "ERROR: Expected an unsigned artifact."
+            exit 1
+          fi
+          sha256sum "$APK"
+          stat --format='UNSIGNED_APK_BYTES=%s' "$APK"
+          echo "Unsigned APK exists only on this ephemeral runner. No signing, upload, cache or artifact storage is used."
