@@ -13,6 +13,12 @@ import app.ownplay.mobile.feature.playback.domain.LiveDvrDataSourceProvider
 import app.ownplay.mobile.feature.playback.domain.LiveDvrReadHandle
 import java.io.IOException
 
+internal class LiveDvrDataSourceFailureException(
+    val stage: app.ownplay.mobile.feature.playback.domain.PlaybackFailureStage,
+    safeMessage: String,
+    cause: Throwable? = null,
+) : IOException(safeMessage, cause)
+
 @UnstableApi
 internal class LiveDvrDataSourceFactory(
     context: Context,
@@ -47,25 +53,50 @@ private class LiveDvrRoutingDataSource(
             return fallback.open(dataSpec)
         }
         val sessionId = dataSpec.uri.host
-            ?: throw IOException("The Live DVR session URI is invalid.")
+            ?: throw LiveDvrDataSourceFailureException(
+                app.ownplay.mobile.feature.playback.domain.PlaybackFailureStage.LIVE_DVR_URI,
+                "The Live DVR session URI is invalid.",
+            )
         val baseOffset = dataSpec.uri.getQueryParameter("offset")?.toLongOrNull()
             ?: if (dataSpec.uri.getQueryParameter("offset") == null) 0L else {
-                throw IOException("The Live DVR retained offset is invalid.")
+                throw LiveDvrDataSourceFailureException(
+                    app.ownplay.mobile.feature.playback.domain.PlaybackFailureStage.LIVE_DVR_URI,
+                    "The Live DVR retained offset is invalid.",
+                )
             }
         val absolutePosition = try {
             Math.addExact(baseOffset, dataSpec.position)
         } catch (_: ArithmeticException) {
-            throw IOException("The Live DVR retained offset is invalid.")
+            throw LiveDvrDataSourceFailureException(
+                app.ownplay.mobile.feature.playback.domain.PlaybackFailureStage.LIVE_DVR_URI,
+                "The Live DVR retained offset is invalid.",
+            )
         }
-        reader = if (
-            baseOffset == 0L && dataSpec.position == 0L &&
-            dataSpec.uri.getQueryParameter("start") == "live"
-        ) {
-            provider.openLiveReadHandle(sessionId)
-        } else {
-            provider.openReadHandle(sessionId, absolutePosition)
-        } ?: throw IOException("The Live DVR session is no longer available.")
-        val openedReader = reader ?: throw IOException("The Live DVR session is no longer available.")
+        val opened = try {
+            if (
+                baseOffset == 0L && dataSpec.position == 0L &&
+                dataSpec.uri.getQueryParameter("start") == "live"
+            ) {
+                provider.openLiveReadHandle(sessionId)
+            } else {
+                provider.openReadHandle(sessionId, absolutePosition)
+            }
+        } catch (failure: IOException) {
+            if (failure is LiveDvrDataSourceFailureException) throw failure
+            throw LiveDvrDataSourceFailureException(
+                app.ownplay.mobile.feature.playback.domain.PlaybackFailureStage.LIVE_DVR_READER_OPEN,
+                "The Live DVR session could not open a retained reader.",
+                failure,
+            )
+        }
+        reader = opened ?: throw LiveDvrDataSourceFailureException(
+            app.ownplay.mobile.feature.playback.domain.PlaybackFailureStage.LIVE_DVR_SESSION_LOOKUP,
+            "The Live DVR session is no longer available.",
+        )
+        val openedReader = reader ?: throw LiveDvrDataSourceFailureException(
+            app.ownplay.mobile.feature.playback.domain.PlaybackFailureStage.LIVE_DVR_SESSION_LOOKUP,
+            "The Live DVR session is no longer available.",
+        )
         return if (openedReader.ended) {
             (openedReader.availableLength - absolutePosition).coerceAtLeast(0L)
         } else {
@@ -75,8 +106,17 @@ private class LiveDvrRoutingDataSource(
 
     @Throws(IOException::class)
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
-        val localReader = reader
-        return localReader?.read(buffer, offset, length) ?: fallback.read(buffer, offset, length)
+        val localReader = reader ?: return fallback.read(buffer, offset, length)
+        return try {
+            localReader.read(buffer, offset, length)
+        } catch (failure: IOException) {
+            if (failure is LiveDvrDataSourceFailureException) throw failure
+            throw LiveDvrDataSourceFailureException(
+                app.ownplay.mobile.feature.playback.domain.PlaybackFailureStage.LIVE_DVR_READ,
+                "The retained Live DVR stream could not be read.",
+                failure,
+            )
+        }
     }
 
     override fun getUri(): Uri? = reader?.let { activeUri } ?: fallback.uri

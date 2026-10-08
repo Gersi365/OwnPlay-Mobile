@@ -17,6 +17,7 @@ import java.io.IOException
 import java.io.OutputStream
 import java.io.RandomAccessFile
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
@@ -121,6 +122,7 @@ internal data class LiveDvrSessionSnapshot(
     val timeline: List<LiveDvrTimelineEntry>,
     val failure: String?,
     val failureCategory: LiveRecordingFailureCategory?,
+    val failureStage: LiveRecordingCaptureStage? = null,
 )
 
 /**
@@ -208,8 +210,13 @@ internal class LiveDvrSessionManager(
                 existing != null && existing.recordingPins.isNotEmpty() -> return null
                 else -> {
                     existing?.let(::removeSessionLocked)
-                    val ownerLeaseId = capacityCoordinator.sessionLeaseId(sourceId, channelId)
-                        ?: return null
+                    val ownerLeaseId = capacityCoordinator.sessionLeaseId(sourceId, channelId) ?: run {
+                        LiveDvrDiagnostics.record(
+                            event = LiveDvrDiagnosticEvent.CAPACITY_ADMISSION_DENIED,
+                            stage = LiveRecordingCaptureStage.CAPACITY_ADMISSION,
+                        )
+                        return null
+                    }
                     newSessionLocked(
                         key = key,
                         capacityLeaseId = ownerLeaseId,
@@ -393,6 +400,7 @@ internal class LiveDvrSessionManager(
             timeline = session.store.timelineSnapshot(),
             failure = session.failure?.javaClass?.simpleName,
             failureCategory = (session.failure as? LiveRecordingCaptureFailureException)?.category,
+            failureStage = (session.failure as? LiveRecordingCaptureFailureException)?.stage,
         )
     }
 
@@ -451,6 +459,15 @@ internal class LiveDvrSessionManager(
             val retainedLengthBeforeAttempt = session.store.length
             var ingressReady = false
             val ingressOutput = SessionIngressOutput(session, generation, media.isHls)
+            val attemptStartedAtNanos = System.nanoTime()
+            LiveDvrDiagnostics.record(
+                event = LiveDvrDiagnosticEvent.INGRESS_ATTEMPT,
+                stage = LiveRecordingCaptureStage.SOURCE_HTTP_RESPONSE,
+                representation = if (media.isHls) LiveDvrRepresentation.HLS else LiveDvrRepresentation.DIRECT_TS,
+                candidateIndex = candidateIndex,
+                retryCount = retries,
+                validatedBytes = session.store.length,
+            )
             try {
                 ingressClient.capture(
                     uri = media.uri,
@@ -469,6 +486,25 @@ internal class LiveDvrSessionManager(
                                     ingressReady = true
                                     retries = 0
                                     session.state = LiveDvrSessionState.ACTIVE
+                                    LiveDvrDiagnostics.record(
+                                        event = LiveDvrDiagnosticEvent.VALIDATED_MEDIA,
+                                        stage = if (media.isHls) {
+                                            LiveRecordingCaptureStage.HLS_SEGMENT_VALIDATION
+                                        } else {
+                                            LiveRecordingCaptureStage.DIRECT_TS_VALIDATION
+                                        },
+                                        representation = if (media.isHls) {
+                                            LiveDvrRepresentation.HLS
+                                        } else {
+                                            LiveDvrRepresentation.DIRECT_TS
+                                        },
+                                        candidateIndex = candidateIndex,
+                                        retryCount = retries,
+                                        validatedBytes = session.store.length,
+                                        durationMs = TimeUnit.NANOSECONDS.toMillis(
+                                            (System.nanoTime() - attemptStartedAtNanos).coerceAtLeast(0L),
+                                        ),
+                                    )
                                 }
                             }
                         }
@@ -482,6 +518,19 @@ internal class LiveDvrSessionManager(
                 throw cancelled
             } catch (error: Throwable) {
                 if (!isCurrent(session, generation)) return
+                val failurePresentation = LiveRecordingFailurePolicy.classify(error)
+                LiveDvrDiagnostics.record(
+                    event = LiveDvrDiagnosticEvent.INGRESS_FAILURE,
+                    stage = failurePresentation.stage,
+                    category = failurePresentation.category,
+                    representation = if (media.isHls) LiveDvrRepresentation.HLS else LiveDvrRepresentation.DIRECT_TS,
+                    candidateIndex = candidateIndex,
+                    retryCount = retries,
+                    validatedBytes = session.store.length,
+                    durationMs = TimeUnit.NANOSECONDS.toMillis(
+                        (System.nanoTime() - attemptStartedAtNanos).coerceAtLeast(0L),
+                    ),
+                )
                 val wroteNoValidatedMedia = session.store.length == 0L
                 val fallback = if (
                     wroteNoValidatedMedia && canTryCompatibilityFallback(error)
@@ -609,24 +658,58 @@ internal class LiveDvrSessionManager(
     }
 
     private fun ensureStartHeadroom() {
-        if (!LiveDvrStoragePolicy.canStart(storageMonitor.space(sessionDirectory))) throw storageFailure()
+        val space = storageMonitor.space(sessionDirectory)
+        val requiredHeadroom = LiveDvrStoragePolicy.requiredHeadroom(space.totalBytes)
+        if (!LiveDvrStoragePolicy.canStart(space)) {
+            LiveDvrDiagnostics.record(
+                event = LiveDvrDiagnosticEvent.STORAGE_HEADROOM_DENIED,
+                stage = LiveRecordingCaptureStage.STORAGE_HEADROOM,
+                category = LiveRecordingFailureCategory.STORAGE,
+                usableBytes = space.usableBytes,
+                totalBytes = space.totalBytes,
+                headroomBytes = requiredHeadroom,
+            )
+            throw storageFailure(stage = LiveRecordingCaptureStage.STORAGE_HEADROOM)
+        }
+        LiveDvrDiagnostics.record(
+            event = LiveDvrDiagnosticEvent.STORAGE_HEADROOM_ACCEPTED,
+            stage = LiveRecordingCaptureStage.STORAGE_HEADROOM,
+            usableBytes = space.usableBytes,
+            totalBytes = space.totalBytes,
+            headroomBytes = requiredHeadroom,
+        )
     }
 
     private fun ensureWriteHeadroom(incomingBytes: Long, recordingOutputCount: Int) {
+        val space = storageMonitor.space(sessionDirectory)
         if (!LiveDvrStoragePolicy.canWrite(
-                space = storageMonitor.space(sessionDirectory),
+                space = space,
                 incomingBytes = incomingBytes,
                 recordingOutputCount = recordingOutputCount,
             )
         ) {
-            throw storageFailure()
+            LiveDvrDiagnostics.record(
+                event = LiveDvrDiagnosticEvent.STORAGE_HEADROOM_DENIED,
+                stage = LiveRecordingCaptureStage.STORAGE_HEADROOM,
+                category = LiveRecordingFailureCategory.STORAGE,
+                incomingBytes = incomingBytes,
+                recordingCopies = recordingOutputCount + 1,
+                usableBytes = space.usableBytes,
+                totalBytes = space.totalBytes,
+                headroomBytes = LiveDvrStoragePolicy.requiredHeadroom(space.totalBytes),
+            )
+            throw storageFailure(stage = LiveRecordingCaptureStage.STORAGE_HEADROOM)
         }
     }
 
-    private fun storageFailure(cause: Throwable? = null) = LiveRecordingCaptureFailureException(
+    private fun storageFailure(
+        cause: Throwable? = null,
+        stage: LiveRecordingCaptureStage = LiveRecordingCaptureStage.RETAINED_STORE,
+    ) = LiveRecordingCaptureFailureException(
         LiveRecordingFailureCategory.STORAGE,
         "Device storage is too low to continue Live DVR capture safely.",
         cause,
+        stage,
     )
 
     private fun closeSession(session: Session) {
@@ -750,11 +833,13 @@ internal class LiveDvrSessionManager(
                 ?: throw LiveRecordingCaptureFailureException(
                     LiveRecordingFailureCategory.UNSUPPORTED_FORMAT,
                     "The HLS segment could not be staged safely.",
+                    stage = LiveRecordingCaptureStage.HLS_SEGMENT_VALIDATION,
                 )
             if (staged.size() > MAX_STAGED_HLS_SEGMENT_BYTES - length) {
                 throw LiveRecordingCaptureFailureException(
                     LiveRecordingFailureCategory.UNSUPPORTED_FORMAT,
                     "The HLS segment is too large to stage safely.",
+                    stage = LiveRecordingCaptureStage.HLS_SEGMENT_VALIDATION,
                 )
             }
             staged.write(buffer, offset, length)
@@ -764,15 +849,24 @@ internal class LiveDvrSessionManager(
             try {
                 ensureWriteHeadroom(length.toLong(), session.recordingSinks.size)
                 session.store.append(buffer, offset, length)
+            } catch (failure: LiveRecordingCaptureFailureException) {
+                throw failure
+            } catch (failure: IOException) {
+                throw storageFailure(failure, LiveRecordingCaptureStage.RETAINED_STORE)
+            }
+            try {
                 session.recordingSinks.forEach { (_, sink) ->
                     sink.output.write(buffer, offset, length)
                     sink.bytesWritten += length
                     sink.onProgress(sink.bytesWritten)
                 }
-            } catch (failure: LiveRecordingCaptureFailureException) {
-                throw failure
             } catch (failure: IOException) {
-                throw storageFailure(failure)
+                throw LiveRecordingCaptureFailureException(
+                    LiveRecordingFailureCategory.STORAGE,
+                    "OwnPlay could not write the Live DVR recording output.",
+                    failure,
+                    LiveRecordingCaptureStage.RECORDING_SINK,
+                )
             }
         }
 
@@ -809,7 +903,9 @@ internal class LiveDvrSessionManager(
                 pendingHlsBytes = null
             }
             if (!complete) return
-            if (!isCompleteTransportStream(bytes)) throw unsupportedTransportStream()
+            if (!isCompleteTransportStream(bytes)) {
+                throw unsupportedTransportStream(LiveRecordingCaptureStage.HLS_SEGMENT_VALIDATION)
+            }
             if (!isCurrent(session, generation)) throw IOException("The Live DVR session is no longer active.")
             synchronized(storageWriteGate) {
                 synchronized(session.lock) {
@@ -822,18 +918,29 @@ internal class LiveDvrSessionManager(
                         ensureWriteHeadroom(bytes.size.toLong(), session.recordingSinks.size)
                         session.store.append(bytes, 0, bytes.size)
                         storeCommitted = true
-                        session.recordingSinks.forEach { (_, sink) ->
-                            sink.output.write(bytes)
-                            sink.bytesWritten += bytes.size
-                            sink.onProgress(sink.bytesWritten)
-                        }
                     } catch (failure: LiveRecordingCaptureFailureException) {
                         throw failure
                     } catch (failure: IOException) {
-                        throw storageFailure(failure)
+                        throw storageFailure(failure, LiveRecordingCaptureStage.RETAINED_STORE)
                     } finally {
                         session.store.endSegment(storeCommitted)
                         session.activeSegment = null
+                    }
+                    if (storeCommitted) {
+                        try {
+                            session.recordingSinks.forEach { (_, sink) ->
+                                sink.output.write(bytes)
+                                sink.bytesWritten += bytes.size
+                                sink.onProgress(sink.bytesWritten)
+                            }
+                        } catch (failure: IOException) {
+                            throw LiveRecordingCaptureFailureException(
+                                LiveRecordingFailureCategory.STORAGE,
+                                "OwnPlay could not write the Live DVR recording output.",
+                                failure,
+                                LiveRecordingCaptureStage.RECORDING_SINK,
+                            )
+                        }
                     }
                 }
             }
@@ -854,9 +961,12 @@ internal class LiveDvrSessionManager(
             bytes.size % TS_PACKET_BYTES == 0 &&
             validTransportStreamPrefix(bytes, bytes.size) == bytes.size
 
-    private fun unsupportedTransportStream() = LiveRecordingCaptureFailureException(
+    private fun unsupportedTransportStream(
+        stage: LiveRecordingCaptureStage = LiveRecordingCaptureStage.DIRECT_TS_VALIDATION,
+    ) = LiveRecordingCaptureFailureException(
         LiveRecordingFailureCategory.UNSUPPORTED_FORMAT,
         "The live source did not contain a complete MPEG-TS stream.",
+        stage = stage,
     )
 
     companion object {

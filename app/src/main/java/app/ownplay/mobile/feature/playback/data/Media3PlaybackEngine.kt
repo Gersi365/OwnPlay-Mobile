@@ -19,7 +19,10 @@ import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import app.ownplay.mobile.feature.live.data.LiveDvrDiagnosticEvent
+import app.ownplay.mobile.feature.live.data.LiveDvrDiagnostics
 import app.ownplay.mobile.feature.playback.domain.PlaybackEngine
+import app.ownplay.mobile.feature.playback.domain.PlaybackFailureStage
 import app.ownplay.mobile.feature.playback.domain.PlaybackEngineEvent
 import app.ownplay.mobile.feature.playback.domain.PlaybackEngineFailureClass
 import app.ownplay.mobile.feature.playback.domain.PlaybackEngineRecoveryKind
@@ -102,10 +105,22 @@ class Media3PlaybackEngine internal constructor(
                 }
 
                 override fun onPlayerError(error: PlaybackException) {
+                    val failureClass = classifyFailure(error)
+                    val recoveryKind = classifyRecovery(error)
+                    val failureStage = failureStage(error)
+                    LiveDvrDiagnostics.record(
+                        event = LiveDvrDiagnosticEvent.MEDIA3_ERROR,
+                        playbackStage = failureStage,
+                        playbackErrorCode = error.errorCode,
+                        playbackFailureClass = failureClass,
+                        playbackRecoveryKind = recoveryKind,
+                    )
                     emitReadiness(
                         readiness = PlaybackEngineReadiness.FAILED,
-                        failureClass = classifyFailure(error),
-                        recoveryKind = classifyRecovery(error),
+                        failureClass = failureClass,
+                        recoveryKind = recoveryKind,
+                        failureStage = failureStage,
+                        failureCode = error.errorCode,
                     )
                 }
 
@@ -308,6 +323,8 @@ class Media3PlaybackEngine internal constructor(
         readiness: PlaybackEngineReadiness,
         failureClass: PlaybackEngineFailureClass? = null,
         recoveryKind: PlaybackEngineRecoveryKind? = null,
+        failureStage: PlaybackFailureStage? = null,
+        failureCode: Int? = null,
     ) {
         val revision = activeMediaRevision ?: return
         eventListener?.invoke(
@@ -316,6 +333,8 @@ class Media3PlaybackEngine internal constructor(
                 readiness = readiness,
                 failureClass = failureClass,
                 recoveryKind = recoveryKind,
+                failureStage = failureStage,
+                failureCode = failureCode,
             ),
         )
     }
@@ -363,6 +382,16 @@ class Media3PlaybackEngine internal constructor(
                 tracks = PlaybackEngineTracks(descriptors),
             ),
         )
+    }
+
+    private fun failureStage(error: PlaybackException): PlaybackFailureStage {
+        var cause: Throwable? = error
+        val visited = mutableSetOf<Throwable>()
+        while (cause != null && visited.add(cause)) {
+            if (cause is LiveDvrDataSourceFailureException) return cause.stage
+            cause = cause.cause
+        }
+        return PlaybackFailureStage.MEDIA3_PLAYER
     }
 
     private fun classifyFailure(error: PlaybackException): PlaybackEngineFailureClass =

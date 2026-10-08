@@ -46,21 +46,38 @@ internal enum class LiveRecordingFailureCategory {
     UNKNOWN,
 }
 
+internal enum class LiveRecordingCaptureStage {
+    SOURCE_HTTP_RESPONSE,
+    DIRECT_BODY,
+    DIRECT_TS_VALIDATION,
+    HLS_PLAYLIST_FETCH,
+    HLS_PLAYLIST_VALIDATION,
+    HLS_SEGMENT_FETCH,
+    HLS_SEGMENT_VALIDATION,
+    RETAINED_STORE,
+    RECORDING_SINK,
+    STORAGE_HEADROOM,
+    CAPACITY_ADMISSION,
+    UNKNOWN,
+}
+
 internal data class LiveRecordingFailurePresentation(
     val category: LiveRecordingFailureCategory,
     val safeMessage: String,
+    val stage: LiveRecordingCaptureStage = LiveRecordingCaptureStage.UNKNOWN,
 )
 
 internal class LiveRecordingCaptureFailureException(
     val category: LiveRecordingFailureCategory,
     val safeMessage: String,
     cause: Throwable? = null,
+    val stage: LiveRecordingCaptureStage = LiveRecordingCaptureStage.UNKNOWN,
 ) : IOException(safeMessage, cause)
 
 internal object LiveRecordingFailurePolicy {
     fun classify(error: Throwable): LiveRecordingFailurePresentation = when (error) {
         is LiveRecordingCaptureFailureException ->
-            LiveRecordingFailurePresentation(error.category, error.safeMessage)
+            LiveRecordingFailurePresentation(error.category, error.safeMessage, error.stage)
         is SecurityException ->
             LiveRecordingFailurePresentation(
                 LiveRecordingFailureCategory.AUTHORIZATION,
@@ -84,18 +101,35 @@ internal object LiveRecordingFailurePolicy {
     }
 }
 
-private fun recordingHttpFailure(code: Int): LiveRecordingCaptureFailureException = when (code) {
+private fun Throwable.asCaptureFailure(stage: LiveRecordingCaptureStage): LiveRecordingCaptureFailureException =
+    this as? LiveRecordingCaptureFailureException ?: LiveRecordingCaptureFailureException(
+        LiveRecordingFailureCategory.NETWORK,
+        "The live provider connection failed.",
+        this,
+        stage,
+    )
+
+private fun elapsedMillis(startedAtNanos: Long): Long =
+    TimeUnit.NANOSECONDS.toMillis((System.nanoTime() - startedAtNanos).coerceAtLeast(0L))
+
+private fun recordingHttpFailure(
+    code: Int,
+    stage: LiveRecordingCaptureStage = LiveRecordingCaptureStage.SOURCE_HTTP_RESPONSE,
+): LiveRecordingCaptureFailureException = when (code) {
     401, 403 -> LiveRecordingCaptureFailureException(
         LiveRecordingFailureCategory.AUTHORIZATION,
         "The provider did not authorize recording access.",
+        stage = stage,
     )
     404, 410 -> LiveRecordingCaptureFailureException(
         LiveRecordingFailureCategory.SOURCE_UNAVAILABLE,
         "The live recording source is unavailable.",
+        stage = stage,
     )
     else -> LiveRecordingCaptureFailureException(
         LiveRecordingFailureCategory.NETWORK,
         "The provider connection failed while recording.",
+        stage = stage,
     )
 }
 
@@ -574,11 +608,24 @@ internal class LiveRecordingCaptureClient(
         coroutineScope {
             val request = Request.Builder().url(uri).build()
             val call = streamClient.newCall(request)
+            val captureStartedAtNanos = System.nanoTime()
             val bytes = AtomicLong(0L)
             val reader = async(Dispatchers.IO) {
                 call.execute().use { response ->
+                    LiveDvrDiagnostics.record(
+                        event = LiveDvrDiagnosticEvent.DIRECT_RESPONSE,
+                        stage = LiveRecordingCaptureStage.SOURCE_HTTP_RESPONSE,
+                        statusCode = response.code,
+                        mediaType = LiveDvrDiagnostics.mediaType(response.body?.contentType()),
+                        redirectClass = LiveDvrDiagnostics.redirectClass(request.url, response.request.url),
+                        durationMs = elapsedMillis(captureStartedAtNanos),
+                    )
                     if (!response.isSuccessful) throw recordingHttpFailure(response.code)
-                    val body = response.body ?: throw IOException("Stream unavailable")
+                    val body = response.body ?: throw LiveRecordingCaptureFailureException(
+                        LiveRecordingFailureCategory.NETWORK,
+                        "The live stream response did not contain a body.",
+                        stage = LiveRecordingCaptureStage.DIRECT_BODY,
+                    )
                     val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
                     body.byteStream().use { input ->
                         while (System.currentTimeMillis() < endEpochMillis) {
@@ -600,14 +647,26 @@ internal class LiveRecordingCaptureClient(
             try {
                 reader.await()
             } catch (failure: IOException) {
-                if (System.currentTimeMillis() < endEpochMillis || bytes.get() == 0L) throw failure
+                if (System.currentTimeMillis() < endEpochMillis || bytes.get() == 0L) {
+                    throw failure.asCaptureFailure(LiveRecordingCaptureStage.DIRECT_BODY)
+                }
             } finally {
                 stopAtEnd.cancel()
                 call.cancel()
             }
-            if (bytes.get() == 0L) throw IOException("Stream was empty")
+            if (bytes.get() == 0L) {
+                throw LiveRecordingCaptureFailureException(
+                    LiveRecordingFailureCategory.NETWORK,
+                    "The live stream returned no media bytes.",
+                    stage = LiveRecordingCaptureStage.DIRECT_BODY,
+                )
+            }
             if (System.currentTimeMillis() < endEpochMillis) {
-                throw IOException("Live stream ended before the selected program")
+                throw LiveRecordingCaptureFailureException(
+                    LiveRecordingFailureCategory.NETWORK,
+                    "The live stream ended before the selected program.",
+                    stage = LiveRecordingCaptureStage.DIRECT_BODY,
+                )
             }
         }
 
@@ -629,7 +688,11 @@ internal class LiveRecordingCaptureClient(
             val playlist = HlsTransportStreamPlaylistParser.parse(playlistUri, fetchedPlaylist.first)
             if (playlist.variants.isNotEmpty()) {
                 playlistUri = playlist.variants.maxByOrNull { it.bandwidth }?.uri
-                    ?: throw IOException("Playlist is unavailable")
+                    ?: throw LiveRecordingCaptureFailureException(
+                        LiveRecordingFailureCategory.UNSUPPORTED_FORMAT,
+                        "The provider playlist has no usable variant.",
+                        stage = LiveRecordingCaptureStage.HLS_PLAYLIST_VALIDATION,
+                    )
                 initial = true
                 continue
             }
@@ -641,6 +704,7 @@ internal class LiveRecordingCaptureClient(
                 throw LiveRecordingCaptureFailureException(
                     LiveRecordingFailureCategory.UNSUPPORTED_FORMAT,
                     "This HLS stream cannot be recorded safely.",
+                    stage = LiveRecordingCaptureStage.HLS_PLAYLIST_VALIDATION,
                 )
             }
             val selectedSegments = when {
@@ -662,6 +726,7 @@ internal class LiveRecordingCaptureClient(
                 throw LiveRecordingCaptureFailureException(
                     LiveRecordingFailureCategory.UNSUPPORTED_FORMAT,
                     "This HLS stream cannot be recorded safely.",
+                    stage = LiveRecordingCaptureStage.HLS_PLAYLIST_VALIDATION,
                 )
             }
             if (initial) {
@@ -678,12 +743,14 @@ internal class LiveRecordingCaptureClient(
                     throw LiveRecordingCaptureFailureException(
                     LiveRecordingFailureCategory.UNSUPPORTED_FORMAT,
                     "This HLS stream cannot be recorded safely.",
+                    stage = LiveRecordingCaptureStage.HLS_PLAYLIST_VALIDATION,
                 )
                 }
                 val boundaryOutput = output as? LiveDvrSegmentBoundaryOutput
                     ?: throw LiveRecordingCaptureFailureException(
                         LiveRecordingFailureCategory.UNSUPPORTED_FORMAT,
                         "HLS segments cannot be written without transactional boundaries.",
+                        stage = LiveRecordingCaptureStage.HLS_SEGMENT_VALIDATION,
                     )
                 val accepted = boundaryOutput.beginSegment(
                     LiveDvrIngressSegment(
@@ -717,6 +784,7 @@ internal class LiveRecordingCaptureClient(
         if (totalBytes <= 0L) throw LiveRecordingCaptureFailureException(
                     LiveRecordingFailureCategory.UNSUPPORTED_FORMAT,
                     "This HLS stream cannot be recorded safely.",
+                    stage = LiveRecordingCaptureStage.HLS_PLAYLIST_VALIDATION,
                 )
     }
 
@@ -726,11 +794,28 @@ internal class LiveRecordingCaptureClient(
         val cancellation = currentCoroutineContext()[Job]
             ?.invokeOnCompletion { cause -> if (cause is CancellationException) call.cancel() }
         try {
+            val startedAtNanos = System.nanoTime()
             call.execute().use { response ->
-                if (!response.isSuccessful) throw IOException("Playlist unavailable")
-                val text = response.body?.string() ?: throw IOException("Playlist unavailable")
+                LiveDvrDiagnostics.record(
+                    event = LiveDvrDiagnosticEvent.HLS_PLAYLIST_RESPONSE,
+                    stage = LiveRecordingCaptureStage.HLS_PLAYLIST_FETCH,
+                    statusCode = response.code,
+                    mediaType = LiveDvrDiagnostics.mediaType(response.body?.contentType()),
+                    redirectClass = LiveDvrDiagnostics.redirectClass(request.url, response.request.url),
+                    durationMs = elapsedMillis(startedAtNanos),
+                )
+                if (!response.isSuccessful) {
+                    throw recordingHttpFailure(response.code, LiveRecordingCaptureStage.HLS_PLAYLIST_FETCH)
+                }
+                val text = response.body?.string() ?: throw LiveRecordingCaptureFailureException(
+                    LiveRecordingFailureCategory.NETWORK,
+                    "The provider playlist was empty.",
+                    stage = LiveRecordingCaptureStage.HLS_PLAYLIST_FETCH,
+                )
                 text to response.request.url.toString()
             }
+        } catch (failure: IOException) {
+            throw failure.asCaptureFailure(LiveRecordingCaptureStage.HLS_PLAYLIST_FETCH)
         } finally {
             cancellation?.dispose()
         }
@@ -743,9 +828,24 @@ internal class LiveRecordingCaptureClient(
             val cancellation = currentCoroutineContext()[Job]
                 ?.invokeOnCompletion { cause -> if (cause is CancellationException) call.cancel() }
             try {
+                val startedAtNanos = System.nanoTime()
                 call.execute().use { response ->
-                    if (!response.isSuccessful) throw recordingHttpFailure(response.code)
-                    val body = response.body ?: throw IOException("Segment unavailable")
+                    LiveDvrDiagnostics.record(
+                        event = LiveDvrDiagnosticEvent.HLS_SEGMENT_RESPONSE,
+                        stage = LiveRecordingCaptureStage.HLS_SEGMENT_FETCH,
+                        statusCode = response.code,
+                        mediaType = LiveDvrDiagnostics.mediaType(response.body?.contentType()),
+                        redirectClass = LiveDvrDiagnostics.redirectClass(request.url, response.request.url),
+                        durationMs = elapsedMillis(startedAtNanos),
+                    )
+                    if (!response.isSuccessful) {
+                        throw recordingHttpFailure(response.code, LiveRecordingCaptureStage.HLS_SEGMENT_FETCH)
+                    }
+                    val body = response.body ?: throw LiveRecordingCaptureFailureException(
+                        LiveRecordingFailureCategory.NETWORK,
+                        "The HLS segment response did not contain a body.",
+                        stage = LiveRecordingCaptureStage.HLS_SEGMENT_FETCH,
+                    )
                     var bytes = 0L
                     val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
                     body.byteStream().use { input ->
@@ -756,8 +856,16 @@ internal class LiveRecordingCaptureClient(
                             bytes += count
                         }
                     }
+                    LiveDvrDiagnostics.record(
+                        event = LiveDvrDiagnosticEvent.HLS_SEGMENT_BODY,
+                        stage = LiveRecordingCaptureStage.HLS_SEGMENT_FETCH,
+                        incomingBytes = bytes,
+                        durationMs = elapsedMillis(startedAtNanos),
+                    )
                     bytes
                 }
+            } catch (failure: IOException) {
+                throw failure.asCaptureFailure(LiveRecordingCaptureStage.HLS_SEGMENT_FETCH)
             } finally {
                 cancellation?.dispose()
             }
@@ -798,6 +906,7 @@ internal object HlsTransportStreamPlaylistParser {
             throw LiveRecordingCaptureFailureException(
                     LiveRecordingFailureCategory.UNSUPPORTED_FORMAT,
                     "This HLS stream cannot be recorded safely.",
+                    stage = LiveRecordingCaptureStage.HLS_PLAYLIST_VALIDATION,
                 )
         }
         val variants = mutableListOf<HlsTransportStreamVariant>()
@@ -818,12 +927,14 @@ internal object HlsTransportStreamPlaylistParser {
                     throw LiveRecordingCaptureFailureException(
                     LiveRecordingFailureCategory.UNSUPPORTED_FORMAT,
                     "This HLS stream cannot be recorded safely.",
+                    stage = LiveRecordingCaptureStage.HLS_PLAYLIST_VALIDATION,
                 )
                 line.startsWith("#EXT-X-MAP:", ignoreCase = true) ||
                     line.startsWith("#EXT-X-BYTERANGE", ignoreCase = true) ->
                     throw LiveRecordingCaptureFailureException(
                     LiveRecordingFailureCategory.UNSUPPORTED_FORMAT,
                     "This HLS stream cannot be recorded safely.",
+                    stage = LiveRecordingCaptureStage.HLS_PLAYLIST_VALIDATION,
                 )
                 line.startsWith("#EXT-X-STREAM-INF:", ignoreCase = true) ->
                     pendingBandwidth = Regex("BANDWIDTH=(\\d+)", RegexOption.IGNORE_CASE)
@@ -848,6 +959,7 @@ internal object HlsTransportStreamPlaylistParser {
                         .getOrElse { throw LiveRecordingCaptureFailureException(
                     LiveRecordingFailureCategory.UNSUPPORTED_FORMAT,
                     "This HLS stream cannot be recorded safely.",
+                    stage = LiveRecordingCaptureStage.HLS_PLAYLIST_VALIDATION,
                 ) }
                     if (pendingBandwidth != null) {
                         variants += HlsTransportStreamVariant(pendingBandwidth!!, resolved)
@@ -856,6 +968,7 @@ internal object HlsTransportStreamPlaylistParser {
                         val duration = pendingDuration ?: throw LiveRecordingCaptureFailureException(
                     LiveRecordingFailureCategory.UNSUPPORTED_FORMAT,
                     "This HLS stream cannot be recorded safely.",
+                    stage = LiveRecordingCaptureStage.HLS_PLAYLIST_VALIDATION,
                 )
                         if (pendingDiscontinuity) {
                             discontinuitySequence += 1L

@@ -512,12 +512,22 @@ internal enum class PlaybackEngineRecoveryKind {
     NON_RETRYABLE_SOURCE,
 }
 
+internal enum class PlaybackFailureStage {
+    LIVE_DVR_URI,
+    LIVE_DVR_SESSION_LOOKUP,
+    LIVE_DVR_READER_OPEN,
+    LIVE_DVR_READ,
+    MEDIA3_PLAYER,
+}
+
 internal data class PlaybackEngineEvent(
     val mediaRevision: Long,
     val readiness: PlaybackEngineReadiness? = null,
     val tracks: PlaybackEngineTracks? = null,
     val failureClass: PlaybackEngineFailureClass? = null,
     val recoveryKind: PlaybackEngineRecoveryKind? = null,
+    val failureStage: PlaybackFailureStage? = null,
+    val failureCode: Int? = null,
 ) {
     init {
         require(readiness != null || tracks != null) {

@@ -397,6 +397,10 @@ class LiveDvrSessionManagerTest {
                 LiveRecordingFailureCategory.UNSUPPORTED_FORMAT,
                 manager.snapshot(SOURCE, CHANNEL)?.failureCategory,
             )
+            assertEquals(
+                LiveRecordingCaptureStage.DIRECT_TS_VALIDATION,
+                manager.snapshot(SOURCE, CHANNEL)?.failureStage,
+            )
         } finally {
             manager.detachPlayback(SOURCE, CHANNEL)
             manager.close()
@@ -464,6 +468,7 @@ class LiveDvrSessionManagerTest {
     fun incompleteHlsSegmentIsQuarantinedBeforeRetainedStoreWrite() = runBlocking {
         val directory = Files.createTempDirectory("ownplay-dvr-hls-quarantine-test").toFile()
         val capacity = LiveCapacityCoordinator(Metadata())
+        val startPartialSegment = CompletableDeferred<Unit>()
         val partialSegmentEnded = CompletableDeferred<Unit>()
         val ingress = object : LiveDvrIngressClient {
             override suspend fun capture(
@@ -474,6 +479,7 @@ class LiveDvrSessionManagerTest {
                 output: OutputStream,
                 onProgress: suspend (Long) -> Unit,
             ) {
+                startPartialSegment.await()
                 val boundaries = output as LiveDvrSegmentBoundaryOutput
                 assertTrue(
                     boundaries.beginSegment(
@@ -491,19 +497,57 @@ class LiveDvrSessionManagerTest {
                 throw LiveRecordingCaptureFailureException(
                     LiveRecordingFailureCategory.SOURCE_UNAVAILABLE,
                     "segment connection ended early",
+                    stage = LiveRecordingCaptureStage.HLS_SEGMENT_FETCH,
                 )
             }
         }
         val manager = manager(directory, ingress, capacity)
+        val recordingOutput = ByteArrayOutputStream()
+        val recordingFinished = CompletableDeferred<Throwable?>()
+        var recordJob: kotlinx.coroutines.Job? = null
         try {
             assertTrue(capacity.acquirePlayback(SOURCE, CHANNEL).allowed)
             assertNotNull(manager.attachPlayback(SOURCE, CHANNEL, preparedHls()))
+            assertTrue(
+                capacity.acquireRecording(
+                    SOURCE,
+                    RECORDING,
+                    CHANNEL,
+                    System.currentTimeMillis(),
+                    sharedSessionAvailable = true,
+                ).allowed,
+            )
+            recordJob = launch {
+                val failure = try {
+                    manager.captureForRecording(
+                        sourceId = SOURCE,
+                        channelId = CHANNEL,
+                        recordingId = RECORDING,
+                        endEpochMillis = Long.MAX_VALUE,
+                        media = preparedHls(),
+                        output = recordingOutput,
+                        onProgress = {},
+                    )
+                    null
+                } catch (error: Throwable) {
+                    error
+                }
+                recordingFinished.complete(failure)
+            }
+            startPartialSegment.complete(Unit)
             withTimeout(2_000L) { partialSegmentEnded.await() }
             withTimeout(2_000L) {
                 while (manager.snapshot(SOURCE, CHANNEL)?.state != LiveDvrSessionState.FAILED) delay(5L)
             }
+            assertTrue(withTimeout(2_000L) { recordingFinished.await() } is IOException)
             assertEquals(0L, manager.snapshot(SOURCE, CHANNEL)?.retainedBytes)
+            assertEquals(0, recordingOutput.size())
+            assertEquals(
+                LiveRecordingCaptureStage.HLS_SEGMENT_FETCH,
+                manager.snapshot(SOURCE, CHANNEL)?.failureStage,
+            )
         } finally {
+            recordJob?.cancelAndJoin()
             manager.detachPlayback(SOURCE, CHANNEL)
             manager.close()
             directory.deleteRecursively()
