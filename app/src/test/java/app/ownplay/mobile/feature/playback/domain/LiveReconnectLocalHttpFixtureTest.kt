@@ -1,5 +1,8 @@
 package app.ownplay.mobile.feature.playback.domain
 
+import app.ownplay.mobile.feature.live.data.LiveDvrIngressSegment
+import app.ownplay.mobile.feature.live.data.LiveDvrSegmentBoundaryOutput
+import app.ownplay.mobile.feature.live.data.LiveRecordingCaptureClient
 import app.ownplay.mobile.sources.domain.SourceId
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
@@ -7,15 +10,92 @@ import kotlinx.coroutines.Dispatchers
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.io.OutputStream
 import java.net.HttpURLConnection
+import java.time.Instant
 import java.net.InetSocketAddress
 import java.net.URL
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 
 class LiveReconnectLocalHttpFixtureTest {
+    @Test
+    fun redirectedHlsPlaylistResolvesRelativeSegmentsFromEffectiveResponseUri() = kotlinx.coroutines.runBlocking {
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        val requestedSegmentPath = AtomicReference<String?>()
+        val segmentBytes = ByteArray(188) { index -> if (index == 0) 0x47 else 0 }
+        server.createContext("/redirect/master.m3u8") { exchange ->
+            exchange.responseHeaders.add("Location", "/effective/path/index.m3u8")
+            exchange.sendResponseHeaders(302, -1)
+            exchange.close()
+        }
+        server.createContext("/effective/path/index.m3u8") { exchange ->
+            val playlist = (
+                "#EXTM3U\n" +
+                    "#EXT-X-VERSION:3\n" +
+                    "#EXT-X-MEDIA-SEQUENCE:1\n" +
+                    "#EXT-X-PROGRAM-DATE-TIME:${Instant.now().minusSeconds(20)}\n" +
+                    "#EXTINF:1.0,\n" +
+                    "segments/one.ts\n" +
+                    "#EXT-X-ENDLIST\n"
+                ).toByteArray()
+            exchange.responseHeaders.add("Content-Type", "application/vnd.apple.mpegurl")
+            exchange.sendResponseHeaders(200, playlist.size.toLong())
+            exchange.responseBody.use { it.write(playlist) }
+        }
+        server.createContext("/effective/path/segments/one.ts") { exchange ->
+            requestedSegmentPath.set(exchange.requestURI.path)
+            exchange.responseHeaders.add("Content-Type", "video/mp2t")
+            exchange.sendResponseHeaders(200, segmentBytes.size.toLong())
+            exchange.responseBody.use { it.write(segmentBytes) }
+        }
+        server.start()
+
+        val staged = ByteArrayOutputStream()
+        val committed = ByteArrayOutputStream()
+        val progress = mutableListOf<Long>()
+        val output = object : OutputStream(), LiveDvrSegmentBoundaryOutput {
+            override fun write(value: Int) {
+                staged.write(value)
+            }
+
+            override fun write(buffer: ByteArray, offset: Int, length: Int) {
+                staged.write(buffer, offset, length)
+            }
+
+            override fun beginSegment(segment: LiveDvrIngressSegment): Boolean {
+                staged.reset()
+                return true
+            }
+
+            override fun endSegment(complete: Boolean) {
+                if (complete) committed.write(staged.toByteArray())
+                staged.reset()
+            }
+        }
+        try {
+            val baseUrl = "http://127.0.0.1:${server.address.port}"
+            val now = System.currentTimeMillis()
+            LiveRecordingCaptureClient().capture(
+                uri = "$baseUrl/redirect/master.m3u8",
+                isHls = true,
+                startEpochMillis = now - 60_000L,
+                endEpochMillis = now + 60_000L,
+                output = output,
+                onProgress = { progress += it },
+            )
+            assertEquals("/effective/path/segments/one.ts", requestedSegmentPath.get())
+            org.junit.Assert.assertArrayEquals(segmentBytes, committed.toByteArray())
+            assertEquals(listOf(segmentBytes.size.toLong()), progress)
+        } finally {
+            server.stop(0)
+        }
+    }
+
     @Test
     fun liveHlsFixtureServesThreePlaylistAndSegmentRefreshCycles() {
         LocalLiveFixture().use { fixture ->

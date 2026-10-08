@@ -624,8 +624,9 @@ internal class LiveRecordingCaptureClient(
         val seen = mutableSetOf<String>()
         var totalBytes = 0L
         while (System.currentTimeMillis() < endEpochMillis && !completedPlaylist) {
-            val text = fetchText(playlistUri)
-            val playlist = HlsTransportStreamPlaylistParser.parse(playlistUri, text)
+            val fetchedPlaylist = fetchText(playlistUri)
+            playlistUri = fetchedPlaylist.second
+            val playlist = HlsTransportStreamPlaylistParser.parse(playlistUri, fetchedPlaylist.first)
             if (playlist.variants.isNotEmpty()) {
                 playlistUri = playlist.variants.maxByOrNull { it.bandwidth }?.uri
                     ?: throw IOException("Playlist is unavailable")
@@ -680,22 +681,29 @@ internal class LiveRecordingCaptureClient(
                 )
                 }
                 val boundaryOutput = output as? LiveDvrSegmentBoundaryOutput
-                val accepted = boundaryOutput?.beginSegment(
+                    ?: throw LiveRecordingCaptureFailureException(
+                        LiveRecordingFailureCategory.UNSUPPORTED_FORMAT,
+                        "HLS segments cannot be written without transactional boundaries.",
+                    )
+                val accepted = boundaryOutput.beginSegment(
                     LiveDvrIngressSegment(
                         identity = segment.identity,
                         durationMs = (segment.durationSeconds * 1_000.0).toLong().coerceAtLeast(1L),
                         programTimeEpochMs = segment.programDateTimeEpochMillis,
                         discontinuitySequence = segment.discontinuitySequence,
                     ),
-                ) ?: true
+                )
                 if (!accepted) continue
                 var completedSegment = false
+                var segmentBytes = 0L
                 try {
-                    totalBytes += fetchSegment(segment.uri, output, totalBytes, onProgress)
+                    segmentBytes = fetchSegment(segment.uri, output)
                     completedSegment = true
                 } finally {
-                    boundaryOutput?.endSegment(completedSegment)
+                    boundaryOutput.endSegment(completedSegment)
                 }
+                totalBytes += segmentBytes
+                onProgress(totalBytes)
             }
             initial = false
             completedPlaylist = playlist.endList
@@ -712,7 +720,7 @@ internal class LiveRecordingCaptureClient(
                 )
     }
 
-    private suspend fun fetchText(uri: String): String = withContext(Dispatchers.IO) {
+    private suspend fun fetchText(uri: String): Pair<String, String> = withContext(Dispatchers.IO) {
         val request = Request.Builder().url(uri).build()
         val call = playlistClient.newCall(request)
         val cancellation = currentCoroutineContext()[Job]
@@ -720,19 +728,15 @@ internal class LiveRecordingCaptureClient(
         try {
             call.execute().use { response ->
                 if (!response.isSuccessful) throw IOException("Playlist unavailable")
-                response.body?.string() ?: throw IOException("Playlist unavailable")
+                val text = response.body?.string() ?: throw IOException("Playlist unavailable")
+                text to response.request.url.toString()
             }
         } finally {
             cancellation?.dispose()
         }
     }
 
-    private suspend fun fetchSegment(
-        uri: String,
-        output: OutputStream,
-        currentTotal: Long,
-        onProgress: suspend (Long) -> Unit,
-    ): Long =
+    private suspend fun fetchSegment(uri: String, output: OutputStream): Long =
         withContext(Dispatchers.IO) {
             val request = Request.Builder().url(uri).build()
             val call = playlistClient.newCall(request)
@@ -750,7 +754,6 @@ internal class LiveRecordingCaptureClient(
                             if (count < 0) break
                             output.write(buffer, 0, count)
                             bytes += count
-                            onProgress(currentTotal + bytes)
                         }
                     }
                     bytes

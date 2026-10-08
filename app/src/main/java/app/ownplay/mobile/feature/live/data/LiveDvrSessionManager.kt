@@ -10,6 +10,7 @@ import app.ownplay.mobile.feature.playback.domain.PlaybackTarget
 import app.ownplay.mobile.feature.playback.domain.PreparedPlaybackAlternative
 import app.ownplay.mobile.feature.playback.domain.PreparedPlaybackMedia
 import app.ownplay.mobile.sources.domain.SourceId
+import java.io.ByteArrayOutputStream
 import java.io.Closeable
 import java.io.File
 import java.io.IOException
@@ -449,15 +450,20 @@ internal class LiveDvrSessionManager(
             session.state = if (retries == 0) LiveDvrSessionState.STARTING else LiveDvrSessionState.RECONNECTING
             val retainedLengthBeforeAttempt = session.store.length
             var ingressReady = false
+            val ingressOutput = SessionIngressOutput(session, generation, media.isHls)
             try {
                 ingressClient.capture(
                     uri = media.uri,
                     isHls = media.isHls,
                     startEpochMillis = System.currentTimeMillis(),
                     endEpochMillis = Long.MAX_VALUE,
-                    output = SessionIngressOutput(session, generation),
+                    output = ingressOutput,
                     onProgress = {
-                        if (!ingressReady && isCurrent(session, generation)) {
+                        if (
+                            !ingressReady &&
+                            session.store.length > retainedLengthBeforeAttempt &&
+                            isCurrent(session, generation)
+                        ) {
                             synchronized(session.lock) {
                                 if (!session.terminal && session.generation == generation) {
                                     ingressReady = true
@@ -468,6 +474,7 @@ internal class LiveDvrSessionManager(
                         }
                     },
                 )
+                ingressOutput.finishCapture()
                 finishSession(session, generation, null)
                 return
             } catch (cancelled: CancellationException) {
@@ -475,9 +482,9 @@ internal class LiveDvrSessionManager(
                 throw cancelled
             } catch (error: Throwable) {
                 if (!isCurrent(session, generation)) return
-                val wroteNoBytes = session.store.length == retainedLengthBeforeAttempt
+                val wroteNoValidatedMedia = session.store.length == 0L
                 val fallback = if (
-                    wroteNoBytes && canTryCompatibilityFallback(error)
+                    wroteNoValidatedMedia && canTryCompatibilityFallback(error)
                 ) {
                     candidates.getOrNull(candidateIndex + 1)
                 } else {
@@ -510,8 +517,24 @@ internal class LiveDvrSessionManager(
                     finishSession(session, generation, error)
                     return
                 }
-                candidates = refreshedCandidates
-                candidateIndex = candidateIndex.coerceAtMost(candidates.lastIndex)
+                val compatibleCandidates = if (session.store.length > 0L) {
+                    refreshedCandidates.filter { it.isHls == media.isHls }
+                } else {
+                    refreshedCandidates
+                }
+                if (compatibleCandidates.isEmpty()) {
+                    finishSession(
+                        session,
+                        generation,
+                        LiveRecordingCaptureFailureException(
+                            LiveRecordingFailureCategory.UNSUPPORTED_FORMAT,
+                            "The refreshed Live source changed media representation.",
+                        ),
+                    )
+                    return
+                }
+                candidates = compatibleCandidates
+                candidateIndex = 0
                 media = candidates[candidateIndex]
                 synchronized(session.lock) {
                     if (session.terminal || session.generation != generation) return
@@ -673,10 +696,15 @@ internal class LiveDvrSessionManager(
     private inner class SessionIngressOutput(
         private val session: Session,
         private val generation: Long,
+        private val isHls: Boolean,
     ) : OutputStream(), LiveDvrSegmentBoundaryOutput {
+        private var directPending = ByteArray(0)
+        private var directValidated = false
+        private var pendingHlsSegment: LiveDvrIngressSegment? = null
+        private var pendingHlsBytes: ByteArrayOutputStream? = null
+
         override fun write(value: Int) {
-            val one = byteArrayOf(value.toByte())
-            write(one, 0, 1)
+            write(byteArrayOf(value.toByte()), 0, 1)
         }
 
         override fun write(buffer: ByteArray, offset: Int, length: Int) {
@@ -687,21 +715,70 @@ internal class LiveDvrSessionManager(
                     if (session.terminal || session.generation != generation) {
                         throw IOException("The Live DVR session is no longer active.")
                     }
-                    try {
-                        ensureWriteHeadroom(length.toLong(), session.recordingSinks.size)
-                        session.store.append(buffer, offset, length)
-                        session.recordingSinks.forEach { (_, sink) ->
-                            sink.output.write(buffer, offset, length)
-                            sink.bytesWritten += length
-                            sink.onProgress(sink.bytesWritten)
-                        }
-                    } catch (failure: LiveRecordingCaptureFailureException) {
-                        throw failure
-                    } catch (failure: IOException) {
-                        throw storageFailure(failure)
-                    }
+                    if (isHls) stageHlsBytes(buffer, offset, length) else acceptDirectBytes(buffer, offset, length)
                 }
             }
+        }
+
+        private fun acceptDirectBytes(buffer: ByteArray, offset: Int, length: Int) {
+            val combined = ByteArray(directPending.size + length)
+            directPending.copyInto(combined)
+            buffer.copyInto(combined, directPending.size, offset, offset + length)
+            val completeLength = combined.size - combined.size % TS_PACKET_BYTES
+            val validLength = validTransportStreamPrefix(combined, completeLength)
+            val invalidPacket = validLength < completeLength
+            val minimumSniffBytes = MIN_DIRECT_SNIFF_PACKETS * TS_PACKET_BYTES
+            if (!directValidated && invalidPacket && validLength < minimumSniffBytes) {
+                directPending = ByteArray(0)
+                throw unsupportedTransportStream()
+            }
+            if (!directValidated && validLength >= minimumSniffBytes) directValidated = true
+            if (directValidated && validLength > 0) appendValidated(combined, 0, validLength)
+            if (invalidPacket) {
+                directPending = ByteArray(0)
+                throw unsupportedTransportStream()
+            }
+            directPending = if (directValidated) {
+                combined.copyOfRange(completeLength, combined.size)
+            } else {
+                combined
+            }
+        }
+
+        private fun stageHlsBytes(buffer: ByteArray, offset: Int, length: Int) {
+            val staged = pendingHlsBytes
+                ?: throw LiveRecordingCaptureFailureException(
+                    LiveRecordingFailureCategory.UNSUPPORTED_FORMAT,
+                    "The HLS segment could not be staged safely.",
+                )
+            if (staged.size() > MAX_STAGED_HLS_SEGMENT_BYTES - length) {
+                throw LiveRecordingCaptureFailureException(
+                    LiveRecordingFailureCategory.UNSUPPORTED_FORMAT,
+                    "The HLS segment is too large to stage safely.",
+                )
+            }
+            staged.write(buffer, offset, length)
+        }
+
+        private fun appendValidated(buffer: ByteArray, offset: Int, length: Int) {
+            try {
+                ensureWriteHeadroom(length.toLong(), session.recordingSinks.size)
+                session.store.append(buffer, offset, length)
+                session.recordingSinks.forEach { (_, sink) ->
+                    sink.output.write(buffer, offset, length)
+                    sink.bytesWritten += length
+                    sink.onProgress(sink.bytesWritten)
+                }
+            } catch (failure: LiveRecordingCaptureFailureException) {
+                throw failure
+            } catch (failure: IOException) {
+                throw storageFailure(failure)
+            }
+        }
+
+        fun finishCapture() {
+            if (!isHls && !directValidated) throw unsupportedTransportStream()
+            if (isHls && pendingHlsSegment != null) endSegment(complete = false)
         }
 
         override fun flush() {
@@ -714,25 +791,83 @@ internal class LiveDvrSessionManager(
         override fun close() = flush()
 
         override fun beginSegment(segment: LiveDvrIngressSegment): Boolean = synchronized(session.lock) {
-            if (session.terminal || session.generation != generation) return@synchronized false
-            val accepted = session.store.beginSegment(segment)
-            if (accepted) session.activeSegment = segment
-            accepted
+            if (!isHls || session.terminal || session.generation != generation || pendingHlsSegment != null) {
+                return@synchronized false
+            }
+            pendingHlsSegment = segment
+            pendingHlsBytes = ByteArrayOutputStream()
+            true
         }
 
         override fun endSegment(complete: Boolean) {
+            val segment: LiveDvrIngressSegment
+            val bytes: ByteArray
             synchronized(session.lock) {
-                session.store.endSegment(complete)
-                session.activeSegment = null
+                segment = pendingHlsSegment ?: return
+                bytes = pendingHlsBytes?.toByteArray() ?: ByteArray(0)
+                pendingHlsSegment = null
+                pendingHlsBytes = null
+            }
+            if (!complete) return
+            if (!isCompleteTransportStream(bytes)) throw unsupportedTransportStream()
+            if (!isCurrent(session, generation)) throw IOException("The Live DVR session is no longer active.")
+            synchronized(storageWriteGate) {
+                synchronized(session.lock) {
+                    if (session.terminal || session.generation != generation) {
+                        throw IOException("The Live DVR session is no longer active.")
+                    }
+                    if (!session.store.beginSegment(segment)) return
+                    var storeCommitted = false
+                    try {
+                        ensureWriteHeadroom(bytes.size.toLong(), session.recordingSinks.size)
+                        session.store.append(bytes, 0, bytes.size)
+                        storeCommitted = true
+                        session.recordingSinks.forEach { (_, sink) ->
+                            sink.output.write(bytes)
+                            sink.bytesWritten += bytes.size
+                            sink.onProgress(sink.bytesWritten)
+                        }
+                    } catch (failure: LiveRecordingCaptureFailureException) {
+                        throw failure
+                    } catch (failure: IOException) {
+                        throw storageFailure(failure)
+                    } finally {
+                        session.store.endSegment(storeCommitted)
+                        session.activeSegment = null
+                    }
+                }
             }
         }
     }
+
+    private fun validTransportStreamPrefix(bytes: ByteArray, length: Int): Int {
+        var offset = 0
+        while (offset < length) {
+            if ((bytes[offset].toInt() and 0xff) != TS_SYNC_BYTE) return offset
+            offset += TS_PACKET_BYTES
+        }
+        return length
+    }
+
+    private fun isCompleteTransportStream(bytes: ByteArray): Boolean =
+        bytes.isNotEmpty() &&
+            bytes.size % TS_PACKET_BYTES == 0 &&
+            validTransportStreamPrefix(bytes, bytes.size) == bytes.size
+
+    private fun unsupportedTransportStream() = LiveRecordingCaptureFailureException(
+        LiveRecordingFailureCategory.UNSUPPORTED_FORMAT,
+        "The live source did not contain a complete MPEG-TS stream.",
+    )
 
     companion object {
         const val DVR_SCHEME = "ownplaydvr"
         const val MPEG_TS_MIME_TYPE = "video/mp2t"
         private const val MAX_RECONNECTS = 3
         private const val TERMINAL_WAIT_STEP_MS = 500L
+        private const val TS_PACKET_BYTES = 188
+        private const val TS_SYNC_BYTE = 0x47
+        private const val MIN_DIRECT_SNIFF_PACKETS = 64
+        private const val MAX_STAGED_HLS_SEGMENT_BYTES = 16 * 1024 * 1024
         private val RECONNECT_BACKOFF_MS = longArrayOf(250L, 500L, 1_000L)
     }
 }

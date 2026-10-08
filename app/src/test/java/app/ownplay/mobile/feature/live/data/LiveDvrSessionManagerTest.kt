@@ -362,6 +362,155 @@ class LiveDvrSessionManagerTest {
     }
 
     @Test
+    fun extensionlessNonTransportBodyIsRejectedBeforeRetainedWrite() = runBlocking {
+        val directory = Files.createTempDirectory("ownplay-dvr-ts-sniff-test").toFile()
+        val capacity = LiveCapacityCoordinator(Metadata())
+        val ingress = object : LiveDvrIngressClient {
+            override suspend fun capture(
+                uri: String,
+                isHls: Boolean,
+                startEpochMillis: Long,
+                endEpochMillis: Long,
+                output: OutputStream,
+                onProgress: suspend (Long) -> Unit,
+            ) {
+                val invalidBody = ByteArray(188 * 64) { index ->
+                    if (index == 0) 0x47 else (index % 251).toByte()
+                }
+                output.write(invalidBody)
+                onProgress(invalidBody.size.toLong())
+            }
+        }
+        val manager = manager(directory, ingress, capacity)
+        val extensionless = PreparedPlaybackMedia(
+            uri = "https://provider.invalid/api/live",
+            usesProviderConnection = true,
+        )
+        try {
+            assertTrue(capacity.acquirePlayback(SOURCE, CHANNEL).allowed)
+            assertNotNull(manager.attachPlayback(SOURCE, CHANNEL, extensionless))
+            withTimeout(2_000L) {
+                while (manager.snapshot(SOURCE, CHANNEL)?.state != LiveDvrSessionState.FAILED) delay(5L)
+            }
+            assertEquals(0L, manager.snapshot(SOURCE, CHANNEL)?.retainedBytes)
+            assertEquals(
+                LiveRecordingFailureCategory.UNSUPPORTED_FORMAT,
+                manager.snapshot(SOURCE, CHANNEL)?.failureCategory,
+            )
+        } finally {
+            manager.detachPlayback(SOURCE, CHANNEL)
+            manager.close()
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun validatedDirectMediaPreventsSwitchingToAnotherRepresentationOnFailure() = runBlocking {
+        val directory = Files.createTempDirectory("ownplay-dvr-no-mix-test").toFile()
+        val capacity = LiveCapacityCoordinator(Metadata())
+        val attempts = mutableListOf<Boolean>()
+        val ingress = object : LiveDvrIngressClient {
+            override suspend fun capture(
+                uri: String,
+                isHls: Boolean,
+                startEpochMillis: Long,
+                endEpochMillis: Long,
+                output: OutputStream,
+                onProgress: suspend (Long) -> Unit,
+            ) {
+                attempts += isHls
+                if (isHls) throw AssertionError("HLS fallback must not follow committed direct media")
+                val packet = ByteArray(188) { index -> if (index == 0) 0x47 else index.toByte() }
+                repeat(64) { index ->
+                    output.write(packet)
+                    onProgress((index + 1L) * packet.size)
+                }
+                throw LiveRecordingCaptureFailureException(
+                    LiveRecordingFailureCategory.SOURCE_UNAVAILABLE,
+                    "direct source unavailable after validated media",
+                )
+            }
+        }
+        val manager = manager(directory, ingress, capacity)
+        val media = PreparedPlaybackMedia(
+            uri = "https://provider.invalid/live.ts",
+            mimeType = LiveDvrSessionManager.MPEG_TS_MIME_TYPE,
+            fallback = PreparedPlaybackAlternative(
+                uri = "https://provider.invalid/live.m3u8",
+                mimeType = "application/vnd.apple.mpegurl",
+            ),
+            usesProviderConnection = true,
+        )
+        try {
+            assertTrue(capacity.acquirePlayback(SOURCE, CHANNEL).allowed)
+            assertNotNull(manager.attachPlayback(SOURCE, CHANNEL, media))
+            withTimeout(2_000L) {
+                while (manager.snapshot(SOURCE, CHANNEL)?.state != LiveDvrSessionState.FAILED) delay(5L)
+            }
+            assertEquals(listOf(false), attempts)
+            assertEquals(64L * 188L, manager.snapshot(SOURCE, CHANNEL)?.retainedBytes)
+            assertEquals(
+                LiveRecordingFailureCategory.SOURCE_UNAVAILABLE,
+                manager.snapshot(SOURCE, CHANNEL)?.failureCategory,
+            )
+        } finally {
+            manager.detachPlayback(SOURCE, CHANNEL)
+            manager.close()
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun incompleteHlsSegmentIsQuarantinedBeforeRetainedStoreWrite() = runBlocking {
+        val directory = Files.createTempDirectory("ownplay-dvr-hls-quarantine-test").toFile()
+        val capacity = LiveCapacityCoordinator(Metadata())
+        val partialSegmentEnded = CompletableDeferred<Unit>()
+        val ingress = object : LiveDvrIngressClient {
+            override suspend fun capture(
+                uri: String,
+                isHls: Boolean,
+                startEpochMillis: Long,
+                endEpochMillis: Long,
+                output: OutputStream,
+                onProgress: suspend (Long) -> Unit,
+            ) {
+                val boundaries = output as LiveDvrSegmentBoundaryOutput
+                assertTrue(
+                    boundaries.beginSegment(
+                        LiveDvrIngressSegment(
+                            identity = "partial-segment",
+                            durationMs = 1_000L,
+                            programTimeEpochMs = BASE_EPOCH_MS,
+                            discontinuitySequence = 0L,
+                        ),
+                    ),
+                )
+                output.write(ByteArray(188 * 4) { index -> if (index % 188 == 0) 0x47 else 0 })
+                boundaries.endSegment(complete = false)
+                partialSegmentEnded.complete(Unit)
+                throw LiveRecordingCaptureFailureException(
+                    LiveRecordingFailureCategory.SOURCE_UNAVAILABLE,
+                    "segment connection ended early",
+                )
+            }
+        }
+        val manager = manager(directory, ingress, capacity)
+        try {
+            assertTrue(capacity.acquirePlayback(SOURCE, CHANNEL).allowed)
+            assertNotNull(manager.attachPlayback(SOURCE, CHANNEL, preparedHls()))
+            withTimeout(2_000L) { partialSegmentEnded.await() }
+            withTimeout(2_000L) {
+                while (manager.snapshot(SOURCE, CHANNEL)?.state != LiveDvrSessionState.FAILED) delay(5L)
+            }
+            assertEquals(0L, manager.snapshot(SOURCE, CHANNEL)?.retainedBytes)
+        } finally {
+            manager.detachPlayback(SOURCE, CHANNEL)
+            manager.close()
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test
     fun startupFailureFallsBackSequentiallyWithoutOpeningParallelProviderIngress() = runBlocking {
         val directory = Files.createTempDirectory("ownplay-dvr-startup-fallback-test").toFile()
         val capacity = LiveCapacityCoordinator(Metadata())
@@ -378,6 +527,11 @@ class LiveDvrSessionManagerTest {
             ) {
                 attempts += uri to isHls
                 if (attempts.size == 1) {
+                    val shortValidPrefix = ByteArray(188) { index -> if (index == 0) 0x47 else index.toByte() }
+                    repeat(8) { index ->
+                        output.write(shortValidPrefix)
+                        onProgress((index + 1L) * shortValidPrefix.size)
+                    }
                     throw LiveRecordingCaptureFailureException(
                         LiveRecordingFailureCategory.SOURCE_UNAVAILABLE,
                         "primary transport unavailable",
