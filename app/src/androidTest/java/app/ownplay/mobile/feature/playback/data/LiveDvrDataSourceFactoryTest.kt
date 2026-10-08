@@ -2,8 +2,8 @@ package app.ownplay.mobile.feature.playback.data
 
 import android.content.Context
 import android.net.Uri
-import android.test.mock.MockContext
 import androidx.media3.common.util.UnstableApi
+import androidx.test.core.app.ApplicationProvider
 import androidx.media3.datasource.DataSpec
 import androidx.media3.extractor.DefaultExtractorInput
 import androidx.media3.extractor.DefaultExtractorsFactory
@@ -22,10 +22,6 @@ import org.junit.Test
 
 @androidx.annotation.OptIn(markerClass = [UnstableApi::class])
 class LiveDvrDataSourceFactoryTest {
-    private class TestContext : MockContext() {
-        override fun getApplicationContext(): Context = this
-    }
-
     @Test
     fun retainedTransportStreamFlowsThroughTheProductionMedia3ExtractorPath() {
         val retainedPackets = syntheticNullPidTransportStream(packetCount = 5)
@@ -39,7 +35,7 @@ class LiveDvrDataSourceFactoryTest {
                 return TestReadHandle(retainedPackets, 0L)
             }
         }
-        val dataSource = LiveDvrDataSourceFactory(TestContext(), provider).createDataSource()
+        val dataSource = LiveDvrDataSourceFactory(ApplicationProvider.getApplicationContext<Context>(), provider).createDataSource()
         val spec = DataSpec.Builder()
             .setUri(Uri.parse("ownplaydvr://session-id/live.ts?start=live"))
             .build()
@@ -78,7 +74,7 @@ class LiveDvrDataSourceFactoryTest {
             override fun openReadHandle(sessionId: String, position: Long): LiveDvrReadHandle? = null
             override fun openLiveReadHandle(sessionId: String): LiveDvrReadHandle? = null
         }
-        val dataSource = LiveDvrDataSourceFactory(TestContext(), provider).createDataSource()
+        val dataSource = LiveDvrDataSourceFactory(ApplicationProvider.getApplicationContext<Context>(), provider).createDataSource()
         val error = runCatching {
             dataSource.open(
                 DataSpec.Builder()
