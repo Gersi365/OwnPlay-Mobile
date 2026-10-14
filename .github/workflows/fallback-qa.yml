@@ -1,0 +1,274 @@
+name: OPM fallback QA
+
+on:
+  workflow_dispatch:
+    inputs:
+      preflight_only:
+        type: boolean
+        required: true
+        default: true
+      source_drive_file_id:
+        type: string
+        required: false
+      source_zip_sha256:
+        type: string
+        required: false
+      version_code:
+        type: string
+        required: false
+      version_name:
+        type: string
+        required: false
+      run_emulator:
+        type: boolean
+        required: true
+        default: false
+      sign_qa:
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: opm-fallback-qa
+  cancel-in-progress: false
+
+jobs:
+  fallback:
+    if: github.repository == 'Gersi365/OwnPlay-Mobile' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: ${{ inputs.sign_qa && 'qa-signing' || 'fallback-build' }}
+    timeout-minutes: 120
+    env:
+      SOURCE_FILE_ID: ${{ inputs.source_drive_file_id }}
+      SOURCE_ZIP_SHA256: ${{ inputs.source_zip_sha256 }}
+      VERSION_CODE: ${{ inputs.version_code }}
+      VERSION_NAME: ${{ inputs.version_name }}
+      EXPECTED_CERT_SHA256: 4503daece496e8b4ee6cf2d95de90325a327dd9f0e6cd153242c25a10f44de08
+      EXPECTED_P12_SHA256: d166e93dfcef2171dfe157f90d76e9801a9f3e79b2760f12e9912c74650577a9
+      SIGNER_ALIAS: ownplay-qa-v38-clean
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+
+    steps:
+      - name: Verify inputs and Android toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$JAVA_HOME_21_X64/bin/java"
+          echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+          echo "$JAVA_HOME_21_X64/bin" >> "$GITHUB_PATH"
+          test -f "$ANDROID_HOME/platforms/android-36/android.jar"
+          test -x "$ANDROID_HOME/build-tools/36.0.0/aapt2"
+          test -x "$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          test -x "$ANDROID_HOME/platform-tools/adb"
+          if [[ '${{ inputs.preflight_only }}' == 'true' ]]; then
+            test '${{ inputs.sign_qa }}' == 'false'
+            echo 'PREFLIGHT=PASS'
+            exit 0
+          fi
+          [[ "$SOURCE_FILE_ID" =~ ^[A-Za-z0-9_-]{10,200}$ ]]
+          [[ "$SOURCE_ZIP_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$VERSION_CODE" =~ ^[0-9]+$ ]]
+          [[ "$VERSION_NAME" =~ ^[A-Za-z0-9._+-]{1,80}$ ]]
+
+      - name: Select Gradle 9.6.0 without cache
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+          cache-disabled: true
+
+      - name: Preflight Android emulator
+        if: ${{ inputs.preflight_only && inputs.run_emulator }}
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: adb shell getprop sys.boot_completed | grep -q '^1$'
+
+      - name: Authenticate to private canonical source
+        if: ${{ !inputs.preflight_only }}
+        id: drive_auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.OPM_FALLBACK_DRIVE_SA_JSON }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/drive.readonly
+          create_credentials_file: false
+          export_environment_variables: false
+
+      - name: Download and verify exact source bundle
+        if: ${{ !inputs.preflight_only }}
+        shell: bash
+        env:
+          DRIVE_ACCESS_TOKEN: ${{ steps.drive_auth.outputs.access_token }}
+        run: |
+          set -euo pipefail
+          test -n "$DRIVE_ACCESS_TOKEN"
+          mkdir -p "$RUNNER_TEMP/opm"
+          curl --fail --silent --show-error --location --retry 2 \
+            -H "Authorization: Bearer $DRIVE_ACCESS_TOKEN" \
+            "https://www.googleapis.com/drive/v3/files/$SOURCE_FILE_ID?alt=media" \
+            --output "$RUNNER_TEMP/opm/source.zip"
+          echo "$SOURCE_ZIP_SHA256  $RUNNER_TEMP/opm/source.zip" | sha256sum --check --status
+          python3 - <<'PY'
+          import os, pathlib, stat, zipfile
+          zip_path = pathlib.Path(os.environ['RUNNER_TEMP']) / 'opm/source.zip'
+          target = pathlib.Path(os.environ['RUNNER_TEMP']) / 'opm/source'
+          target.mkdir(parents=True, exist_ok=True)
+          with zipfile.ZipFile(zip_path) as archive:
+              entries = archive.infolist()
+              if len(entries) > 10000 or sum(x.file_size for x in entries) > 1_500_000_000:
+                  raise SystemExit('Source archive exceeds bounds')
+              for item in entries:
+                  path = pathlib.PurePosixPath(item.filename)
+                  if (path.is_absolute() or '..' in path.parts or '\\' in item.filename
+                          or stat.S_ISLNK(item.external_attr >> 16)):
+                      raise SystemExit('Source archive has unsafe entry')
+              archive.extractall(target)
+          roots = [p.parent for p in target.rglob('settings.gradle.kts')]
+          roots = [p for p in roots if (p / 'app/build.gradle.kts').is_file()]
+          if len(roots) != 1:
+              raise SystemExit('Expected exactly one Android source root')
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as f:
+              f.write('OPM_SOURCE_DIR=' + str(roots[0]) + '\n')
+          print('SOURCE_SHA256=PASS')
+          PY
+
+      - name: Validate, test and assemble unsigned APK
+        if: ${{ !inputs.preflight_only }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$OPM_SOURCE_DIR"
+          grep -Fq 'applicationId = "app.ownplay.mobile"' app/build.gradle.kts
+          grep -Fq "versionCode = $VERSION_CODE" app/build.gradle.kts
+          grep -Fq "versionName = \"$VERSION_NAME\"" app/build.gradle.kts
+          if test -f tools/validate-source-no-apk.sh; then
+            bash tools/validate-source-no-apk.sh
+          fi
+          gradle --no-daemon --no-build-cache \
+            :app:compileDebugKotlin \
+            :app:testDebugUnitTest \
+            :app:compileDebugAndroidTestKotlin \
+            :app:lintDebug \
+            :app:assembleRelease \
+            :app:lintVitalRelease
+          APK=app/build/outputs/apk/release/app-release-unsigned.apk
+          test -s "$APK"
+          unzip -t "$APK" >/dev/null
+          if "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify "$APK" >/dev/null 2>&1; then
+            echo 'Unsigned build unexpectedly signed' >&2
+            exit 1
+          fi
+          sha256sum "$APK"
+
+      - name: Emulator instrumentation
+        if: ${{ !inputs.preflight_only && inputs.run_emulator }}
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: cd "$OPM_SOURCE_DIR" && gradle --no-daemon --no-build-cache :app:connectedDebugAndroidTest
+
+      - name: Verify protected QA signer and sign
+        if: ${{ !inputs.preflight_only && inputs.sign_qa }}
+        shell: bash
+        env:
+          SIGNING_P12_B64: ${{ secrets.OWNPLAY_QA_SIGNING_P12_B64 }}
+          SIGNING_PASS: ${{ secrets.OWNPLAY_QA_SIGNING_PASS }}
+        run: |
+          set -euo pipefail
+          test -n "$SIGNING_P12_B64"
+          test -n "$SIGNING_PASS"
+          KS="$RUNNER_TEMP/ownplay-qa.p12"
+          CERT="$RUNNER_TEMP/ownplay-qa.cert.der"
+          printf '%s' "$SIGNING_P12_B64" | base64 --decode > "$KS"
+          chmod 600 "$KS"
+          echo "$EXPECTED_P12_SHA256  $KS" | sha256sum --check --status
+          keytool -exportcert -keystore "$KS" -storetype PKCS12 \
+            -storepass "$SIGNING_PASS" -alias "$SIGNER_ALIAS" -file "$CERT"
+          echo "$EXPECTED_CERT_SHA256  $CERT" | sha256sum --check --status
+          IN="$OPM_SOURCE_DIR/app/build/outputs/apk/release/app-release-unsigned.apk"
+          OUT="$RUNNER_TEMP/OwnPlay-QA-signed.apk"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" sign \
+            --ks "$KS" --ks-type PKCS12 --ks-key-alias "$SIGNER_ALIAS" \
+            --ks-pass env:SIGNING_PASS --key-pass env:SIGNING_PASS \
+            --v1-signing-enabled false --v2-signing-enabled true \
+            --v3-signing-enabled true --v4-signing-enabled false \
+            --out "$OUT" "$IN"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify \
+            --verbose --print-certs "$OUT" > "$RUNNER_TEMP/signature-verify.txt"
+          grep -Fq "Signer #1 certificate SHA-256 digest: $EXPECTED_CERT_SHA256" \
+            "$RUNNER_TEMP/signature-verify.txt"
+          "$ANDROID_HOME/build-tools/36.0.0/aapt2" dump badging "$OUT" \
+            > "$RUNNER_TEMP/signed-badging.txt"
+          grep -Fq "package: name='app.ownplay.mobile' versionCode='$VERSION_CODE' versionName='$VERSION_NAME'" \
+            "$RUNNER_TEMP/signed-badging.txt"
+          sha256sum "$OUT"
+          echo 'QA_SIGNING=PASS'
+
+      - name: Authenticate for private QA output
+        if: ${{ !inputs.preflight_only && inputs.sign_qa }}
+        id: drive_upload_auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.OPM_FALLBACK_DRIVE_SA_JSON }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/drive
+          create_credentials_file: false
+          export_environment_variables: false
+
+      - name: Deliver signed QA APK only to private Drive
+        if: ${{ !inputs.preflight_only && inputs.sign_qa }}
+        shell: bash
+        env:
+          DRIVE_ACCESS_TOKEN: ${{ steps.drive_upload_auth.outputs.access_token }}
+          OUTPUT_FOLDER_ID: ${{ secrets.OPM_QA_OUTPUT_DRIVE_FOLDER_ID }}
+        run: |
+          set -euo pipefail
+          [[ "$OUTPUT_FOLDER_ID" =~ ^[A-Za-z0-9_-]{10,200}$ ]]
+          test -n "$DRIVE_ACCESS_TOKEN"
+          APK="$RUNNER_TEMP/OwnPlay-QA-signed.apk"
+          test -s "$APK"
+          export OUTPUT_NAME="OwnPlay-QA-v${VERSION_CODE}-$(sha256sum "$APK" | cut -c1-12).apk"
+          python3 - <<'PY' > "$RUNNER_TEMP/upload-metadata.json"
+          import json, os
+          print(json.dumps({'name': os.environ['OUTPUT_NAME'], 'parents': [os.environ['OUTPUT_FOLDER_ID']]}))
+          PY
+          curl --fail --silent --show-error --dump-header "$RUNNER_TEMP/upload-headers.txt" \
+            --output /dev/null --request POST \
+            -H "Authorization: Bearer $DRIVE_ACCESS_TOKEN" \
+            -H 'Content-Type: application/json; charset=UTF-8' \
+            -H 'X-Upload-Content-Type: application/vnd.android.package-archive' \
+            --data-binary "@$RUNNER_TEMP/upload-metadata.json" \
+            'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,name'
+          UPLOAD_URL="$(awk 'tolower($1)=="location:" {print $2}' "$RUNNER_TEMP/upload-headers.txt" | tr -d '\r' | tail -1)"
+          [[ "$UPLOAD_URL" == https://www.googleapis.com/upload/drive/v3/files* ]]
+          curl --fail --silent --show-error --request PUT \
+            -H "Authorization: Bearer $DRIVE_ACCESS_TOKEN" \
+            -H 'Content-Type: application/vnd.android.package-archive' \
+            --data-binary "@$APK" "$UPLOAD_URL" \
+            --output "$RUNNER_TEMP/upload-result.json"
+          python3 - <<'PY'
+          import json, os, pathlib
+          p = pathlib.Path(os.environ['RUNNER_TEMP']) / 'upload-result.json'
+          obj = json.loads(p.read_text())
+          if not obj.get('id') or obj.get('name') != os.environ['OUTPUT_NAME']:
+              raise SystemExit('Private Drive upload not verified')
+          print('PRIVATE_QA_OUTPUT=PASS')
+          PY
+
+      - name: Remove temporary signer
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          rm -f "$RUNNER_TEMP/ownplay-qa.p12" "$RUNNER_TEMP/ownplay-qa.cert.der"
